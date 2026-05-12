@@ -3,7 +3,7 @@ name: Build and Push Docker Image (TINY)
 on:
   push:
     branches:
-      - main
+      - master
     tags:
       - "v*.*"
       - "v*.*.*"
