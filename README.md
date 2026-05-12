@@ -1,310 +1,274 @@
-# OmniVoice 🌍
-
 <p align="center">
-  <img width="200" height="200" alt="OmniVoice" src="https://zhu-han.github.io/omnivoice/pics/omnivoice.jpg" />
+  <a href="https://nuggies.website/">
+    <img src="logo.jpg" alt="Hangry Labs OmniVoiceTTS logo" width="720">
+  </a>
 </p>
 
-<p align="center">
-  <a href="https://huggingface.co/k2-fsa/OmniVoice"><img src="https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Model-FFD21E" alt="Hugging Face Model"></a>
-  &nbsp;
-  <a href="https://huggingface.co/spaces/k2-fsa/OmniVoice"><img src="https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Space-blue" alt="Hugging Face Space"></a>
-  &nbsp;
-  <a href="https://arxiv.org/abs/2604.00688"><img src="https://img.shields.io/badge/arXiv-Paper-B31B1B.svg"></a>
-  &nbsp;
-  <a href="https://zhu-han.github.io/omnivoice"><img src="https://img.shields.io/badge/GitHub.io-Demo_Page-blue?logo=GitHub&style=flat-square"></a>
-  &nbsp;
-  <a href="https://colab.research.google.com/github/k2-fsa/OmniVoice/blob/master/docs/OmniVoice.ipynb"><img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab"></a>
-</p>
+# Hangry Labs OmniVoiceTTS
 
-OmniVoice is a state-of-the-art massively multilingual zero-shot text-to-speech (TTS) model supporting over 600 languages. Built on a novel diffusion language model-style architecture, it generates high-quality speech with superior inference speed, supporting voice cloning and voice design.
+Easy-to-run OmniVoice text-to-speech Docker images with a browser UI and HTTP API included.
 
-**Contents**: [Key Features](#key-features) | [Installation](#installation) | [Quick Start](#quick-start) | [Python API](#python-api) | [Command-Line Tools](#command-line-tools) | [Training & Evaluation](#training--evaluation) | [Discussion](#discussion--communication) | [Citation](#citation)
+This Hangry Labs fork is made for ease of use. The aim is that anyone should be able to run massively multilingual text to speech without fighting Python environments, missing model files, or unclear setup: a person trying it at home, a developer wiring it into an app, or a professional evaluating it for local deployment. Install Docker, run one command from Quick Start, open the local link, and start generating speech.
 
-## Key Features
+You get:
+- A browser UI for auto voice, voice design, and voice cloning
+- An HTTP API for your own applications and tools
+- No manual Python, model, ASR, or audio dependency setup
+- 600+ language support inherited from OmniVoice
+- WAV, MP3, FLAC, and OGG output
+- GPU acceleration when Docker/NVIDIA support is available
+- Offline-friendly usage: download an image once, keep it, and run it later without relying on live model downloads
 
-- **600+ Languages Supported**: The broadest language coverage among zero-shot TTS models ([full list](docs/languages.md)).
-- **Voice Cloning**: State-of-the-art voice cloning quality.
-- **Voice Design**: Control voices via assigned speaker attributes (gender, age, pitch, dialect/accent, whisper, etc.).
-- **Fine-grained Control**: Non-verbal symbols (e.g., `[laughter]`) and pronunciation correction via pinyin or phonemes.
-- **Fast Inference**: RTF as low as 0.025 (40x faster than real-time).
-- **Diffusion Language Model-style Architecture**: A clean, streamlined, and scalable design that delivers both quality and speed.
+Official Docker images are intended for: [hangrylabs/omnivoicetts on Docker Hub](https://hub.docker.com/r/hangrylabs/omnivoicetts/tags).
+
+Project page: [hangry-labs.github.io/OmniVoiceTTS/examples](https://hangry-labs.github.io/OmniVoiceTTS/examples/).
+
+Hangry Labs home: [nuggies.website](https://nuggies.website/).
 
 ---
 
-## Installation
+## Responsible Use
 
-Choose **one** of the following methods: **pip** or **uv**.
-
-### pip
-
-> We recommend using a fresh virtual environment (e.g., `conda`, `venv`, etc.) to avoid conflicts.
-
-**Step 1**: Install PyTorch
-
-<details>
-<summary>NVIDIA GPU</summary>
-
-```bash
-# Install pytorch with your CUDA version, e.g.
-pip install torch==2.8.0+cu128 torchaudio==2.8.0+cu128 --extra-index-url https://download.pytorch.org/whl/cu128
-```
-> See [PyTorch official site](https://pytorch.org/get-started/locally/) for other versions installation.
-
-</details>
-
-<details>
-<summary>Apple Silicon</summary>
-
-```bash
-pip install torch==2.8.0 torchaudio==2.8.0
-```
-
-</details>
-
-**Step 2**: Install OmniVoice (choose one)
-
-```bash
-# From PyPI (stable release)
-pip install omnivoice
-
-# From the latest source on GitHub (no need to clone)
-pip install git+https://github.com/k2-fsa/OmniVoice.git
-
-# For development (clone first, editable install)
-git clone https://github.com/k2-fsa/OmniVoice.git
-cd OmniVoice
-pip install -e .
-```
-
-### uv
-
-Clone the repository and sync dependencies:
-
-```bash
-git clone https://github.com/k2-fsa/OmniVoice.git
-cd OmniVoice
-uv sync
-```
-
-> **Tip**: Can use mirror with `uv sync --default-index "https://mirrors.aliyun.com/pypi/simple"`
+OmniVoice supports voice cloning. Do not use this project for unauthorized voice cloning, impersonation, fraud, harassment, scams, or any illegal or unethical activity. Only clone voices when you have the rights and consent to do so. You are responsible for complying with applicable laws, regulations, platform rules, and ethical standards.
 
 ---
 
 ## Quick Start
 
-Try OmniVoice without coding:
+Run with NVIDIA GPU support:
 
-- Launch the local web UI: `omnivoice-demo --ip 0.0.0.0 --port 8001`
+```bash
+docker run -p 7861:7861 --gpus all hangrylabs/omnivoicetts:v0.1
+```
 
-- Or try it directly on [HuggingFace Space](https://huggingface.co/spaces/k2-fsa/OmniVoice)
+Run on CPU:
 
-- Or run it in Google Colab: [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/k2-fsa/OmniVoice/blob/master/docs/OmniVoice.ipynb)
+```bash
+docker run -p 7861:7861 -e OMNIVOICE_DEVICE=cpu hangrylabs/omnivoicetts:v0.1
+```
 
-> If you have trouble connecting to HuggingFace when downloading the pre-trained models, set `export HF_ENDPOINT="https://hf-mirror.com"` before running.
+Run on a specific GPU (example: GPU index `1`):
 
-For full usage, see the [Python API](#python-api) and [Command-Line Tools](#command-line-tools) sections below.
+```bash
+docker run -p 7861:7861 --gpus "device=1" -e CUDA_VISIBLE_DEVICES=1 hangrylabs/omnivoicetts:v0.1
+```
+
+Then open: **[http://localhost:7861](http://localhost:7861)**
+
+The full image is baked with the OmniVoice model, the Higgs audio tokenizer, and Whisper ASR assets. After the image is pulled, normal runtime is configured for offline use with `HF_HUB_OFFLINE=1` and `TRANSFORMERS_OFFLINE=1`.
 
 ---
 
-## Python API
+## API Usage Example
 
-OmniVoice supports three generation modes. All features in this section are also available via [command-line tools](#command-line-tools).
+Default API behavior returns WAV:
 
-### Voice Cloning
-
-Clone a voice from a short reference audio. Provide `ref_audio` and `ref_text`:
-
-```python
-from omnivoice import OmniVoice
-import soundfile as sf
-import torch
-
-model = OmniVoice.from_pretrained(
-    "k2-fsa/OmniVoice",
-    device_map="cuda:0",
-    dtype=torch.float16
-)
-# Apple Silicon users: use device_map="mps" instead
-
-audio = model.generate(
-    text="Hello, this is a test of zero-shot voice cloning.",
-    ref_audio="ref.wav",
-    ref_text="Transcription of the reference audio.",
-) # audio is a list of `np.ndarray` with shape (T,) at 24 kHz.
-
-# If you don't want to input `ref_text` manually, you can directly omit the `ref_text`.
-# The model will use Whisper ASR to auto-transcribe it.
-
-sf.write("out.wav", audio[0], 24000)
+```bash
+curl -X POST "http://localhost:7861/tts/generate" \
+  -H "Content-Type: application/json" \
+  -d '{"text":"Hello from Hangry Labs OmniVoiceTTS.","language":"English"}' \
+  -o output.wav
 ```
 
-> **Tips**
->
-> - Use a 3–10 seconds reference audio clip. Longer audio slows down inference and may degrade cloning quality.
-> - For standard pronunciation, use a reference audio in the **same language** as the target speech. In cross-lingual voice cloning (i.e., the reference audio and target speech are in different languages), the generated speech will carry an accent from the reference audio's language.
-> - For better results with Arabic numerals, normalize them to words first (e.g., "123" → "one hundred twenty-three") with text normalization tools (e.g., [WeTextProcessing](https://github.com/wenet-e2e/WeTextProcessing)).
->
-> For more tips, see [docs/tips.md](docs/tips.md).
+Request MP3 when you want compact output:
 
-### Voice Design
+```bash
+curl -X POST "http://localhost:7861/tts/generate" \
+  -H "Content-Type: application/json" \
+  -d '{"text":"Hello from Hangry Labs OmniVoiceTTS.","language":"English","output_format":"mp3"}' \
+  -o output.mp3
+```
 
-Describe the desired voice with speaker attributes — no reference audio needed.
-Supported attributes: **gender** (male/female), **age** (child to elderly),
-**pitch** (very low to very high), **style** (whisper), **English accent**
-(American, British, etc.), and **Chinese dialect** (四川话, 陕西话, etc.).
-Attributes are comma-separated and freely combinable across categories.
+Voice design:
+
+```bash
+curl -X POST "http://localhost:7861/tts/generate" \
+  -H "Content-Type: application/json" \
+  -d '{"text":"This is a custom designed voice.","language":"English","instruct":"female, low pitch, british accent","output_format":"mp3"}' \
+  -o designed.mp3
+```
+
+Voice cloning with a reference audio path mounted into the container:
+
+```bash
+docker run -p 7861:7861 --gpus all -v "%cd%/samples:/data" hangrylabs/omnivoicetts:v0.1
+```
+
+```bash
+curl -X POST "http://localhost:7861/tts/generate" \
+  -H "Content-Type: application/json" \
+  -d '{"text":"This voice follows the reference sample.","language":"English","ref_audio":"/data/ref.wav","ref_text":"Transcript of the reference audio.","output_format":"mp3"}' \
+  -o cloned.mp3
+```
+
+Kokoro-shaped compatibility fields are accepted where they can be translated cleanly. For example, existing callers may send `voice` and `use_gpu`; OmniVoiceTTS accepts those fields even though OmniVoice uses auto voice, voice design, or reference-audio cloning rather than fixed Kokoro speaker ids.
+
+Useful endpoints:
+
+- `GET /tts/ping`
+- `GET /tts/status`
+- `GET /tts/defaults`
+- `GET /tts/formats`
+- `GET /tts/stream-formats`
+- `GET /tts/languages`
+- `GET /tts/speakers?language=a`
+- `GET /tts/voices`
+- `POST /tts/generate`
+- `POST /tts/convert`
+- `POST /tts/stream`
+- `POST /tts/metrics`
+- `POST /tts/purge`
+
+Interactive API documentation is available at **[http://localhost:7861/tts/docs](http://localhost:7861/tts/docs)**.
+
+### Use From Python
+
+Install this package in a Python project and point the client at a running OmniVoiceTTS server:
 
 ```python
-audio = model.generate(
-    text="Hello, this is a test of zero-shot voice design.",
+from omnivoice import OmniVoiceTTSClient
+
+tts = OmniVoiceTTSClient("http://localhost:7861")
+
+audio = tts.generate(
+    text="Hello from my Python app.",
+    language="English",
     instruct="female, low pitch, british accent",
+    output_format="mp3",
 )
-```
 
-> **Note**: Voice design was trained on Chinese and English data only. It can generalize to other languages, but results can be unstable for some low-resource languages.
-
-See [docs/voice-design.md](docs/voice-design.md) for the full attribute
-reference, Chinese equivalents, and usage tips.
-
-### Auto Voice
-
-Let the model choose a voice automatically:
-
-```python
-audio = model.generate(text="This is a sentence without any voice prompt.")
-```
-
-### Generation Parameters
-
-All above three modes share the same `model.generate()` API. You can further control the generation behavior via keyword arguments:
-
-```python
-audio = model.generate(
-    text="...",
-    num_step=32,  # diffusion steps (or 16 for faster inference)
-    speed=1.0,     # speed factor (>1.0 faster, <1.0 slower)
-    duration=10.0, # fixed output duration in seconds (overrides speed)
-    # ... more options
-)
-```
-See more detailed control in [docs/generation-parameters.md](docs/generation-parameters.md).
-
-### Non-Verbal & Pronunciation Control
-
-OmniVoice supports inline **non-verbal symbols** and **pronunciation correction** within the input text.
-
-**Non-verbal symbols**: Insert tags like `[laughter]` directly in the text to add expressive non-verbal sounds.
-
-```python
-audio = model.generate(text="[laughter] You really got me. I didn't see that coming at all.")
-```
-
-Supported tags: `[laughter]`, `[sigh]`, `[confirmation-en]`, `[question-en]`, `[question-ah]`, `[question-oh]`, `[question-ei]`, `[question-yi]`, `[surprise-ah]`, `[surprise-oh]`, `[surprise-wa]`, `[surprise-yo]`, `[dissatisfaction-hnn]`.
-
-**Pronunciation control (Chinese)**: Use pinyin with tone numbers to correct specific character pronunciations.
-
-```python
-audio = model.generate(text="这批货物打ZHE2出售后他严重SHE2本了，再也经不起ZHE1腾了。")
-```
-
-**Pronunciation control (English)**: Use [CMU pronunciation dictionary](https://svn.code.sf.net/p/cmusphinx/code/trunk/cmudict/cmudict.0.7a)  (uppercase, in brackets) to override default English pronunciations.
-
-```python
-audio = model.generate(text="He plays the [B EY1 S] guitar while catching a [B AE1 S] fish.")
+audio.save("hello.mp3")
 ```
 
 ---
 
-## Command-Line Tools
+## Docker Features
 
-Three CLI entry points are provided. The CLI tools support all features available in the Python API (voice cloning, voice design, auto voice, generation parameters, etc.) — all controlled via command-line arguments.
+- Full baked image with OmniVoice model assets and Whisper ASR assets included
+- Optional tiny image target for cache-volume workflows
+- GPU acceleration when available
+- HTTP API + web UI in one container
+- Offline-friendly runtime flags by default
+- Persistent Hugging Face cache volume support in the local Taskfile workflow
+- Kokoro-shaped compatibility routes for easier integration with existing TTS tooling
 
-| Command | Description | Source |
-|---|---|---|
-| `omnivoice-demo` | Interactive Gradio web demo | [omnivoice/cli/demo.py](omnivoice/cli/demo.py) |
-| `omnivoice-infer` | Single-item inference | [omnivoice/cli/infer.py](omnivoice/cli/infer.py) |
-| `omnivoice-infer-batch` | Batch inference across multiple GPUs | [omnivoice/cli/infer_batch.py](omnivoice/cli/infer_batch.py) |
+---
 
-### Demo
+## Local Development
+
+Build and run the full baked image:
+
+```bash
+task image
+task imagerun
+task imageweb
+task imageapi
+```
+
+Build and run the tiny image:
+
+```bash
+task image-tiny
+task imagerun-tiny
+```
+
+Hot-swap local service code into the container without rebuilding:
+
+```bash
+task localrun
+task localrun-tiny
+task logs
+```
+
+Dependency and cleanup helpers:
+
+```bash
+task deps
+task imagestop
+task nuke
+```
+
+`task imagerun` and `task localrun` mount a named Docker volume at `/app/.cache/huggingface` so assets can survive container and image rebuilds. Baked run tasks seed missing cache files from the full image before startup.
+
+Release from a clean tree:
+
+```bash
+task release DRY_RUN=1
+task release
+```
+
+---
+
+## Original OmniVoice Project
+
+OmniVoice is a massively multilingual zero-shot text-to-speech model supporting 600+ languages. It provides:
+
+- Voice cloning from a short reference audio clip
+- Voice design from speaker attributes such as gender, age, pitch, style, English accent, and Chinese dialect
+- Auto voice generation with no reference prompt
+- Fine-grained controls such as non-verbal symbols and pronunciation correction
+- Training, fine-tuning, data preparation, and evaluation tooling
+
+Upstream links:
+
+- Original repository: [k2-fsa/OmniVoice](https://github.com/k2-fsa/OmniVoice)
+- Hugging Face model: [k2-fsa/OmniVoice](https://huggingface.co/k2-fsa/OmniVoice)
+- Hugging Face Space: [k2-fsa/OmniVoice](https://huggingface.co/spaces/k2-fsa/OmniVoice)
+- Paper: [arXiv:2604.00688](https://arxiv.org/abs/2604.00688)
+- Language list: [docs/languages.md](docs/languages.md)
+- Voice design reference: [docs/voice-design.md](docs/voice-design.md)
+- Generation parameters: [docs/generation-parameters.md](docs/generation-parameters.md)
+
+The original Python CLI tools are still present:
 
 ```bash
 omnivoice-demo --ip 0.0.0.0 --port 8001
+omnivoice-infer --model k2-fsa/OmniVoice --text "Hello world." --output hello.wav
+omnivoice-infer-batch --model k2-fsa/OmniVoice --test_list test.jsonl --res_dir results/
 ```
 
-Provides a web UI for voice cloning and voice design. See `omnivoice-demo --help` for all options.
-
-### Single Inference
-
-```bash
-# Voice Cloning
-# ref_text can be omitted (Whisper will auto-transcribe ref_audio to get it).
-omnivoice-infer \
-    --model k2-fsa/OmniVoice \
-    --text "This is a test for text to speech." \
-    --ref_audio ref.wav \
-    --ref_text "Transcription of the reference audio." \
-    --output hello.wav
-
-# Voice Design
-omnivoice-infer --model k2-fsa/OmniVoice \
-    --text "This is a test for text to speech." \
-    --instruct "male, British accent" \
-    --output hello.wav
-
-# Auto Voice
-omnivoice-infer \
-    --model k2-fsa/OmniVoice \
-    --text "This is a test for text to speech."\
-    --output hello.wav
-```
-
-### Batch Inference
-
-`omnivoice-infer-batch` can distribute batch inference across multiple GPUs, designed for large-scale TTS tasks.
-
-```bash
-omnivoice-infer-batch \
-    --model k2-fsa/OmniVoice \
-    --test_list test.jsonl \
-    --res_dir results/
-```
-
-The test list is a JSONL file where each line is a JSON object:
-```json
-{"id": "sample_001", "text": "Hello world", "ref_audio": "/path/to/ref.wav", "ref_text": "Reference transcript", "instruct": "female, british accent", "language_id": "en", "duration": 10.0, "speed": 1.0}
-```
-Only `id` and `text` are mandatory fields. `ref_audio` and `ref_text` are used in voice cloning mode. `instruct` is used in voice design mode. If no reference audio or instruct are provided, the model will generate text in a random voice.
-
-`language_id`, `duration`, and `speed` are optional. `duration` (in seconds) fixes the output length; `speed` controls the speaking rate. If `duration` and `speed` are both provided, `speed` will be ignored.
+Training and evaluation documentation remains available in [examples/](examples/) and [docs/training.md](docs/training.md).
 
 ---
 
-## Training & Evaluation
+## About This Fork
 
-See [examples/](examples/) for the complete pipeline — from data preparation to training, evaluation, and finetuning.
+This project is an independently maintained packaging and serving fork of the original [OmniVoice](https://github.com/k2-fsa/OmniVoice) project by k2-fsa and contributors.
 
----
+The upstream model and research are the core contribution. This Hangry Labs fork focuses on making OmniVoice simple to run and integrate: Docker image, included UI, HTTP API, offline-friendly baked assets, practical examples, and release tooling.
 
-## Discussion & Communication
-
-You can directly discuss on [GitHub Issues](https://github.com/k2-fsa/OmniVoice/issues).
-
-You can also scan the QR code to join our wechat group or follow our wechat official account.
-
-| Wechat Group | Wechat Official Account |
-| ------------ | ----------------------- |
-|![wechat](https://k2-fsa.org/zh-CN/assets/pic/wechat_group.jpg) |![wechat](https://k2-fsa.org/zh-CN/assets/pic/wechat_account.jpg) |
+License and attribution are preserved in [LICENSE](LICENSE).
 
 ---
 
-## Community Projects
+## Support & Issues
 
-OmniVoice is supported by a growing ecosystem of community projects.
-Explore them in [Community Projects](docs/community-projects.md).
+If you encounter bugs, have feature requests, or need help using Hangry Labs OmniVoiceTTS:
+
+- Open a new [GitHub Issue](https://github.com/Hangry-Labs/OmniVoiceTTS/issues) with as much detail as possible
+- Include error messages, logs, Docker command, GPU/CPU mode, and reproduction steps
+- For upstream model behavior, also check the original [k2-fsa/OmniVoice](https://github.com/k2-fsa/OmniVoice) project
+
+---
+
+## Version History
+
+### v0.1 Snapshot
+
+- Bootstrapped Hangry Labs Docker packaging for OmniVoiceTTS.
+- Added a unified Gradio UI and FastAPI HTTP service on port `7861`.
+- Added baked Docker image flow with OmniVoice and Whisper ASR assets prefetched for offline runtime.
+- Added WAV, MP3, FLAC, and OGG output support.
+- Added a dependency-free Python HTTP client.
+- Added Kokoro-shaped compatibility fields and discovery routes.
+- Added Taskfile workflows for image build, local run, API smoke testing, logs, cleanup, and release.
+- Added Hangry Labs public docs and static project page scaffold.
 
 ---
 
 ## Citation
+
+If you use OmniVoice in research, cite the upstream work:
 
 ```bibtex
 @article{zhu2026omnivoice,
@@ -317,6 +281,8 @@ Explore them in [Community Projects](docs/community-projects.md).
 
 ---
 
-## Disclaimer
+## License
 
-Users are strictly prohibited from using this model for unauthorized voice cloning, voice impersonation, fraud, scams, or any other illegal or unethical activities. All users shall ensure full compliance with applicable local laws, regulations, and ethical standards. The developers assume no liability for any misuse of this model and advocate for responsible AI development and use, encouraging the community to uphold safety and ethical principles in AI research and applications.
+This fork is licensed under the [Apache License 2.0](LICENSE).
+
+Original work by k2-fsa and contributors in [OmniVoice](https://github.com/k2-fsa/OmniVoice). The upstream responsible-use disclaimer is preserved in spirit here: users must not use this model for unauthorized voice cloning, voice impersonation, fraud, scams, or any other illegal or unethical activities.

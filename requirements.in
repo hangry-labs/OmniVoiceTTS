@@ -1,0 +1,17 @@
+--extra-index-url https://download.pytorch.org/whl/cu128
+
+accelerate
+fastapi
+gradio
+huggingface-hub
+librosa
+numpy
+pydub
+pydantic
+soundfile
+tensorboardX
+torch==2.8.0
+torchaudio==2.8.0
+transformers>=5.3.0
+uvicorn[standard]
+webdataset

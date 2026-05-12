@@ -24,5 +24,13 @@ from omnivoice.models.omnivoice import (
     OmniVoiceConfig,
     OmniVoiceGenerationConfig,
 )
+from omnivoice.client import AudioResponse, OmniVoiceTTSClient, OmniVoiceTTSClientError
 
-__all__ = ["OmniVoice", "OmniVoiceConfig", "OmniVoiceGenerationConfig"]
+__all__ = [
+    "AudioResponse",
+    "OmniVoice",
+    "OmniVoiceConfig",
+    "OmniVoiceGenerationConfig",
+    "OmniVoiceTTSClient",
+    "OmniVoiceTTSClientError",
+]

@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "omnivoice"
-version = "0.1.5"
-description = "OmniVoice: Towards Omnilingual Zero-Shot Text-to-Speech with Diffusion Language Models"
+version = "0.1.0.dev0"
+description = "Hangry Labs OmniVoiceTTS: easy-to-run multilingual zero-shot text-to-speech"
 readme = "README.md"
 license = "Apache-2.0"
 requires-python = ">=3.10"
@@ -36,6 +36,8 @@ dependencies = [
     "accelerate",
     "pydub",
     "gradio",
+    "fastapi",
+    "uvicorn[standard]",
     "tensorboardX",
     "webdataset",
     "numpy",
@@ -58,11 +60,13 @@ eval = [
 omnivoice-infer = "omnivoice.cli.infer:main"
 omnivoice-infer-batch = "omnivoice.cli.infer_batch:main"
 omnivoice-demo = "omnivoice.cli.demo:main"
+omnivoice-serve = "omnivoice.app:main"
 
 [project.urls]
-Homepage = "https://github.com/k2-fsa/OmniVoice"
-Repository = "https://github.com/k2-fsa/OmniVoice"
-"Bug Tracker" = "https://github.com/k2-fsa/OmniVoice/issues"
+Homepage = "https://github.com/Hangry-Labs/OmniVoiceTTS"
+Repository = "https://github.com/Hangry-Labs/OmniVoiceTTS"
+"Upstream Project" = "https://github.com/k2-fsa/OmniVoice"
+"Bug Tracker" = "https://github.com/Hangry-Labs/OmniVoiceTTS/issues"
 
 [tool.uv.sources]
 # Install PyTorch with CUDA support on Linux/Windows (CUDA doesn't exist for Mac).
