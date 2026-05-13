@@ -263,17 +263,30 @@ If you encounter bugs, have feature requests, or need help using Hangry Labs Omn
 
 ## Version History
 
-### v0.1 Snapshot
+### v0.1.0
 
-- Bootstrapped Hangry Labs Docker packaging for OmniVoiceTTS.
-- Added a unified Gradio UI and FastAPI HTTP service on port `7861`.
-- Added baked Docker image flow with OmniVoice and Whisper ASR assets prefetched for offline runtime.
-- Added WAV, MP3, FLAC, and OGG output support.
+- Forked OmniVoice into a Hangry Labs runtime-focused project for local TTS use.
+- Added Python 3.13 support with pinned runtime dependencies, refreshed lockfiles, and Docker images based on `python:3.13-slim`.
+- Added full baked Docker packaging that prefetches OmniVoice, the Higgs audio tokenizer, and Whisper ASR assets for offline-friendly runtime after image pull.
+- Added a tiny Docker target for persistent Hugging Face cache-volume workflows.
+- Added GitHub Actions for full and tiny Docker Hub image publishing on `master`, release tags, and manual dispatch.
+- Added a unified Gradio browser UI and FastAPI HTTP API on port `7861`.
+- Added auto voice, structured voice design, and reference-audio voice cloning workflows.
+- Added discovery/status endpoints for ping, status, defaults, formats, languages, speakers, voices, voice-design options, metrics, and OpenAPI docs.
+- Added synthesis endpoints for generate, convert, stream, and purge.
+- Added WAV, MP3, FLAC, and OGG output support, plus `output_format`, `format`, and Kokoro/OpenAI-style `response_format` compatibility.
+- Added Kokoro-shaped compatibility fields/routes where they can be translated cleanly, including `voice`, `use_gpu`, `/tts/voices`, `/tts/speakers`, `/tts/stream-formats`, `/tts/convert`, and `/tts/stream`.
+- Added advanced generation controls for guidance, denoise/preprocess/postprocess, chunking, temperature, layer penalty, pitch, tempo, volume, and loudness normalization.
 - Added a dependency-free Python HTTP client.
-- Added Kokoro-shaped compatibility fields and discovery routes, including `response_format` output-format compatibility.
-- Added Taskfile workflows for image build, local run, API smoke testing, logs, cleanup, and release.
-- Added Hangry Labs Docker Hub docs and static project page scaffold.
-- Validated Python 3.13 baked Docker runtime with no host model-cache volume mounted, offline flags enabled, GPU inference, all output formats, stream/convert routes, purge, and reload from baked cache.
+- Added Taskfile workflows for image build, image run, local bind-mounted run, API smoke testing, logs, cleanup, release, app injection, NAS shell access, and local agent/dev process cleanup.
+- Removed upstream training, data-preparation, evaluation, fine-tuning, and benchmark workflows from this fork to keep the project focused on inference, UI, API, and Docker runtime.
+- Simplified public docs to README plus Docker Hub docs, with runtime discovery delegated to API endpoints.
+- Added Hangry Labs branding assets, static 404 page, Docker Hub documentation, and a GitHub Pages examples showcase.
+- Added 20-language public audio examples with 280 MP3 files: 10 random voice-variety samples, 3 translated intros, and 1 cross-language clone demo per language.
+- Added native-language example-page controls, embedded manifest data for fetch-free GitHub Pages/direct-file preview, custom audio cards, progress bars, shared volume/mute, random intro playback, and a highlighted clone demo.
+- Added a runtime guard that blocks voice-design `instruct` together with bracket expression tags such as `[laughter]` and `[sigh]`, after testing showed that combination can produce unstable non-speech audio.
+- Regenerated affected non-verbal public examples without voice-design `instruct`, avoiding whisper plus bracket tags and placing tags inside sentences with follow-up text.
+- Validated a fresh Python 3.13 baked image without a host model-cache volume mounted, with offline flags enabled, GPU inference, all output formats, stream/convert routes, purge, and reload from baked cache.
 
 ---
 

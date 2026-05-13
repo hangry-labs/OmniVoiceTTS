@@ -27,7 +27,13 @@ function Convert-ToPackageVersion {
 
 function Get-NextSnapshot {
     param([string]$Version)
-    if ($Version -match '^(\d+)\.(\d+)(?:\.\d+)?$') {
+    if ($Version -match '^(\d+)\.(\d+)\.(\d+)$') {
+        $major = [int]$Matches[1]
+        $minor = [int]$Matches[2]
+        $patch = [int]$Matches[3] + 1
+        return "$major.$minor.$patch-snapshot"
+    }
+    if ($Version -match '^(\d+)\.(\d+)$') {
         $major = [int]$Matches[1]
         $minor = [int]$Matches[2] + 1
         return "$major.$minor-snapshot"

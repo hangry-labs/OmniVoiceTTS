@@ -46,9 +46,9 @@ Then open:
 
 http://localhost:7861
 
-The `latest` image is the full baked image with OmniVoice model assets, the Higgs audio tokenizer, and Whisper ASR assets included for offline-friendly use after the image is pulled. The release image is based on Python 3.13 and is intended to run without live Hugging Face downloads after pull. Version tags such as `v0.1` are also available for reproducible deployments.
+The `latest` image is the full baked image with OmniVoice model assets, the Higgs audio tokenizer, and Whisper ASR assets included for offline-friendly use after the image is pulled. The release image is based on Python 3.13 and is intended to run without live Hugging Face downloads after pull. Version tags such as `v0.1.0` are also available for reproducible deployments.
 
-Tiny tags use the `vX.Y_tiny` pattern. They keep runtime dependencies but skip baked Hugging Face model assets, and are intended for persistent-volume workflows where the cache is warmed on first online use:
+Tiny tags use the `vX.Y.Z_tiny` pattern. They keep runtime dependencies but skip baked Hugging Face model assets, and are intended for persistent-volume workflows where the cache is warmed on first online use:
 
 ```bash
 docker run -p 7861:7861 --gpus "device=0" -e CUDA_VISIBLE_DEVICES=0 -v omnivoicetts_hf_cache:/app/.cache/huggingface hangrylabs/omnivoicetts:latest_tiny
@@ -126,8 +126,8 @@ http://localhost:7861/tts/docs
 ## Image Tags
 
 - Recommended tag for most users: `latest`
-- Versioned release tags use the pattern `vX.Y`, for example `v0.1`
-- Tiny tags use `latest_tiny` or versioned tags such as `v0.1_tiny`
+- Versioned release tags use the pattern `vX.Y.Z`, for example `v0.1.0`
+- Tiny tags use `latest_tiny` or versioned tags such as `v0.1.0_tiny`
 
 ## Release Validation
 
