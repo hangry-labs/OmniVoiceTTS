@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "omnivoice"
-version = "0.1.0.dev0"
+version = "0.1.0"
 description = "Hangry Labs OmniVoiceTTS: easy-to-run multilingual zero-shot text-to-speech"
 readme = "README.md"
 license = "Apache-2.0"
