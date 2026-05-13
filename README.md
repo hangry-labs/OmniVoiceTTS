@@ -38,19 +38,19 @@ OmniVoice supports voice cloning. Do not use this project for unauthorized voice
 Run with NVIDIA GPU support:
 
 ```bash
-docker run -p 7861:7861 --gpus all hangrylabs/omnivoicetts:v0.1
+docker run -p 7861:7861 --gpus "device=0" -e CUDA_VISIBLE_DEVICES=0 hangrylabs/omnivoicetts:latest
 ```
 
 Run on CPU:
 
 ```bash
-docker run -p 7861:7861 -e OMNIVOICE_DEVICE=cpu hangrylabs/omnivoicetts:v0.1
+docker run -p 7861:7861 -e OMNIVOICE_DEVICE=cpu hangrylabs/omnivoicetts:latest
 ```
 
 Run on a specific GPU (example: GPU index `1`):
 
 ```bash
-docker run -p 7861:7861 --gpus "device=1" -e CUDA_VISIBLE_DEVICES=1 hangrylabs/omnivoicetts:v0.1
+docker run -p 7861:7861 --gpus "device=1" -e CUDA_VISIBLE_DEVICES=1 hangrylabs/omnivoicetts:latest
 ```
 
 Then open: **[http://localhost:7861](http://localhost:7861)**
@@ -91,7 +91,7 @@ curl -X POST "http://localhost:7861/tts/generate" \
 Voice cloning with a reference audio path mounted into the container:
 
 ```bash
-docker run -p 7861:7861 --gpus all -v "%cd%/samples:/data" hangrylabs/omnivoicetts:v0.1
+docker run -p 7861:7861 --gpus "device=0" -e CUDA_VISIBLE_DEVICES=0 -v "%cd%/samples:/data" hangrylabs/omnivoicetts:latest
 ```
 
 ```bash
@@ -207,7 +207,6 @@ OmniVoice is a massively multilingual zero-shot text-to-speech model supporting 
 - Voice design from speaker attributes such as gender, age, pitch, style, English accent, and Chinese dialect
 - Auto voice generation with no reference prompt
 - Fine-grained controls such as non-verbal symbols and pronunciation correction
-- Training, fine-tuning, data preparation, and evaluation tooling
 
 Upstream links:
 
@@ -227,7 +226,7 @@ omnivoice-infer --model k2-fsa/OmniVoice --text "Hello world." --output hello.wa
 omnivoice-infer-batch --model k2-fsa/OmniVoice --test_list test.jsonl --res_dir results/
 ```
 
-Training and evaluation documentation remains available in [examples/](examples/) and [docs/training.md](docs/training.md).
+This fork intentionally removes upstream training, data-preparation, and benchmark-evaluation pipelines from the runtime-focused package. For model training or research reproduction, use the original [k2-fsa/OmniVoice](https://github.com/k2-fsa/OmniVoice) repository.
 
 ---
 

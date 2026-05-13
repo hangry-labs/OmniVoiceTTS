@@ -15,10 +15,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Data utilities for batch inference and evaluation.
+"""Data utilities for batch inference.
 
 Provides ``read_test_list()`` to parse JSONL test list files used by
-``omnivoice.cli.infer_batch`` and evaluation scripts.
+``omnivoice.cli.infer_batch``.
 """
 
 import json
@@ -34,9 +34,8 @@ def read_test_list(path):
         id, text, ref_audio, ref_text, instruct,
         language_id, language_name, duration, speed
 
-    Note: ``language_name`` is only used by evaluation scripts (under
-    ``omnivoice/eval/``) for grouping and reporting results.  The model
-    itself only consumes ``language_id``.
+    Note: ``language_name`` is kept for compatibility with upstream-style
+    manifests. The model itself only consumes ``language_id``.
 
     Returns a list of dicts.
     """

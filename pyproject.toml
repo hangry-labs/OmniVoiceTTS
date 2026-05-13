@@ -39,23 +39,10 @@ dependencies = [
     "pydub==0.25.1",
     "pydantic==2.13.4",
     "soundfile==0.13.1",
-    "tensorboardX==2.6.5",
     "torch==2.8.0",
     "torchaudio==2.8.0",
     "transformers==5.8.0",
     "uvicorn[standard]==0.46.0",
-    "webdataset==1.0.2",
-]
-
-[project.optional-dependencies]
-
-eval = [
-    "jiwer==3.1.0",       # WER
-    "s3prl",               # Speech representation (HuBERT etc.)
-    "funasr",              # ASR models
-    "zhconv",              # Chinese character normalization
-    "zhon",                # Chinese punctuation
-    "unidecode",            # Unicode normalization
 ]
 
 [project.scripts]

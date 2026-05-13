@@ -27,31 +27,31 @@ OmniVoice supports voice cloning. Do not use this image for unauthorized voice c
 Run with NVIDIA GPU support:
 
 ```bash
-docker run -p 7861:7861 --gpus all hangrylabs/omnivoicetts:v0.1
+docker run -p 7861:7861 --gpus "device=0" -e CUDA_VISIBLE_DEVICES=0 hangrylabs/omnivoicetts:latest
 ```
 
 Run on CPU:
 
 ```bash
-docker run -p 7861:7861 -e OMNIVOICE_DEVICE=cpu hangrylabs/omnivoicetts:v0.1
+docker run -p 7861:7861 -e OMNIVOICE_DEVICE=cpu hangrylabs/omnivoicetts:latest
 ```
 
-Run on a specific GPU:
+Run on a different GPU by changing both GPU numbers. For example, GPU `1`:
 
 ```bash
-docker run -p 7861:7861 --gpus "device=1" -e CUDA_VISIBLE_DEVICES=1 hangrylabs/omnivoicetts:v0.1
+docker run -p 7861:7861 --gpus "device=1" -e CUDA_VISIBLE_DEVICES=1 hangrylabs/omnivoicetts:latest
 ```
 
 Then open:
 
 http://localhost:7861
 
-The standard `vX.Y` image is the full baked image with OmniVoice model assets, the Higgs audio tokenizer, and Whisper ASR assets included for offline-friendly use after the image is pulled.
+The `latest` image is the full baked image with OmniVoice model assets, the Higgs audio tokenizer, and Whisper ASR assets included for offline-friendly use after the image is pulled. Version tags such as `v0.1` are also available for reproducible deployments.
 
 Tiny tags use the `vX.Y_tiny` pattern. They keep runtime dependencies but skip baked Hugging Face model assets, and are intended for persistent-volume workflows where the cache is warmed on first online use:
 
 ```bash
-docker run -p 7861:7861 --gpus all -v omnivoicetts_hf_cache:/app/.cache/huggingface hangrylabs/omnivoicetts:v0.1_tiny
+docker run -p 7861:7861 --gpus "device=0" -e CUDA_VISIBLE_DEVICES=0 -v omnivoicetts_hf_cache:/app/.cache/huggingface hangrylabs/omnivoicetts:latest_tiny
 ```
 
 ## What You Get
@@ -114,9 +114,9 @@ http://localhost:7861/tts/docs
 
 ## Image Tags
 
-- Current release tag: `v0.1`
-- Future release tags use the same pattern: `vX.Y`
-- Tiny tags use the pattern `vX.Y_tiny`
+- Recommended tag for most users: `latest`
+- Versioned release tags use the pattern `vX.Y`, for example `v0.1`
+- Tiny tags use `latest_tiny` or versioned tags such as `v0.1_tiny`
 
 ## Attribution
 

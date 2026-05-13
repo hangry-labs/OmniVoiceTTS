@@ -18,12 +18,10 @@
 """Core OmniVoice model implementation.
 
 Defines the ``OmniVoice`` model class, generation config, and inference pipeline.
-This is the main entry point for both inference and training:
+This is the main entry point for inference:
 
 - **Inference**: ``OmniVoice.from_pretrained()`` loads the model, then
   ``model.generate()`` supports voice cloning, voice design, and auto voice.
-- **Training**: ``model.forward()`` computes the training loss; the model is
-  built and used by ``omnivoice.training.builder`` and ``omnivoice.training.trainer``.
 
 """
 
@@ -395,8 +393,8 @@ class OmniVoice(PreTrainedModel):
             if not _flex_attention_available:
                 raise RuntimeError(
                     "flex_attention is not available in the current environment. "
-                    "If you do not need flex_attention, set "
-                    '"attn_implementation": "sdpa" in your training config.'
+                    "Omit packed document_ids or use SDPA-compatible calls when "
+                    "flex_attention is not available."
                 )
             attention_mask = create_block_mask(
                 _get_packed_mask(
