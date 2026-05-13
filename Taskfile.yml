@@ -20,6 +20,13 @@ vars:
   DRY_RUN: '0'
   NEXT_VERSION: ''
   SKIP_VALIDATION: '0'
+  DEVPI_URL: 'http://192.168.10.148:3141/root/pypi/+simple/'
+  DEVPI_TRUSTED_HOST: '192.168.10.148'
+  LOCAL_EXTRA_INDEX_URLS: 'https://pypi.org/simple/ https://download.pytorch.org/whl/cu128'
+  DEVPI_TEST_PACKAGE: 'simplejson'
+  NAS_HOST: '192.168.10.148'
+  NAS_SSH_PORT: '1022'
+  NAS_USER: 'admin'
 
 tasks:
   gpuinfo:
@@ -27,13 +34,40 @@ tasks:
     cmds:
       - cmd /c nvidia-smi --query-gpu=index,name --format=csv,noheader
 
+  devpi-check:
+    desc: Check the local LAN devpi mirror used by local Docker builds
+    cmds:
+      - cmd /c curl.exe -sS -I {{.DEVPI_URL}}
+
+  devpi-package-check:
+    desc: Verify the LAN devpi mirror can resolve and download a real package
+    cmds:
+      - cmd /c if exist "%TEMP%\omnivoicetts-devpi-check" rmdir /s /q "%TEMP%\omnivoicetts-devpi-check"
+      - cmd /c mkdir "%TEMP%\omnivoicetts-devpi-check"
+      - cmd /c python -m pip download --no-deps --index-url {{.DEVPI_URL}} --trusted-host {{.DEVPI_TRUSTED_HOST}} --dest "%TEMP%\omnivoicetts-devpi-check" {{.DEVPI_TEST_PACKAGE}}
+
+  nas-shell:
+    desc: Open SSH shell to the Synology NAS
+    cmds:
+      - ssh -p {{.NAS_SSH_PORT}} {{.NAS_USER}}@{{.NAS_HOST}}
+
   image:
-    desc: Build local baked OmniVoiceTTS Docker image
+    desc: Build local baked OmniVoiceTTS Docker image using LAN devpi
+    cmds:
+      - cmd /c docker build --target baked -t {{.IMAGE}} --build-arg PIP_INDEX_URL={{.DEVPI_URL}} --build-arg "PIP_EXTRA_INDEX_URL={{.LOCAL_EXTRA_INDEX_URLS}}" --build-arg PIP_TRUSTED_HOST={{.DEVPI_TRUSTED_HOST}} .
+
+  image-tiny:
+    desc: Build local tiny OmniVoiceTTS Docker image without baked model cache using LAN devpi
+    cmds:
+      - cmd /c docker build --target tiny -t {{.TINY_IMAGE}} --build-arg PIP_INDEX_URL={{.DEVPI_URL}} --build-arg "PIP_EXTRA_INDEX_URL={{.LOCAL_EXTRA_INDEX_URLS}}" --build-arg PIP_TRUSTED_HOST={{.DEVPI_TRUSTED_HOST}} .
+
+  image-public:
+    desc: Build local baked image with public package indexes, matching GitHub Actions
     cmds:
       - cmd /c docker build --target baked -t {{.IMAGE}} .
 
-  image-tiny:
-    desc: Build local tiny OmniVoiceTTS Docker image without baked model cache
+  image-tiny-public:
+    desc: Build local tiny image with public package indexes, matching GitHub Actions
     cmds:
       - cmd /c docker build --target tiny -t {{.TINY_IMAGE}} .
 
@@ -93,6 +127,21 @@ tasks:
     desc: Open default browser to local OmniVoiceTTS UI
     cmds:
       - cmd /c start "" "http://localhost:{{.PORT}}"
+
+  localps:
+    desc: Show likely local agent/dev app processes
+    cmds:
+      - powershell -NoProfile -ExecutionPolicy Bypass -File scripts/local-processes.ps1 -Mode scan -RepoPath "{{.TASKFILE_DIR}}"
+
+  localports:
+    desc: Show likely local agent/dev app processes plus listening ports
+    cmds:
+      - powershell -NoProfile -ExecutionPolicy Bypass -File scripts/local-processes.ps1 -Mode scan -RepoPath "{{.TASKFILE_DIR}}" -IncludePorts
+
+  localclean:
+    desc: Stop Python/Node/dev processes whose command line references this repo
+    cmds:
+      - powershell -NoProfile -ExecutionPolicy Bypass -File scripts/local-processes.ps1 -Mode clean -RepoPath "{{.TASKFILE_DIR}}"
 
   appinject:
     desc: Inject local omnivoice/app.py into the running baked container and restart it
