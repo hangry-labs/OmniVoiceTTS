@@ -1,5 +1,5 @@
 <p>
-  <a href="https://github.com/Hangry-Labs/OmniVoiceTTS">
+  <a href="https://hangry-labs.github.io/OmniVoiceTTS/examples/">
     <img src="https://github.com/Hangry-Labs/OmniVoiceTTS/raw/master/logo.jpg" alt="Hangry Labs OmniVoiceTTS logo">
   </a>
 </p>
@@ -9,6 +9,14 @@
 Easy-to-run OmniVoice text-to-speech Docker images with a browser UI and HTTP API included.
 
 This Hangry Labs fork is built for people who want massively multilingual text to speech without a long setup. Install Docker, run one command, open the local UI, or call the API from your own application.
+
+## Listen First
+
+Before pulling the image, hear what OmniVoiceTTS can do:
+
+**[Open the OmniVoiceTTS language examples page](https://hangry-labs.github.io/OmniVoiceTTS/examples/)**
+
+The examples page includes native-language samples, voice-variety demos, translated intros, and cross-language clone demos across 20 languages.
 
 ## Responsible Use
 

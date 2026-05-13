@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="https://nuggies.website/">
+  <a href="https://hangry-labs.github.io/OmniVoiceTTS/examples/">
     <img src="logo.jpg" alt="Hangry Labs OmniVoiceTTS logo" width="720">
   </a>
 </p>
@@ -21,7 +21,7 @@ You get:
 
 Official Docker images are intended for: [hangrylabs/omnivoicetts on Docker Hub](https://hub.docker.com/r/hangrylabs/omnivoicetts/tags).
 
-Project page: [hangry-labs.github.io/OmniVoiceTTS/examples](https://hangry-labs.github.io/OmniVoiceTTS/examples/).
+**Listen to examples first:** [hangry-labs.github.io/OmniVoiceTTS/examples](https://hangry-labs.github.io/OmniVoiceTTS/examples/).
 
 Hangry Labs home: [nuggies.website](https://nuggies.website/).
 
