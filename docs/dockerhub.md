@@ -1,6 +1,6 @@
 <p>
   <a href="https://github.com/Hangry-Labs/OmniVoiceTTS">
-    <img src="https://github.com/Hangry-Labs/OmniVoiceTTS/raw/main/logo.jpg" alt="Hangry Labs OmniVoiceTTS logo">
+    <img src="https://github.com/Hangry-Labs/OmniVoiceTTS/raw/master/logo.jpg" alt="Hangry Labs OmniVoiceTTS logo">
   </a>
 </p>
 

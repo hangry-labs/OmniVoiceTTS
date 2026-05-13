@@ -51,7 +51,7 @@ tasks:
   deps:
     desc: Regenerate Linux/Python 3.11 requirements.txt from requirements.in
     cmds:
-      - uv pip compile requirements.in --python-version 3.11 --python-platform x86_64-manylinux_2_36 --no-header --no-annotate --output-file requirements.txt
+      - uv pip compile requirements.in --python-version 3.11 --python-platform x86_64-manylinux_2_36 --index-strategy unsafe-best-match --upgrade --no-header --no-annotate --output-file requirements.txt
 
   imagerun:
     desc: Run baked image with UI and API on PORT

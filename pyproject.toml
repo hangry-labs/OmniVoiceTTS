@@ -8,7 +8,7 @@ version = "0.1.0.dev0"
 description = "Hangry Labs OmniVoiceTTS: easy-to-run multilingual zero-shot text-to-speech"
 readme = "README.md"
 license = "Apache-2.0"
-requires-python = ">=3.10"
+requires-python = ">=3.11, <3.14"
 authors = [{name = "Han Zhu"}]
 keywords = [
     "tts",
@@ -30,19 +30,21 @@ classifiers = [
     "Programming Language :: Python :: 3",
 ]
 dependencies = [
-    "torch>=2.4",
-    "torchaudio>=2.4",
-    "transformers>=5.3.0",
-    "accelerate",
-    "pydub",
-    "gradio",
-    "fastapi",
-    "uvicorn[standard]",
-    "tensorboardX",
-    "webdataset",
-    "numpy",
-    "soundfile",
-    "librosa",
+    "accelerate==1.13.0",
+    "fastapi==0.136.1",
+    "gradio==6.14.0",
+    "huggingface-hub==1.14.0",
+    "librosa==0.11.0",
+    "numpy==2.4.4",
+    "pydub==0.25.1",
+    "pydantic==2.13.4",
+    "soundfile==0.13.1",
+    "tensorboardX==2.6.5",
+    "torch==2.8.0",
+    "torchaudio==2.8.0",
+    "transformers==5.8.0",
+    "uvicorn[standard]==0.46.0",
+    "webdataset==1.0.2",
 ]
 
 [project.optional-dependencies]
@@ -86,12 +88,6 @@ name = "pytorch-cuda"
 url = "https://download.pytorch.org/whl/cu128"
 # Only use this index when explicitly requested by `tool.uv.sources`.
 explicit = true
-
-[tool.uv]
-constraint-dependencies = [
-    "torch==2.8.0",
-    "torchaudio==2.8.0",
-]
 
 [tool.hatch.build.targets.sdist]
 include = ["omnivoice"]
