@@ -50,10 +50,10 @@ window.EXAMPLE_MANIFEST = {
         },
         {
           "file": "english/random/03.mp3",
-          "text": "The weather forecast said sunshine, so naturally I brought an umbrella and emotional backup. [laughter]",
-          "bytes": 132524,
-          "voice_profile": "whisper_female",
-          "instruct": "female, young adult, moderate pitch, whisper",
+          "text": "The weather forecast said sunshine, so naturally I brought an umbrella and emotional backup. [laughter] Maybe the umbrella knew more than the forecast.",
+          "bytes": 190604,
+          "voice_profile": "auto_nonverbal",
+          "instruct": null,
           "nonverbal_tag": "laughter"
         },
         {
@@ -74,10 +74,10 @@ window.EXAMPLE_MANIFEST = {
         },
         {
           "file": "english/random/06.mp3",
-          "text": "My calendar has a sense of humor: it put Monday right after Sunday again. [sigh]",
-          "bytes": 99404,
-          "voice_profile": "playful_male",
-          "instruct": "male, young adult, high pitch",
+          "text": "My calendar has a sense of humor: it put Monday right after Sunday again. [sigh] Apparently Sunday filed a complaint, but nobody read it.",
+          "bytes": 168524,
+          "voice_profile": "auto_nonverbal",
+          "instruct": null,
           "nonverbal_tag": "sigh"
         },
         {
@@ -98,11 +98,11 @@ window.EXAMPLE_MANIFEST = {
         },
         {
           "file": "english/random/09.mp3",
-          "text": "If sarcasm burned calories, half the office would be Olympic athletes. [surprise-ah]",
-          "bytes": 107564,
-          "voice_profile": "whisper_male",
-          "instruct": "male, young adult, low pitch, whisper",
-          "nonverbal_tag": "surprise"
+          "text": "If sarcasm burned calories, half the office would be Olympic athletes. [surprise-ah] Wait, that may explain the mystery doughnut.",
+          "bytes": 161324,
+          "voice_profile": "auto_nonverbal",
+          "instruct": null,
+          "nonverbal_tag": "surprise-ah"
         },
         {
           "file": "english/random/10.mp3",
@@ -163,10 +163,10 @@ window.EXAMPLE_MANIFEST = {
         },
         {
           "file": "chinese/random/03.mp3",
-          "text": "老板说这个需求很简单，我听见键盘在偷偷叹气。 [laughter]",
-          "bytes": 104204,
-          "voice_profile": "whisper_female",
-          "instruct": "female, young adult, moderate pitch, whisper",
+          "text": "老板说这个需求很简单，我听见键盘在偷偷叹气。 [laughter] 看来键盘比我更懂职场。",
+          "bytes": 147404,
+          "voice_profile": "auto_nonverbal",
+          "instruct": null,
           "nonverbal_tag": "laughter"
         },
         {
@@ -187,10 +187,10 @@ window.EXAMPLE_MANIFEST = {
         },
         {
           "file": "chinese/random/06.mp3",
-          "text": "电梯到了，门一开，尴尬也一起上来了。 [sigh]",
-          "bytes": 73484,
-          "voice_profile": "playful_male",
-          "instruct": "male, young adult, high pitch",
+          "text": "电梯到了，门一开，尴尬也一起上来了。 [sigh] 尴尬还按了最近的楼层。",
+          "bytes": 121964,
+          "voice_profile": "auto_nonverbal",
+          "instruct": null,
           "nonverbal_tag": "sigh"
         },
         {
@@ -211,11 +211,11 @@ window.EXAMPLE_MANIFEST = {
         },
         {
           "file": "chinese/random/09.mp3",
-          "text": "今天风很大，连我的计划都被吹散了。 [surprise-ah]",
-          "bytes": 86924,
-          "voice_profile": "whisper_male",
-          "instruct": "male, young adult, low pitch, whisper",
-          "nonverbal_tag": "surprise"
+          "text": "今天风很大，连我的计划都被吹散了。 [surprise-ah] 原来计划也会请假。",
+          "bytes": 121964,
+          "voice_profile": "auto_nonverbal",
+          "instruct": null,
+          "nonverbal_tag": "surprise-ah"
         },
         {
           "file": "chinese/random/10.mp3",
@@ -276,10 +276,10 @@ window.EXAMPLE_MANIFEST = {
         },
         {
           "file": "hindi/random/03.mp3",
-          "text": "माँ ने पूछा खाना खाया? मैंने कहा हाँ, और फ्रिज ने चुपचाप सच्चाई छिपा ली। [laughter]",
-          "bytes": 100364,
-          "voice_profile": "whisper_female",
-          "instruct": "female, young adult, moderate pitch, whisper",
+          "text": "माँ ने पूछा खाना खाया? मैंने कहा हाँ, और फ्रिज ने चुपचाप सच्चाई छिपा ली। [laughter] शायद फ्रिज भी परिवार की इज्जत बचा रहा था।",
+          "bytes": 157004,
+          "voice_profile": "auto_nonverbal",
+          "instruct": null,
           "nonverbal_tag": "laughter"
         },
         {
@@ -300,10 +300,10 @@ window.EXAMPLE_MANIFEST = {
         },
         {
           "file": "hindi/random/06.mp3",
-          "text": "मैंने डाइट शुरू की, समोसे ने कहा पहले मुझसे तो मिल लो। [sigh]",
-          "bytes": 77804,
-          "voice_profile": "playful_male",
-          "instruct": "male, young adult, high pitch",
+          "text": "मैंने डाइट शुरू की, समोसे ने कहा पहले मुझसे तो मिल लो। [sigh] समोसे की दलील सच में मजबूत थी।",
+          "bytes": 118604,
+          "voice_profile": "auto_nonverbal",
+          "instruct": null,
           "nonverbal_tag": "sigh"
         },
         {
@@ -324,11 +324,11 @@ window.EXAMPLE_MANIFEST = {
         },
         {
           "file": "hindi/random/09.mp3",
-          "text": "बारिश आई और सड़क ने तुरंत स्विमिंग पूल बनने का फैसला कर लिया। [surprise-ah]",
-          "bytes": 104204,
-          "voice_profile": "whisper_male",
-          "instruct": "male, young adult, low pitch, whisper",
-          "nonverbal_tag": "surprise"
+          "text": "बारिश आई और सड़क ने तुरंत स्विमिंग पूल बनने का फैसला कर लिया। [surprise-ah] लगता है प्लान भी छुट्टी पर चला गया।",
+          "bytes": 150764,
+          "voice_profile": "auto_nonverbal",
+          "instruct": null,
+          "nonverbal_tag": "surprise-ah"
         },
         {
           "file": "hindi/random/10.mp3",
@@ -389,10 +389,10 @@ window.EXAMPLE_MANIFEST = {
         },
         {
           "file": "spanish/random/03.mp3",
-          "text": "Mi plan era madrugar, pero mi almohada presentó mejores argumentos. [laughter]",
-          "bytes": 101324,
-          "voice_profile": "whisper_female",
-          "instruct": "female, young adult, moderate pitch, whisper",
+          "text": "Mi plan era madrugar, pero mi almohada presentó mejores argumentos. [laughter] La almohada debería estudiar derecho.",
+          "bytes": 148364,
+          "voice_profile": "auto_nonverbal",
+          "instruct": null,
           "nonverbal_tag": "laughter"
         },
         {
@@ -413,10 +413,10 @@ window.EXAMPLE_MANIFEST = {
         },
         {
           "file": "spanish/random/06.mp3",
-          "text": "El lunes llegó tan puntual que sospecho que no tiene amigos. [sigh]",
-          "bytes": 85004,
-          "voice_profile": "playful_male",
-          "instruct": "male, young adult, high pitch",
+          "text": "El lunes llegó tan puntual que sospecho que no tiene amigos. [sigh] Quizá por eso nadie lo invita.",
+          "bytes": 115244,
+          "voice_profile": "auto_nonverbal",
+          "instruct": null,
           "nonverbal_tag": "sigh"
         },
         {
@@ -437,11 +437,11 @@ window.EXAMPLE_MANIFEST = {
         },
         {
           "file": "spanish/random/09.mp3",
-          "text": "Mi celular tiene poca batería, igual que mis ganas de hacer trámites. [surprise-ah]",
-          "bytes": 105164,
-          "voice_profile": "whisper_male",
-          "instruct": "male, young adult, low pitch, whisper",
-          "nonverbal_tag": "surprise"
+          "text": "Mi celular tiene poca batería, igual que mis ganas de hacer trámites. [surprise-ah] Ahora entiendo por qué desapareció el último churro.",
+          "bytes": 170924,
+          "voice_profile": "auto_nonverbal",
+          "instruct": null,
+          "nonverbal_tag": "surprise-ah"
         },
         {
           "file": "spanish/random/10.mp3",
@@ -502,10 +502,10 @@ window.EXAMPLE_MANIFEST = {
         },
         {
           "file": "french/random/03.mp3",
-          "text": "Mon réveil a sonné, j'ai négocié comme à un sommet international. [laughter]",
-          "bytes": 96524,
-          "voice_profile": "whisper_female",
-          "instruct": "female, young adult, moderate pitch, whisper",
+          "text": "Mon réveil a sonné, j'ai négocié comme à un sommet international. [laughter] Mon réveil a perdu, mais il a demandé un appel.",
+          "bytes": 150764,
+          "voice_profile": "auto_nonverbal",
+          "instruct": null,
           "nonverbal_tag": "laughter"
         },
         {
@@ -526,10 +526,10 @@ window.EXAMPLE_MANIFEST = {
         },
         {
           "file": "french/random/06.mp3",
-          "text": "Le café du matin ne réveille pas seulement le corps, il signe un traité de paix. [sigh]",
-          "bytes": 107564,
-          "voice_profile": "playful_male",
-          "instruct": "male, young adult, high pitch",
+          "text": "Le café du matin ne réveille pas seulement le corps, il signe un traité de paix. [sigh] Le traité n'a duré que jusqu'au deuxième courriel.",
+          "bytes": 168524,
+          "voice_profile": "auto_nonverbal",
+          "instruct": null,
           "nonverbal_tag": "sigh"
         },
         {
@@ -550,11 +550,11 @@ window.EXAMPLE_MANIFEST = {
         },
         {
           "file": "french/random/09.mp3",
-          "text": "Le pain frais a une odeur qui annule toutes les bonnes résolutions. [surprise-ah]",
-          "bytes": 103724,
-          "voice_profile": "whisper_male",
-          "instruct": "male, young adult, low pitch, whisper",
-          "nonverbal_tag": "surprise"
+          "text": "Le pain frais a une odeur qui annule toutes les bonnes résolutions. [surprise-ah] Voilà donc où le dernier croissant est passé.",
+          "bytes": 158924,
+          "voice_profile": "auto_nonverbal",
+          "instruct": null,
+          "nonverbal_tag": "surprise-ah"
         },
         {
           "file": "french/random/10.mp3",
@@ -615,10 +615,10 @@ window.EXAMPLE_MANIFEST = {
         },
         {
           "file": "standard_arabic/random/03.mp3",
-          "text": "فتحت الثلاجة ثلاث مرات، كأن الطعام سيظهر من شدة الإصرار. [laughter]",
-          "bytes": 117164,
-          "voice_profile": "whisper_female",
-          "instruct": "female, young adult, moderate pitch, whisper",
+          "text": "فتحت الثلاجة ثلاث مرات، كأن الطعام سيظهر من شدة الإصرار. [laughter] يبدو أن الثلاجة تعرف أسراري أكثر مما ينبغي.",
+          "bytes": 184844,
+          "voice_profile": "auto_nonverbal",
+          "instruct": null,
           "nonverbal_tag": "laughter"
         },
         {
@@ -639,10 +639,10 @@ window.EXAMPLE_MANIFEST = {
         },
         {
           "file": "standard_arabic/random/06.mp3",
-          "text": "قلت سأبدأ الحمية غداً، فابتسمت الحلوى ابتسامة المنتصر. [sigh]",
-          "bytes": 101324,
-          "voice_profile": "playful_male",
-          "instruct": "male, young adult, high pitch",
+          "text": "قلت سأبدأ الحمية غداً، فابتسمت الحلوى ابتسامة المنتصر. [sigh] كانت ابتسامة الحلوى مقنعة جداً.",
+          "bytes": 145484,
+          "voice_profile": "auto_nonverbal",
+          "instruct": null,
           "nonverbal_tag": "sigh"
         },
         {
@@ -663,11 +663,11 @@ window.EXAMPLE_MANIFEST = {
         },
         {
           "file": "standard_arabic/random/09.mp3",
-          "text": "المنبه يوقظني كل يوم، وأنا أعلّمه معنى الصبر. [surprise-ah]",
-          "bytes": 99404,
-          "voice_profile": "whisper_male",
-          "instruct": "male, young adult, low pitch, whisper",
-          "nonverbal_tag": "surprise"
+          "text": "المنبه يوقظني كل يوم، وأنا أعلّمه معنى الصبر. [surprise-ah] ربما اختفت الخطة مع آخر قطعة كعك.",
+          "bytes": 153164,
+          "voice_profile": "auto_nonverbal",
+          "instruct": null,
+          "nonverbal_tag": "surprise-ah"
         },
         {
           "file": "standard_arabic/random/10.mp3",
@@ -728,10 +728,10 @@ window.EXAMPLE_MANIFEST = {
         },
         {
           "file": "bengali/random/03.mp3",
-          "text": "সোমবার এমনভাবে আসে, যেন সে ক্যালেন্ডারের বাড়িওয়ালা। [laughter]",
-          "bytes": 87404,
-          "voice_profile": "whisper_female",
-          "instruct": "female, young adult, moderate pitch, whisper",
+          "text": "সোমবার এমনভাবে আসে, যেন সে ক্যালেন্ডারের বাড়িওয়ালা। [laughter] মনে হয় সোমবারের চাবিটা খুবই আসল।",
+          "bytes": 135404,
+          "voice_profile": "auto_nonverbal",
+          "instruct": null,
           "nonverbal_tag": "laughter"
         },
         {
@@ -752,10 +752,10 @@ window.EXAMPLE_MANIFEST = {
         },
         {
           "file": "bengali/random/06.mp3",
-          "text": "ঘুম থেকে ওঠার আগে অ্যালার্মের সঙ্গে আমার প্রতিদিন সংসদ বসে। [sigh]",
-          "bytes": 94604,
-          "voice_profile": "playful_male",
-          "instruct": "male, young adult, high pitch",
+          "text": "ঘুম থেকে ওঠার আগে অ্যালার্মের সঙ্গে আমার প্রতিদিন সংসদ বসে। [sigh] অ্যালার্মের ধৈর্য সত্যিই প্রশংসনীয়।",
+          "bytes": 145004,
+          "voice_profile": "auto_nonverbal",
+          "instruct": null,
           "nonverbal_tag": "sigh"
         },
         {
@@ -776,11 +776,11 @@ window.EXAMPLE_MANIFEST = {
         },
         {
           "file": "bengali/random/09.mp3",
-          "text": "আমার ডেস্ক গুছিয়ে এত পরিষ্কার করেছি যে এখন কাজটাই খুঁজে পাচ্ছি না। [surprise-ah]",
-          "bytes": 109004,
-          "voice_profile": "whisper_male",
-          "instruct": "male, young adult, low pitch, whisper",
-          "nonverbal_tag": "surprise"
+          "text": "আমার ডেস্ক গুছিয়ে এত পরিষ্কার করেছি যে এখন কাজটাই খুঁজে পাচ্ছি না। [surprise-ah] তাহলে মিষ্টিটা নিজে নিজেই হারায়নি।",
+          "bytes": 152204,
+          "voice_profile": "auto_nonverbal",
+          "instruct": null,
+          "nonverbal_tag": "surprise-ah"
         },
         {
           "file": "bengali/random/10.mp3",
@@ -841,10 +841,10 @@ window.EXAMPLE_MANIFEST = {
         },
         {
           "file": "russian/random/03.mp3",
-          "text": "Понедельник пришел без стука, как будто ему все можно. [laughter]",
-          "bytes": 83564,
-          "voice_profile": "whisper_female",
-          "instruct": "female, young adult, moderate pitch, whisper",
+          "text": "Понедельник пришел без стука, как будто ему все можно. [laughter] Похоже, понедельник давно сделал дубликат ключей.",
+          "bytes": 146924,
+          "voice_profile": "auto_nonverbal",
+          "instruct": null,
           "nonverbal_tag": "laughter"
         },
         {
@@ -865,10 +865,10 @@ window.EXAMPLE_MANIFEST = {
         },
         {
           "file": "russian/random/06.mp3",
-          "text": "План был простой, пока я не начал его выполнять. [sigh]",
-          "bytes": 70124,
-          "voice_profile": "playful_male",
-          "instruct": "male, young adult, high pitch",
+          "text": "План был простой, пока я не начал его выполнять. [sigh] Простой план просто хорошо маскировался.",
+          "bytes": 121004,
+          "voice_profile": "auto_nonverbal",
+          "instruct": null,
           "nonverbal_tag": "sigh"
         },
         {
@@ -889,11 +889,11 @@ window.EXAMPLE_MANIFEST = {
         },
         {
           "file": "russian/random/09.mp3",
-          "text": "Кот посмотрел на меня так, будто аренду плачу я, а квартира его. [surprise-ah]",
-          "bytes": 97004,
-          "voice_profile": "whisper_male",
-          "instruct": "male, young adult, low pitch, whisper",
-          "nonverbal_tag": "surprise"
+          "text": "Кот посмотрел на меня так, будто аренду плачу я, а квартира его. [surprise-ah] Вот куда делся последний пряник.",
+          "bytes": 137804,
+          "voice_profile": "auto_nonverbal",
+          "instruct": null,
+          "nonverbal_tag": "surprise-ah"
         },
         {
           "file": "russian/random/10.mp3",
@@ -954,10 +954,10 @@ window.EXAMPLE_MANIFEST = {
         },
         {
           "file": "portuguese/random/03.mp3",
-          "text": "Segunda-feira chegou sorrindo, e isso já foi suspeito. [laughter]",
-          "bytes": 84524,
-          "voice_profile": "whisper_female",
-          "instruct": "female, young adult, moderate pitch, whisper",
+          "text": "Segunda-feira chegou sorrindo, e isso já foi suspeito. [laughter] Agora desconfio que a segunda-feira tem agenda própria.",
+          "bytes": 153164,
+          "voice_profile": "auto_nonverbal",
+          "instruct": null,
           "nonverbal_tag": "laughter"
         },
         {
@@ -978,10 +978,10 @@ window.EXAMPLE_MANIFEST = {
         },
         {
           "file": "portuguese/random/06.mp3",
-          "text": "Meu plano era acordar cedo; meu travesseiro ganhou no argumento. [sigh]",
-          "bytes": 91724,
-          "voice_profile": "playful_male",
-          "instruct": "male, young adult, high pitch",
+          "text": "Meu plano era acordar cedo; meu travesseiro ganhou no argumento. [sigh] Meu travesseiro deveria virar advogado.",
+          "bytes": 142124,
+          "voice_profile": "auto_nonverbal",
+          "instruct": null,
           "nonverbal_tag": "sigh"
         },
         {
@@ -1002,11 +1002,11 @@ window.EXAMPLE_MANIFEST = {
         },
         {
           "file": "portuguese/random/09.mp3",
-          "text": "O cachorro me olhou como quem sabe todos os meus segredos e quer petisco. [surprise-ah]",
-          "bytes": 109004,
-          "voice_profile": "whisper_male",
-          "instruct": "male, young adult, low pitch, whisper",
-          "nonverbal_tag": "surprise"
+          "text": "O cachorro me olhou como quem sabe todos os meus segredos e quer petisco. [surprise-ah] Então foi ali que sumiu o último brigadeiro.",
+          "bytes": 163724,
+          "voice_profile": "auto_nonverbal",
+          "instruct": null,
+          "nonverbal_tag": "surprise-ah"
         },
         {
           "file": "portuguese/random/10.mp3",
@@ -1067,10 +1067,10 @@ window.EXAMPLE_MANIFEST = {
         },
         {
           "file": "urdu/random/03.mp3",
-          "text": "پیر کا دن ایسے آتا ہے جیسے بغیر بلایا مہمان۔ [laughter]",
-          "bytes": 93164,
-          "voice_profile": "whisper_female",
-          "instruct": "female, young adult, moderate pitch, whisper",
+          "text": "پیر کا دن ایسے آتا ہے جیسے بغیر بلایا مہمان۔ [laughter] لگتا ہے پیر کے پاس واقعی اپنی چابی ہے۔",
+          "bytes": 158924,
+          "voice_profile": "auto_nonverbal",
+          "instruct": null,
           "nonverbal_tag": "laughter"
         },
         {
@@ -1091,10 +1091,10 @@ window.EXAMPLE_MANIFEST = {
         },
         {
           "file": "urdu/random/06.mp3",
-          "text": "الارم روز مجھے جگاتا ہے، اور میں روز اسے امید کا سبق دیتا ہوں۔ [sigh]",
-          "bytes": 101804,
-          "voice_profile": "playful_male",
-          "instruct": "male, young adult, high pitch",
+          "text": "الارم روز مجھے جگاتا ہے، اور میں روز اسے امید کا سبق دیتا ہوں۔ [sigh] الارم کی امید واقعی قابل تعریف ہے۔",
+          "bytes": 172364,
+          "voice_profile": "auto_nonverbal",
+          "instruct": null,
           "nonverbal_tag": "sigh"
         },
         {
@@ -1115,11 +1115,11 @@ window.EXAMPLE_MANIFEST = {
         },
         {
           "file": "urdu/random/09.mp3",
-          "text": "کام آسان تھا، جب تک واقعی شروع نہیں کیا تھا۔ [surprise-ah]",
-          "bytes": 95564,
-          "voice_profile": "whisper_male",
-          "instruct": "male, young adult, low pitch, whisper",
-          "nonverbal_tag": "surprise"
+          "text": "کام آسان تھا، جب تک واقعی شروع نہیں کیا تھا۔ [surprise-ah] تو آخری سموسہ یوں غائب نہیں ہوا تھا۔",
+          "bytes": 157964,
+          "voice_profile": "auto_nonverbal",
+          "instruct": null,
+          "nonverbal_tag": "surprise-ah"
         },
         {
           "file": "urdu/random/10.mp3",
@@ -1180,10 +1180,10 @@ window.EXAMPLE_MANIFEST = {
         },
         {
           "file": "polish/random/03.mp3",
-          "text": "Poniedziałek przyszedł bez pukania, jakby miał klucze do mieszkania. [laughter]",
-          "bytes": 103724,
-          "voice_profile": "whisper_female",
-          "instruct": "female, young adult, moderate pitch, whisper",
+          "text": "Poniedziałek przyszedł bez pukania, jakby miał klucze do mieszkania. [laughter] Może to nie był najlepszy żart.",
+          "bytes": 140684,
+          "voice_profile": "auto_nonverbal",
+          "instruct": null,
           "nonverbal_tag": "laughter"
         },
         {
@@ -1204,10 +1204,10 @@ window.EXAMPLE_MANIFEST = {
         },
         {
           "file": "polish/random/06.mp3",
-          "text": "Budzik dzwoni, a ja codziennie prowadzę z nim trudne negocjacje. [sigh]",
-          "bytes": 87884,
-          "voice_profile": "playful_male",
-          "instruct": "male, young adult, high pitch",
+          "text": "Budzik dzwoni, a ja codziennie prowadzę z nim trudne negocjacje. [sigh] Negocjacje trwają, ale budzik ma przewagę.",
+          "bytes": 144524,
+          "voice_profile": "auto_nonverbal",
+          "instruct": null,
           "nonverbal_tag": "sigh"
         },
         {
@@ -1228,11 +1228,11 @@ window.EXAMPLE_MANIFEST = {
         },
         {
           "file": "polish/random/09.mp3",
-          "text": "Pogoda obiecała słońce, więc oczywiście wziąłem parasol. [surprise-ah]",
-          "bytes": 73964,
-          "voice_profile": "whisper_male",
-          "instruct": "male, young adult, low pitch, whisper",
-          "nonverbal_tag": "surprise"
+          "text": "Pogoda obiecała słońce, więc oczywiście wziąłem parasol. [surprise-ah] Czyli pączek jednak miał plan awaryjny.",
+          "bytes": 137804,
+          "voice_profile": "auto_nonverbal",
+          "instruct": null,
+          "nonverbal_tag": "surprise-ah"
         },
         {
           "file": "polish/random/10.mp3",
@@ -1293,10 +1293,10 @@ window.EXAMPLE_MANIFEST = {
         },
         {
           "file": "thai/random/03.mp3",
-          "text": "วันจันทร์มาไวเหมือนเน็ตตอนยังไม่หมดโปร [laughter]",
-          "bytes": 83564,
-          "voice_profile": "whisper_female",
-          "instruct": "female, young adult, moderate pitch, whisper",
+          "text": "วันจันทร์มาไวเหมือนเน็ตตอนยังไม่หมดโปร [laughter] ดูเหมือนวันจันทร์จะมีกุญแจสำรองจริง ๆ",
+          "bytes": 124844,
+          "voice_profile": "auto_nonverbal",
+          "instruct": null,
           "nonverbal_tag": "laughter"
         },
         {
@@ -1317,10 +1317,10 @@ window.EXAMPLE_MANIFEST = {
         },
         {
           "file": "thai/random/06.mp3",
-          "text": "นาฬิกาปลุกดังทุกเช้า ส่วนฉันก็กดเลื่อนอย่างมีวินัย [sigh]",
-          "bytes": 86924,
-          "voice_profile": "playful_male",
-          "instruct": "male, young adult, high pitch",
+          "text": "นาฬิกาปลุกดังทุกเช้า ส่วนฉันก็กดเลื่อนอย่างมีวินัย [sigh] นาฬิกาปลุกคงเหนื่อยกับการเจรจานี้เหมือนกัน",
+          "bytes": 149804,
+          "voice_profile": "auto_nonverbal",
+          "instruct": null,
           "nonverbal_tag": "sigh"
         },
         {
@@ -1341,11 +1341,11 @@ window.EXAMPLE_MANIFEST = {
         },
         {
           "file": "thai/random/09.mp3",
-          "text": "ยิ้มไว้ก่อน เดี๋ยวค่อยไปงงต่อข้างใน [surprise-ah]",
-          "bytes": 74924,
-          "voice_profile": "whisper_male",
-          "instruct": "male, young adult, low pitch, whisper",
-          "nonverbal_tag": "surprise"
+          "text": "ยิ้มไว้ก่อน เดี๋ยวค่อยไปงงต่อข้างใน [surprise-ah] อย่างนี้ขนมชิ้นสุดท้ายก็มีผู้ต้องสงสัยแล้ว",
+          "bytes": 118124,
+          "voice_profile": "auto_nonverbal",
+          "instruct": null,
+          "nonverbal_tag": "surprise-ah"
         },
         {
           "file": "thai/random/10.mp3",
@@ -1406,10 +1406,10 @@ window.EXAMPLE_MANIFEST = {
         },
         {
           "file": "japanese/random/03.mp3",
-          "text": "月曜日は招待していないのに、毎週きちんと来ます。 [laughter]",
-          "bytes": 97004,
-          "voice_profile": "whisper_female",
-          "instruct": "female, young adult, moderate pitch, whisper",
+          "text": "月曜日は招待していないのに、毎週きちんと来ます。 [laughter] 月曜日は合鍵まで持っているのかもしれません。",
+          "bytes": 169964,
+          "voice_profile": "auto_nonverbal",
+          "instruct": null,
           "nonverbal_tag": "laughter"
         },
         {
@@ -1430,10 +1430,10 @@ window.EXAMPLE_MANIFEST = {
         },
         {
           "file": "japanese/random/06.mp3",
-          "text": "目覚まし時計とは毎朝、小さな外交交渉をしています。 [sigh]",
-          "bytes": 97964,
-          "voice_profile": "playful_male",
-          "instruct": "male, young adult, high pitch",
+          "text": "目覚まし時計とは毎朝、小さな外交交渉をしています。 [sigh] 目覚ましのほうが交渉上手でした。",
+          "bytes": 152204,
+          "voice_profile": "auto_nonverbal",
+          "instruct": null,
           "nonverbal_tag": "sigh"
         },
         {
@@ -1454,11 +1454,11 @@ window.EXAMPLE_MANIFEST = {
         },
         {
           "file": "japanese/random/09.mp3",
-          "text": "雨の日の靴下は、だいたい冒険者です。 [surprise-ah]",
-          "bytes": 80204,
-          "voice_profile": "whisper_male",
-          "instruct": "male, young adult, low pitch, whisper",
-          "nonverbal_tag": "surprise"
+          "text": "雨の日の靴下は、だいたい冒険者です。 [surprise-ah] つまり最後の団子には事情があったんですね。",
+          "bytes": 147884,
+          "voice_profile": "auto_nonverbal",
+          "instruct": null,
+          "nonverbal_tag": "surprise-ah"
         },
         {
           "file": "japanese/random/10.mp3",
@@ -1519,10 +1519,10 @@ window.EXAMPLE_MANIFEST = {
         },
         {
           "file": "german/random/03.mp3",
-          "text": "Der Montag kam pünktlich, und genau das war das Problem. [laughter]",
-          "bytes": 85964,
-          "voice_profile": "whisper_female",
-          "instruct": "female, young adult, moderate pitch, whisper",
+          "text": "Der Montag kam pünktlich, und genau das war das Problem. [laughter] Vielleicht hat der Montag wirklich einen Ersatzschlüssel.",
+          "bytes": 151724,
+          "voice_profile": "auto_nonverbal",
+          "instruct": null,
           "nonverbal_tag": "laughter"
         },
         {
@@ -1543,10 +1543,10 @@ window.EXAMPLE_MANIFEST = {
         },
         {
           "file": "german/random/06.mp3",
-          "text": "Das Brötchen war so frisch, dass meine Vorsätze sofort gekündigt haben. [sigh]",
-          "bytes": 92204,
-          "voice_profile": "playful_male",
-          "instruct": "male, young adult, high pitch",
+          "text": "Das Brötchen war so frisch, dass meine Vorsätze sofort gekündigt haben. [sigh] Der Wecker verhandelt leider ziemlich hart.",
+          "bytes": 152204,
+          "voice_profile": "auto_nonverbal",
+          "instruct": null,
           "nonverbal_tag": "sigh"
         },
         {
@@ -1567,11 +1567,11 @@ window.EXAMPLE_MANIFEST = {
         },
         {
           "file": "german/random/09.mp3",
-          "text": "Ich machte eine kurze Pause; sie beantragte sofort Verlängerung. [surprise-ah]",
-          "bytes": 101804,
-          "voice_profile": "whisper_male",
-          "instruct": "male, young adult, low pitch, whisper",
-          "nonverbal_tag": "surprise"
+          "text": "Ich machte eine kurze Pause; sie beantragte sofort Verlängerung. [surprise-ah] Dann war das letzte Brötchen doch nicht unschuldig.",
+          "bytes": 156044,
+          "voice_profile": "auto_nonverbal",
+          "instruct": null,
+          "nonverbal_tag": "surprise-ah"
         },
         {
           "file": "german/random/10.mp3",
@@ -1632,10 +1632,10 @@ window.EXAMPLE_MANIFEST = {
         },
         {
           "file": "indonesian/random/03.mp3",
-          "text": "Hari Senin datang tepat waktu, padahal tidak ada yang mengundang. [laughter]",
-          "bytes": 98924,
-          "voice_profile": "whisper_female",
-          "instruct": "female, young adult, moderate pitch, whisper",
+          "text": "Hari Senin datang tepat waktu, padahal tidak ada yang mengundang. [laughter] Sepertinya Senin memang punya kunci cadangan.",
+          "bytes": 151724,
+          "voice_profile": "auto_nonverbal",
+          "instruct": null,
           "nonverbal_tag": "laughter"
         },
         {
@@ -1656,10 +1656,10 @@ window.EXAMPLE_MANIFEST = {
         },
         {
           "file": "indonesian/random/06.mp3",
-          "text": "Alarm berbunyi, saya tekan tunda dengan rasa tanggung jawab yang besar. [sigh]",
-          "bytes": 100364,
-          "voice_profile": "playful_male",
-          "instruct": "male, young adult, high pitch",
+          "text": "Alarm berbunyi, saya tekan tunda dengan rasa tanggung jawab yang besar. [sigh] Alarm itu ternyata lawan negosiasi yang tangguh.",
+          "bytes": 161324,
+          "voice_profile": "auto_nonverbal",
+          "instruct": null,
           "nonverbal_tag": "sigh"
         },
         {
@@ -1680,11 +1680,11 @@ window.EXAMPLE_MANIFEST = {
         },
         {
           "file": "indonesian/random/09.mp3",
-          "text": "Rencana sederhana berubah menjadi rapat kecil dengan diri sendiri. [surprise-ah]",
-          "bytes": 105164,
-          "voice_profile": "whisper_male",
-          "instruct": "male, young adult, low pitch, whisper",
-          "nonverbal_tag": "surprise"
+          "text": "Rencana sederhana berubah menjadi rapat kecil dengan diri sendiri. [surprise-ah] Jadi camilan terakhir punya alibi yang lemah.",
+          "bytes": 154604,
+          "voice_profile": "auto_nonverbal",
+          "instruct": null,
+          "nonverbal_tag": "surprise-ah"
         },
         {
           "file": "indonesian/random/10.mp3",
@@ -1745,10 +1745,10 @@ window.EXAMPLE_MANIFEST = {
         },
         {
           "file": "turkish/random/03.mp3",
-          "text": "Pazartesi kapıyı çalmadan geldi, sanki evin anahtarı onda. [laughter]",
-          "bytes": 90764,
-          "voice_profile": "whisper_female",
-          "instruct": "female, young adult, moderate pitch, whisper",
+          "text": "Pazartesi kapıyı çalmadan geldi, sanki evin anahtarı onda. [laughter] Galiba pazartesinin gerçekten yedek anahtarı var.",
+          "bytes": 142604,
+          "voice_profile": "auto_nonverbal",
+          "instruct": null,
           "nonverbal_tag": "laughter"
         },
         {
@@ -1769,10 +1769,10 @@ window.EXAMPLE_MANIFEST = {
         },
         {
           "file": "turkish/random/06.mp3",
-          "text": "Alarm çalıyor, ben her sabah erteleme sanatını geliştiriyorum. [sigh]",
-          "bytes": 90764,
-          "voice_profile": "playful_male",
-          "instruct": "male, young adult, high pitch",
+          "text": "Alarm çalıyor, ben her sabah erteleme sanatını geliştiriyorum. [sigh] Alarm bu pazarlıkta oldukça inatçı çıktı.",
+          "bytes": 142604,
+          "voice_profile": "auto_nonverbal",
+          "instruct": null,
           "nonverbal_tag": "sigh"
         },
         {
@@ -1793,11 +1793,11 @@ window.EXAMPLE_MANIFEST = {
         },
         {
           "file": "turkish/random/09.mp3",
-          "text": "Çay demlenene kadar hayatın anlamı biraz bekleyebilir. [surprise-ah]",
-          "bytes": 90764,
-          "voice_profile": "whisper_male",
-          "instruct": "male, young adult, low pitch, whisper",
-          "nonverbal_tag": "surprise"
+          "text": "Çay demlenene kadar hayatın anlamı biraz bekleyebilir. [surprise-ah] Demek son baklavanın da bir hikayesi varmış.",
+          "bytes": 136844,
+          "voice_profile": "auto_nonverbal",
+          "instruct": null,
+          "nonverbal_tag": "surprise-ah"
         },
         {
           "file": "turkish/random/10.mp3",
@@ -1858,10 +1858,10 @@ window.EXAMPLE_MANIFEST = {
         },
         {
           "file": "korean/random/03.mp3",
-          "text": "월요일은 초대하지 않았는데도 매주 성실하게 옵니다. [laughter]",
-          "bytes": 97964,
-          "voice_profile": "whisper_female",
-          "instruct": "female, young adult, moderate pitch, whisper",
+          "text": "월요일은 초대하지 않았는데도 매주 성실하게 옵니다. [laughter] 월요일은 아마 예비 열쇠까지 갖고 있나 봅니다.",
+          "bytes": 168524,
+          "voice_profile": "auto_nonverbal",
+          "instruct": null,
           "nonverbal_tag": "laughter"
         },
         {
@@ -1882,10 +1882,10 @@ window.EXAMPLE_MANIFEST = {
         },
         {
           "file": "korean/random/06.mp3",
-          "text": "알람은 매일 울리고, 저는 매일 협상의 달인이 됩니다. [sigh]",
-          "bytes": 89804,
-          "voice_profile": "playful_male",
-          "instruct": "male, young adult, high pitch",
+          "text": "알람은 매일 울리고, 저는 매일 협상의 달인이 됩니다. [sigh] 알람은 협상에서 꽤 강한 상대였습니다.",
+          "bytes": 143084,
+          "voice_profile": "auto_nonverbal",
+          "instruct": null,
           "nonverbal_tag": "sigh"
         },
         {
@@ -1906,11 +1906,11 @@ window.EXAMPLE_MANIFEST = {
         },
         {
           "file": "korean/random/09.mp3",
-          "text": "고양이가 저를 무시하면, 왠지 제가 사과해야 할 것 같아요. [surprise-ah]",
-          "bytes": 106604,
-          "voice_profile": "whisper_male",
-          "instruct": "male, young adult, low pitch, whisper",
-          "nonverbal_tag": "surprise"
+          "text": "고양이가 저를 무시하면, 왠지 제가 사과해야 할 것 같아요. [surprise-ah] 그러면 마지막 떡은 그냥 사라진 게 아니었군요.",
+          "bytes": 172844,
+          "voice_profile": "auto_nonverbal",
+          "instruct": null,
+          "nonverbal_tag": "surprise-ah"
         },
         {
           "file": "korean/random/10.mp3",
@@ -1971,10 +1971,10 @@ window.EXAMPLE_MANIFEST = {
         },
         {
           "file": "vietnamese/random/03.mp3",
-          "text": "Thứ Hai đến đúng giờ, và đó là điều đáng ngại nhất. [laughter]",
-          "bytes": 76364,
-          "voice_profile": "whisper_female",
-          "instruct": "female, young adult, moderate pitch, whisper",
+          "text": "Thứ Hai đến đúng giờ, và đó là điều đáng ngại nhất. [laughter] Có lẽ thứ Hai thật sự có chìa khóa dự phòng.",
+          "bytes": 126764,
+          "voice_profile": "auto_nonverbal",
+          "instruct": null,
           "nonverbal_tag": "laughter"
         },
         {
@@ -1995,10 +1995,10 @@ window.EXAMPLE_MANIFEST = {
         },
         {
           "file": "vietnamese/random/06.mp3",
-          "text": "Báo thức reo mỗi sáng, còn tôi luyện kỹ năng hoãn binh. [sigh]",
-          "bytes": 75404,
-          "voice_profile": "playful_male",
-          "instruct": "male, young adult, high pitch",
+          "text": "Báo thức reo mỗi sáng, còn tôi luyện kỹ năng hoãn binh. [sigh] Cái báo thức đúng là đối thủ đàm phán cứng rắn.",
+          "bytes": 130604,
+          "voice_profile": "auto_nonverbal",
+          "instruct": null,
           "nonverbal_tag": "sigh"
         },
         {
@@ -2019,11 +2019,11 @@ window.EXAMPLE_MANIFEST = {
         },
         {
           "file": "vietnamese/random/09.mp3",
-          "text": "Kế hoạch thì đơn giản, cho đến khi tôi bắt đầu làm thật. [surprise-ah]",
-          "bytes": 85964,
-          "voice_profile": "whisper_male",
-          "instruct": "male, young adult, low pitch, whisper",
-          "nonverbal_tag": "surprise"
+          "text": "Kế hoạch thì đơn giản, cho đến khi tôi bắt đầu làm thật. [surprise-ah] Vậy chiếc bánh cuối cùng cũng có câu chuyện riêng.",
+          "bytes": 143084,
+          "voice_profile": "auto_nonverbal",
+          "instruct": null,
+          "nonverbal_tag": "surprise-ah"
         },
         {
           "file": "vietnamese/random/10.mp3",
@@ -2084,10 +2084,10 @@ window.EXAMPLE_MANIFEST = {
         },
         {
           "file": "italian/random/03.mp3",
-          "text": "Il lunedì è arrivato puntuale, e già questo mi sembrava provocatorio. [laughter]",
-          "bytes": 102764,
-          "voice_profile": "whisper_female",
-          "instruct": "female, young adult, moderate pitch, whisper",
+          "text": "Il lunedì è arrivato puntuale, e già questo mi sembrava provocatorio. [laughter] Forse il lunedì ha davvero una copia delle chiavi.",
+          "bytes": 157004,
+          "voice_profile": "auto_nonverbal",
+          "instruct": null,
           "nonverbal_tag": "laughter"
         },
         {
@@ -2108,10 +2108,10 @@ window.EXAMPLE_MANIFEST = {
         },
         {
           "file": "italian/random/06.mp3",
-          "text": "La sveglia suona, io rispondo con una trattativa sindacale. [sigh]",
-          "bytes": 77804,
-          "voice_profile": "playful_male",
-          "instruct": "male, young adult, high pitch",
+          "text": "La sveglia suona, io rispondo con una trattativa sindacale. [sigh] La sveglia però negozia con troppa esperienza.",
+          "bytes": 143564,
+          "voice_profile": "auto_nonverbal",
+          "instruct": null,
           "nonverbal_tag": "sigh"
         },
         {
@@ -2132,11 +2132,11 @@ window.EXAMPLE_MANIFEST = {
         },
         {
           "file": "italian/random/09.mp3",
-          "text": "Il gatto mi ignora con una professionalità impressionante. [surprise-ah]",
-          "bytes": 94604,
-          "voice_profile": "whisper_male",
-          "instruct": "male, young adult, low pitch, whisper",
-          "nonverbal_tag": "surprise"
+          "text": "Il gatto mi ignora con una professionalità impressionante. [surprise-ah] Allora l'ultimo cannolo non era innocente.",
+          "bytes": 140204,
+          "voice_profile": "auto_nonverbal",
+          "instruct": null,
+          "nonverbal_tag": "surprise-ah"
         },
         {
           "file": "italian/random/10.mp3",
@@ -2197,10 +2197,10 @@ window.EXAMPLE_MANIFEST = {
         },
         {
           "file": "dutch/random/03.mp3",
-          "text": "Maandag kwam precies op tijd, en dat voelde onnodig efficiënt. [laughter]",
-          "bytes": 94124,
-          "voice_profile": "whisper_female",
-          "instruct": "female, young adult, moderate pitch, whisper",
+          "text": "Maandag kwam precies op tijd, en dat voelde onnodig efficiënt. [laughter] Misschien heeft maandag echt een reservesleutel.",
+          "bytes": 156524,
+          "voice_profile": "auto_nonverbal",
+          "instruct": null,
           "nonverbal_tag": "laughter"
         },
         {
@@ -2221,10 +2221,10 @@ window.EXAMPLE_MANIFEST = {
         },
         {
           "file": "dutch/random/06.mp3",
-          "text": "Mijn wekker rinkelt elke ochtend met veel te veel vertrouwen. [sigh]",
-          "bytes": 87404,
-          "voice_profile": "playful_male",
-          "instruct": "male, young adult, high pitch",
+          "text": "Mijn wekker rinkelt elke ochtend met veel te veel vertrouwen. [sigh] Die wekker onderhandelt helaas veel te goed.",
+          "bytes": 136844,
+          "voice_profile": "auto_nonverbal",
+          "instruct": null,
           "nonverbal_tag": "sigh"
         },
         {
@@ -2245,11 +2245,11 @@ window.EXAMPLE_MANIFEST = {
         },
         {
           "file": "dutch/random/09.mp3",
-          "text": "Een korte pauze nemen in Nederland kan zomaar met koffie en overleg eindigen. [surprise-ah]",
-          "bytes": 116204,
-          "voice_profile": "whisper_male",
-          "instruct": "male, young adult, low pitch, whisper",
-          "nonverbal_tag": "surprise"
+          "text": "Een korte pauze nemen in Nederland kan zomaar met koffie en overleg eindigen. [surprise-ah] Dan was het laatste koekje toch niet onschuldig.",
+          "bytes": 169004,
+          "voice_profile": "auto_nonverbal",
+          "instruct": null,
+          "nonverbal_tag": "surprise-ah"
         },
         {
           "file": "dutch/random/10.mp3",
@@ -2337,8 +2337,7 @@ window.EXAMPLE_MANIFEST = {
       "[sigh]",
       "[surprise-ah]"
     ],
-    "notes": "Random samples intentionally rotate voice-design settings and selected non-verbal tags. Child and elderly voices are intentionally avoided."
+    "notes": "Random samples rotate voice-design settings for normal text. Samples with bracket expression tags are generated without voice design/instruct because OmniVoice can produce unstable non-speech audio when bracket tags are combined with voice design. Whisper profiles are not used with bracket tags."
   }
 }
 ;
-

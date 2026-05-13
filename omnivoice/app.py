@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import os
+import re
 import subprocess
 import tempfile
 import threading
@@ -62,6 +63,12 @@ FORMAT_ALIASES = {
     "mpeg": "mp3",
     "vorbis": "ogg",
 }
+
+BRACKET_TOKEN_PATTERN = re.compile(r"\[[^\]\r\n]{1,80}\]")
+VOICE_DESIGN_BRACKET_TOKEN_MESSAGE = (
+    "Voice Design does not support bracket tags such as [laughter] or [sigh]. "
+    "Use No Voice Prompt or Voice Clone for expressive bracket tags, or remove the bracket tag when using Voice Design."
+)
 
 MODEL_CACHE: dict[str, OmniVoice] = {}
 MODEL_LOCK = threading.Lock()
@@ -255,6 +262,15 @@ def build_voice_design_instruct(*selected_options: str | None, manual_instruct: 
     if not parts:
         return None
     return ", ".join(parts)
+
+
+def has_bracket_token(text: str | None) -> bool:
+    return bool(BRACKET_TOKEN_PATTERN.search(text or ""))
+
+
+def validate_voice_design_text(text: str | None, instruct: str | None) -> None:
+    if (instruct or "").strip() and has_bracket_token(text):
+        raise ValueError(VOICE_DESIGN_BRACKET_TOKEN_MESSAGE)
 
 
 def coerce_float(value, default: float) -> float:
@@ -451,6 +467,7 @@ def synthesize_array(
 ) -> tuple[int, np.ndarray]:
     if not (text or "").strip():
         raise ValueError("Text must not be empty")
+    validate_voice_design_text(text, instruct)
     model = get_model(device)
     audios = model.generate(
         text=text.strip(),
@@ -508,7 +525,7 @@ def synthesize_file(
 ):
     try:
         effective_instruct = None
-        if mode in {"Voice Design", "Voice Clone"}:
+        if mode == "Voice Design":
             effective_instruct = build_voice_design_instruct(
                 design_gender,
                 design_age,
@@ -517,6 +534,7 @@ def synthesize_file(
                 design_english_accent,
                 design_chinese_dialect,
             )
+            validate_voice_design_text(text, effective_instruct)
         config = build_generation_config(
             num_step=int(num_step),
             guidance_scale=float(guidance_scale),
@@ -620,8 +638,17 @@ with gr.Blocks(title="OmniVoiceTTS") as ui:
                 lines=5,
                 value="Hello from OmniVoice. This Docker image includes a browser UI and an HTTP API.",
             )
+            gr.Markdown(
+                "Bracket expression tags such as `[laughter]`, `[sigh]`, and `[surprise-ah]` work with "
+                "`No Voice Prompt` or `Voice Clone`. Do not combine them with `Voice Design`; the app will block "
+                "that combination because it can produce unstable non-speech audio."
+            )
             language = gr.Dropdown(LANGUAGE_CHOICES, value="Auto", label="Language")
-            with gr.Accordion("Voice Design Builder", open=False):
+            with gr.Accordion("Voice Design Builder (Voice Design mode only)", open=False):
+                gr.Markdown(
+                    "Voice Design controls speaker attributes only. For expressive bracket tags, switch to "
+                    "`No Voice Prompt` or `Voice Clone`."
+                )
                 with gr.Row():
                     design_gender = gr.Dropdown(
                         choices=["No preference"] + VOICE_DESIGN_CATEGORIES["gender"]["options"],
@@ -757,7 +784,13 @@ class TTSRequest(BaseModel):
     language: Optional[str] = Field(None, description="Language name or id. Omit for auto/language-agnostic mode.")
     ref_audio: Optional[str] = Field(None, description="Reference audio path inside the container for voice cloning.")
     ref_text: Optional[str] = Field(None, description="Transcript for ref_audio. If omitted, ASR may load on demand.")
-    instruct: Optional[str] = Field(None, description="Voice design instruction, for example 'female, low pitch'.")
+    instruct: Optional[str] = Field(
+        None,
+        description=(
+            "Voice design instruction, for example 'female, low pitch'. Do not combine with bracket expression "
+            "tags in text; use ref_audio voice cloning or omit instruct for [laughter]/[sigh]-style tags."
+        ),
+    )
     speed: Optional[float] = Field(1.0, ge=0.5, le=1.5, description="Speech speed multiplier.")
     duration: Optional[float] = Field(None, gt=0.0, description="Fixed output duration in seconds. Overrides speed.")
     device: str = Field("auto", description="auto, cpu, mps, or cuda:N.")

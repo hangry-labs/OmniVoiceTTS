@@ -93,6 +93,8 @@ curl -X POST "http://localhost:7861/tts/generate" \
   -o designed.mp3
 ```
 
+Voice design is for speaker attributes only. Do not combine `instruct` with bracket expression tags such as `[laughter]` or `[sigh]`; use no voice prompt or voice cloning for expressive bracket tags.
+
 Voice cloning can be called with a reference audio path that is visible inside the container:
 
 ```bash

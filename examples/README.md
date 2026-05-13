@@ -20,7 +20,7 @@ Runtime examples now live in the root [README.md](../README.md), especially:
 
 Generated language showcase candidates live under `assets/<language>/`:
 
-- `random/`: ten native-language culture/humor samples for review, rotating voice-design profiles and selected non-verbal tags
+- `random/`: ten native-language culture/humor samples for review. Plain-text samples rotate voice-design profiles. Samples with bracket expression tags such as `[laughter]`, `[sigh]`, and `[surprise-ah]` intentionally use no voice-design `instruct` because OmniVoice can produce unstable non-speech audio when voice design is combined with bracket tags.
 - `intro/`: three translated OmniVoiceTTS/Hangry Labs introduction candidates
 - `clone/`: one reference-clone candidate using `examples/original_clone.mp3`
 - `assets/manifest.json`: exact text, language, and file metadata for the generated samples
