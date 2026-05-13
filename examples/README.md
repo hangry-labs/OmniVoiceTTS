@@ -2,6 +2,14 @@
 
 This directory contains the static public project page used for GitHub Pages.
 
+The page embeds the example manifest in `voices.js`, so opening `index.html` directly works. Serving over HTTP is still useful for a closer GitHub Pages preview:
+
+```bash
+python -m http.server 8055
+```
+
+Then open `http://localhost:8055/examples/`.
+
 Runtime examples now live in the root [README.md](../README.md), especially:
 
 - Docker quick start
