@@ -46,7 +46,7 @@ Then open:
 
 http://localhost:7861
 
-The `latest` image is the full baked image with OmniVoice model assets, the Higgs audio tokenizer, and Whisper ASR assets included for offline-friendly use after the image is pulled. Version tags such as `v0.1` are also available for reproducible deployments.
+The `latest` image is the full baked image with OmniVoice model assets, the Higgs audio tokenizer, and Whisper ASR assets included for offline-friendly use after the image is pulled. The release image is based on Python 3.13 and is intended to run without live Hugging Face downloads after pull. Version tags such as `v0.1` are also available for reproducible deployments.
 
 Tiny tags use the `vX.Y_tiny` pattern. They keep runtime dependencies but skip baked Hugging Face model assets, and are intended for persistent-volume workflows where the cache is warmed on first online use:
 
@@ -62,7 +62,7 @@ docker run -p 7861:7861 --gpus "device=0" -e CUDA_VISIBLE_DEVICES=0 -v omnivoice
 - WAV, MP3, FLAC, and OGG output support
 - GPU support when Docker/NVIDIA support is available
 - Offline-friendly usage with the standard full image once it is available locally
-- Kokoro-shaped compatibility fields such as `voice`, `use_gpu`, `/tts/voices`, `/tts/speakers`, `/tts/stream-formats`, and `/tts/stream`
+- Kokoro-shaped compatibility fields and routes such as `voice`, `use_gpu`, `response_format`, `/tts/voices`, `/tts/speakers`, `/tts/stream-formats`, `/tts/convert`, and `/tts/stream`
 
 ## API Example
 
@@ -102,6 +102,15 @@ curl -X POST "http://localhost:7861/tts/generate" \
   -o cloned.mp3
 ```
 
+Compatibility output-format fields:
+
+```bash
+curl -X POST "http://localhost:7861/tts/convert" \
+  -H "Content-Type: application/json" \
+  -d '{"text":"Kokoro-shaped request using response_format.","voice":"default","response_format":"mp3"}' \
+  -o converted.mp3
+```
+
 Health check:
 
 ```bash
@@ -117,6 +126,10 @@ http://localhost:7861/tts/docs
 - Recommended tag for most users: `latest`
 - Versioned release tags use the pattern `vX.Y`, for example `v0.1`
 - Tiny tags use `latest_tiny` or versioned tags such as `v0.1_tiny`
+
+## Release Validation
+
+Before the initial release, the Python 3.13 baked image was built and tested without a host model-cache volume mounted. API validation covered `/tts/ping`, `/tts/status`, discovery routes, OpenAPI docs, metrics, real generation in WAV/MP3/FLAC/OGG, voice design, `/tts/stream`, `/tts/convert`, `/tts/purge`, and generation after purge/reload from baked cache.
 
 ## Attribution
 

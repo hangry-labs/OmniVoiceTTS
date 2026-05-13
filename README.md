@@ -17,7 +17,7 @@ You get:
 - 600+ language support inherited from OmniVoice
 - WAV, MP3, FLAC, and OGG output
 - GPU acceleration when Docker/NVIDIA support is available
-- Offline-friendly usage: download an image once, keep it, and run it later without relying on live model downloads
+- Offline-friendly usage: download the full image once, keep it, and run it later without relying on live model downloads
 
 Official Docker images are intended for: [hangrylabs/omnivoicetts on Docker Hub](https://hub.docker.com/r/hangrylabs/omnivoicetts/tags).
 
@@ -55,7 +55,7 @@ docker run -p 7861:7861 --gpus "device=1" -e CUDA_VISIBLE_DEVICES=1 hangrylabs/o
 
 Then open: **[http://localhost:7861](http://localhost:7861)**
 
-The full image is baked with the OmniVoice model, the Higgs audio tokenizer, and Whisper ASR assets. After the image is pulled, normal runtime is configured for offline use with `HF_HUB_OFFLINE=1` and `TRANSFORMERS_OFFLINE=1`.
+The full image is baked with the OmniVoice model, the Higgs audio tokenizer, and Whisper ASR assets. After the image is pulled, normal runtime is configured for offline use with `HF_HUB_OFFLINE=1` and `TRANSFORMERS_OFFLINE=1`. The Python 3.13 baked image was validated with no host model-cache volume mounted.
 
 ---
 
@@ -101,7 +101,9 @@ curl -X POST "http://localhost:7861/tts/generate" \
   -o cloned.mp3
 ```
 
-Kokoro-shaped compatibility fields are accepted where they can be translated cleanly. For example, existing callers may send `voice` and `use_gpu`; OmniVoiceTTS accepts those fields even though OmniVoice uses auto voice, voice design, or reference-audio cloning rather than fixed Kokoro speaker ids.
+Kokoro-shaped compatibility fields are accepted where they can be translated cleanly. For example, existing callers may send `voice`, `use_gpu`, or `response_format`; OmniVoiceTTS accepts those fields even though OmniVoice uses no-prompt generation, voice design, or reference-audio cloning rather than fixed Kokoro speaker ids.
+
+Output format can be sent as `output_format`, `format`, or Kokoro/OpenAI-style `response_format`.
 
 Useful endpoints:
 
@@ -113,6 +115,7 @@ Useful endpoints:
 - `GET /tts/languages`
 - `GET /tts/speakers?language=a`
 - `GET /tts/voices`
+- `GET /tts/voice-design/options`
 - `POST /tts/generate`
 - `POST /tts/convert`
 - `POST /tts/stream`
@@ -155,6 +158,8 @@ audio.save("hello.mp3")
 ---
 
 ## Local Development
+
+This repository currently targets Python `>=3.13, <3.14`. The Docker image uses `python:3.13-slim`, and `task deps` regenerates Linux/Python 3.13 requirements.
 
 Build and run the full baked image:
 
@@ -214,9 +219,13 @@ Upstream links:
 - Hugging Face model: [k2-fsa/OmniVoice](https://huggingface.co/k2-fsa/OmniVoice)
 - Hugging Face Space: [k2-fsa/OmniVoice](https://huggingface.co/spaces/k2-fsa/OmniVoice)
 - Paper: [arXiv:2604.00688](https://arxiv.org/abs/2604.00688)
-- Language list: [docs/languages.md](docs/languages.md)
-- Voice design reference: [docs/voice-design.md](docs/voice-design.md)
-- Generation parameters: [docs/generation-parameters.md](docs/generation-parameters.md)
+
+Runtime discovery is available from the local API:
+
+- Supported languages: `GET /tts/languages`
+- Voice design options: `GET /tts/voice-design/options`
+- Output formats: `GET /tts/formats`
+- Interactive API reference: `GET /tts/docs`
 
 The original Python CLI tools are still present:
 
@@ -259,9 +268,10 @@ If you encounter bugs, have feature requests, or need help using Hangry Labs Omn
 - Added baked Docker image flow with OmniVoice and Whisper ASR assets prefetched for offline runtime.
 - Added WAV, MP3, FLAC, and OGG output support.
 - Added a dependency-free Python HTTP client.
-- Added Kokoro-shaped compatibility fields and discovery routes.
+- Added Kokoro-shaped compatibility fields and discovery routes, including `response_format` output-format compatibility.
 - Added Taskfile workflows for image build, local run, API smoke testing, logs, cleanup, and release.
-- Added Hangry Labs public docs and static project page scaffold.
+- Added Hangry Labs Docker Hub docs and static project page scaffold.
+- Validated Python 3.13 baked Docker runtime with no host model-cache volume mounted, offline flags enabled, GPU inference, all output formats, stream/convert routes, purge, and reload from baked cache.
 
 ---
 
