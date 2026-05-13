@@ -1,8 +1,5 @@
 FROM python:3.11-slim AS base
 
-ARG PIP_INDEX_URL=
-ARG PIP_EXTRA_INDEX_URL=https://download.pytorch.org/whl/cu128
-ARG PIP_TRUSTED_HOST=
 ARG HF_ENDPOINT=
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -20,12 +17,9 @@ RUN apt-get update \
 COPY pyproject.toml README.md LICENSE VERSION requirements.txt /app/
 COPY omnivoice /app/omnivoice
 
-RUN if [ -n "$PIP_INDEX_URL" ]; then export PIP_INDEX_URL; else unset PIP_INDEX_URL; fi \
-    && if [ -n "$PIP_EXTRA_INDEX_URL" ]; then export PIP_EXTRA_INDEX_URL; else unset PIP_EXTRA_INDEX_URL; fi \
-    && if [ -n "$PIP_TRUSTED_HOST" ]; then export PIP_TRUSTED_HOST; else unset PIP_TRUSTED_HOST; fi \
-    && if [ -n "$HF_ENDPOINT" ]; then export HF_ENDPOINT; else unset HF_ENDPOINT; fi \
+RUN if [ -n "$HF_ENDPOINT" ]; then export HF_ENDPOINT; else unset HF_ENDPOINT; fi \
     && python -m pip install --upgrade pip setuptools wheel \
-    && python -m pip install -r /app/requirements.txt \
+    && python -m pip install --extra-index-url https://download.pytorch.org/whl/cu128 -r /app/requirements.txt \
     && python -m pip install -e . --no-deps
 
 FROM base AS baked-builder
