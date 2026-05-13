@@ -66,6 +66,59 @@ FORMAT_ALIASES = {
 MODEL_CACHE: dict[str, OmniVoice] = {}
 MODEL_LOCK = threading.Lock()
 
+VOICE_DESIGN_CATEGORIES = {
+    "gender": {
+        "label": "Gender",
+        "options": ["male", "female"],
+    },
+    "age": {
+        "label": "Age",
+        "options": ["child", "teenager", "young adult", "middle-aged", "elderly"],
+    },
+    "pitch": {
+        "label": "Pitch",
+        "options": ["very low pitch", "low pitch", "moderate pitch", "high pitch", "very high pitch"],
+    },
+    "style": {
+        "label": "Style",
+        "options": ["whisper"],
+    },
+    "english_accent": {
+        "label": "English Accent",
+        "options": [
+            "american accent",
+            "australian accent",
+            "british accent",
+            "chinese accent",
+            "canadian accent",
+            "indian accent",
+            "korean accent",
+            "portuguese accent",
+            "russian accent",
+            "japanese accent",
+        ],
+        "note": "Only effective for English speech.",
+    },
+    "chinese_dialect": {
+        "label": "Chinese Dialect",
+        "options": [
+            "河南话",
+            "陕西话",
+            "四川话",
+            "贵州话",
+            "云南话",
+            "桂林话",
+            "济南话",
+            "石家庄话",
+            "甘肃话",
+            "宁夏话",
+            "青岛话",
+            "东北话",
+        ],
+        "note": "Only effective for Chinese speech.",
+    },
+}
+
 
 def read_version_file() -> str:
     version_file = Path(__file__).resolve().parent.parent / "VERSION"
@@ -173,6 +226,41 @@ def normalize_output_format(output_format: str | None) -> str:
         supported = ", ".join(OUTPUT_FORMATS)
         raise ValueError(f"Unsupported output format '{output_format}'. Supported formats: {supported}")
     return normalized
+
+
+def voice_design_options_payload() -> dict:
+    return {
+        "categories": [
+            {
+                "id": key,
+                "label": category["label"],
+                "options": category["options"],
+                "note": category.get("note"),
+            }
+            for key, category in VOICE_DESIGN_CATEGORIES.items()
+        ],
+        "separator": ", ",
+    }
+
+
+def build_voice_design_instruct(*selected_options: str | None, manual_instruct: str | None = None) -> str | None:
+    parts = [
+        str(option).strip()
+        for option in selected_options
+        if option and str(option).strip() and str(option).strip().lower() not in {"auto", "no preference"}
+    ]
+    manual_value = (manual_instruct or "").strip()
+    if manual_value:
+        parts.append(manual_value)
+    if not parts:
+        return None
+    return ", ".join(parts)
+
+
+def coerce_float(value, default: float) -> float:
+    if value is None or value == "":
+        return default
+    return float(value)
 
 
 def to_int16_audio(audio: np.ndarray) -> np.ndarray:
@@ -328,6 +416,8 @@ def build_generation_config(
     layer_penalty_factor: float = 5.0,
     position_temperature: float = 5.0,
     class_temperature: float = 0.0,
+    audio_chunk_duration: float = 15.0,
+    audio_chunk_threshold: float = 30.0,
 ) -> OmniVoiceGenerationConfig:
     return OmniVoiceGenerationConfig(
         num_step=num_step,
@@ -339,6 +429,8 @@ def build_generation_config(
         layer_penalty_factor=layer_penalty_factor,
         position_temperature=position_temperature,
         class_temperature=class_temperature,
+        audio_chunk_duration=audio_chunk_duration,
+        audio_chunk_threshold=audio_chunk_threshold,
     )
 
 
@@ -387,7 +479,6 @@ def synthesize_file(
     language,
     ref_audio,
     ref_text,
-    instruct,
     mode,
     num_step,
     guidance_scale,
@@ -398,18 +489,46 @@ def synthesize_file(
     denoise,
     preprocess_prompt,
     postprocess_output,
+    t_shift,
+    layer_penalty_factor,
+    position_temperature,
+    class_temperature,
+    audio_chunk_duration,
+    audio_chunk_threshold,
     pitch_semitones,
     tempo,
     volume,
     normalize,
+    design_gender,
+    design_age,
+    design_pitch,
+    design_style,
+    design_english_accent,
+    design_chinese_dialect,
 ):
     try:
+        effective_instruct = None
+        if mode in {"Voice Design", "Voice Clone"}:
+            effective_instruct = build_voice_design_instruct(
+                design_gender,
+                design_age,
+                design_pitch,
+                design_style,
+                design_english_accent,
+                design_chinese_dialect,
+            )
         config = build_generation_config(
             num_step=int(num_step),
             guidance_scale=float(guidance_scale),
             denoise=bool(denoise),
             preprocess_prompt=bool(preprocess_prompt),
             postprocess_output=bool(postprocess_output),
+            t_shift=coerce_float(t_shift, 0.1),
+            layer_penalty_factor=coerce_float(layer_penalty_factor, 5.0),
+            position_temperature=coerce_float(position_temperature, 5.0),
+            class_temperature=coerce_float(class_temperature, 0.0),
+            audio_chunk_duration=coerce_float(audio_chunk_duration, 15.0),
+            audio_chunk_threshold=coerce_float(audio_chunk_threshold, 30.0),
         )
         clone_ref_audio = ref_audio if mode == "Voice Clone" else None
         sample_rate, waveform = synthesize_array(
@@ -417,7 +536,7 @@ def synthesize_file(
             language=language,
             ref_audio=clone_ref_audio,
             ref_text=ref_text,
-            instruct=instruct,
+            instruct=effective_instruct,
             duration=float(duration) if duration else None,
             speed=float(speed) if speed else None,
             device=device,
@@ -495,18 +614,47 @@ with gr.Blocks(title="OmniVoiceTTS") as ui:
     )
     with gr.Row():
         with gr.Column(scale=1):
-            mode = gr.Radio(["Auto Voice", "Voice Design", "Voice Clone"], value="Auto Voice", label="Mode")
+            mode = gr.Radio(["No Voice Prompt", "Voice Design", "Voice Clone"], value="No Voice Prompt", label="Mode")
             text = gr.Textbox(
                 label="Input Text",
                 lines=5,
                 value="Hello from OmniVoice. This Docker image includes a browser UI and an HTTP API.",
             )
             language = gr.Dropdown(LANGUAGE_CHOICES, value="Auto", label="Language")
-            instruct = gr.Textbox(
-                label="Voice Design Instruct",
-                lines=2,
-                placeholder="female, low pitch, british accent",
-            )
+            with gr.Accordion("Voice Design Builder", open=False):
+                with gr.Row():
+                    design_gender = gr.Dropdown(
+                        choices=["No preference"] + VOICE_DESIGN_CATEGORIES["gender"]["options"],
+                        value="No preference",
+                        label="Gender",
+                    )
+                    design_age = gr.Dropdown(
+                        choices=["No preference"] + VOICE_DESIGN_CATEGORIES["age"]["options"],
+                        value="No preference",
+                        label="Age",
+                    )
+                with gr.Row():
+                    design_pitch = gr.Dropdown(
+                        choices=["No preference"] + VOICE_DESIGN_CATEGORIES["pitch"]["options"],
+                        value="No preference",
+                        label="Pitch",
+                    )
+                    design_style = gr.Dropdown(
+                        choices=["No preference"] + VOICE_DESIGN_CATEGORIES["style"]["options"],
+                        value="No preference",
+                        label="Style",
+                    )
+                with gr.Row():
+                    design_english_accent = gr.Dropdown(
+                        choices=["No preference"] + VOICE_DESIGN_CATEGORIES["english_accent"]["options"],
+                        value="No preference",
+                        label="English Accent",
+                    )
+                    design_chinese_dialect = gr.Dropdown(
+                        choices=["No preference"] + VOICE_DESIGN_CATEGORIES["chinese_dialect"]["options"],
+                        value="No preference",
+                        label="Chinese Dialect",
+                    )
             ref_audio = gr.Audio(label="Reference Audio", type="filepath")
             ref_text = gr.Textbox(
                 label="Reference Text",
@@ -528,6 +676,19 @@ with gr.Blocks(title="OmniVoiceTTS") as ui:
                 denoise = gr.Checkbox(value=True, label="Denoise")
                 preprocess_prompt = gr.Checkbox(value=True, label="Preprocess Prompt")
                 postprocess_output = gr.Checkbox(value=True, label="Postprocess Output")
+                with gr.Accordion("Advanced Model Controls", open=False):
+                    t_shift = gr.Slider(0.01, 1.0, value=0.1, step=0.01, label="T Shift")
+                    layer_penalty_factor = gr.Slider(0.0, 10.0, value=5.0, step=0.1, label="Layer Penalty")
+                    position_temperature = gr.Slider(
+                        0.0,
+                        10.0,
+                        value=5.0,
+                        step=0.1,
+                        label="Position Temperature",
+                    )
+                    class_temperature = gr.Slider(0.0, 2.0, value=0.0, step=0.05, label="Class Temperature")
+                    audio_chunk_duration = gr.Number(value=15.0, label="Long Text Chunk Duration")
+                    audio_chunk_threshold = gr.Number(value=30.0, label="Long Text Chunk Threshold")
             with gr.Accordion("Audio Controls", open=False):
                 pitch_semitones = gr.Slider(-12, 12, value=0, step=0.5, label="Pitch")
                 tempo = gr.Slider(0.5, 2, value=1, step=0.05, label="Tempo")
@@ -545,7 +706,6 @@ with gr.Blocks(title="OmniVoiceTTS") as ui:
             language,
             ref_audio,
             ref_text,
-            instruct,
             mode,
             num_step,
             guidance_scale,
@@ -556,10 +716,22 @@ with gr.Blocks(title="OmniVoiceTTS") as ui:
             denoise,
             preprocess_prompt,
             postprocess_output,
+            t_shift,
+            layer_penalty_factor,
+            position_temperature,
+            class_temperature,
+            audio_chunk_duration,
+            audio_chunk_threshold,
             pitch_semitones,
             tempo,
             volume,
             loudness_normalize,
+            design_gender,
+            design_age,
+            design_pitch,
+            design_style,
+            design_english_accent,
+            design_chinese_dialect,
         ],
         outputs=[output_audio, status_box],
     )
@@ -595,6 +767,12 @@ class TTSRequest(BaseModel):
     denoise: bool = Field(True, description="Use denoising prompt when applicable.")
     preprocess_prompt: bool = Field(True, description="Trim/remove silence from reference prompt audio.")
     postprocess_output: bool = Field(True, description="Remove long silences and fade/pad generated audio.")
+    t_shift: float = Field(0.1, gt=0.0, le=1.0, description="Time-step shift for the noise schedule.")
+    layer_penalty_factor: float = Field(5.0, ge=0.0, le=20.0, description="Penalty encouraging lower codebook layers to unmask first.")
+    position_temperature: float = Field(5.0, ge=0.0, le=20.0, description="Temperature for mask-position selection.")
+    class_temperature: float = Field(0.0, ge=0.0, le=5.0, description="Temperature for token sampling.")
+    audio_chunk_duration: float = Field(15.0, ge=0.0, le=120.0, description="Target chunk duration for long text.")
+    audio_chunk_threshold: float = Field(30.0, ge=0.0, le=300.0, description="Estimated duration threshold before long-text chunking activates.")
     pitch_semitones: float = Field(0.0, ge=-12.0, le=12.0, description="Post-synthesis pitch shift.")
     tempo: float = Field(1.0, ge=0.5, le=2.0, description="Post-synthesis tempo multiplier.")
     volume: float = Field(1.0, ge=0.0, le=2.0, description="Output volume multiplier.")
@@ -617,6 +795,12 @@ def synthesize_payload(payload: TTSRequest) -> tuple[str, int, np.ndarray]:
             denoise=payload.denoise,
             preprocess_prompt=payload.preprocess_prompt,
             postprocess_output=payload.postprocess_output,
+            t_shift=payload.t_shift,
+            layer_penalty_factor=payload.layer_penalty_factor,
+            position_temperature=payload.position_temperature,
+            class_temperature=payload.class_temperature,
+            audio_chunk_duration=payload.audio_chunk_duration,
+            audio_chunk_threshold=payload.audio_chunk_threshold,
         )
         sample_rate, waveform = synthesize_array(
             text=payload.text,
@@ -715,12 +899,17 @@ def speakers(language: str = "auto") -> dict:
 def voices() -> dict:
     return {
         "voices": [
-            {"id": "auto", "name": "Auto Voice", "language": "auto", "language_name": "Auto"},
+            {"id": "auto", "name": "No Voice Prompt", "language": "auto", "language_name": "Any supported language"},
             {"id": "voice-design", "name": "Voice Design", "language": "multi", "language_name": "Any supported language"},
             {"id": "voice-clone", "name": "Voice Clone", "language": "multi", "language_name": "Any supported language"},
         ],
         "compatibility_note": "Kokoro voice ids in requests are accepted but ignored unless translated by a future compatibility profile.",
     }
+
+
+@api.get("/tts/voice-design/options")
+def voice_design_options() -> dict:
+    return voice_design_options_payload()
 
 
 @api.post("/tts/metrics")

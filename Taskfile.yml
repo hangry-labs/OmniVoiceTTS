@@ -4,7 +4,7 @@ vars:
   IMAGE: omnivoicetts:test
   TINY_IMAGE: omnivoicetts:tiny
   PORT: '7861'
-  GPU_DEVICE: '0'
+  GPU_DEVICE: '1'
   APP_DEVICE: 'auto'
   HF_TOKEN: ''
   HF_CACHE_VOLUME: omnivoicetts_hf_cache
@@ -93,6 +93,13 @@ tasks:
     desc: Open default browser to local OmniVoiceTTS UI
     cmds:
       - cmd /c start "" "http://localhost:{{.PORT}}"
+
+  appinject:
+    desc: Inject local omnivoice/app.py into the running baked container and restart it
+    cmds:
+      - cmd /c docker cp "{{.TASKFILE_DIR}}\omnivoice\app.py" {{.CONTAINER}}:/app/omnivoice/app.py
+      - cmd /c docker restart {{.CONTAINER}}
+      - cmd /c docker ps --filter "name={{.CONTAINER}}"
 
   imageapi:
     desc: Call API, play generated temp audio, then remove it
