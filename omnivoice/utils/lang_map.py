@@ -17,13 +17,13 @@
 
 """Language name to ISO 639-3 code mapping.
 
-Auto-generated from ``docs/lang_id_name_map.tsv``. Provides ``LANG_NAME_TO_ID``
-(for resolving language names to codes) and ``LANG_IDS`` (the set of supported
-ISO 639-3 codes). Used by ``OmniVoice.generate()`` to resolve user-provided
-language names.
+Provides ``LANG_NAME_TO_ID`` (for resolving language names to codes) and
+``LANG_IDS`` (the set of supported ISO 639-3 codes). Used by
+``OmniVoice.generate()`` and the HTTP API to resolve user-provided language
+names. The public release exposes this list through ``GET /tts/languages``.
 """
 
-# Auto-generated from docs/lang_id_name_map.tsv
+# Embedded generated language map.
 # Maps lowercase language name -> language ID code
 
 LANG_NAME_TO_ID = {

@@ -15,7 +15,7 @@ import torch
 import uvicorn
 from fastapi import Body, FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 from omnivoice import OmniVoice, OmniVoiceGenerationConfig, __version__
 from omnivoice.utils.lang_map import LANG_IDS, LANG_NAMES, LANG_NAME_TO_ID, lang_display_name
@@ -777,7 +777,12 @@ class TTSRequest(BaseModel):
     tempo: float = Field(1.0, ge=0.5, le=2.0, description="Post-synthesis tempo multiplier.")
     volume: float = Field(1.0, ge=0.0, le=2.0, description="Output volume multiplier.")
     normalize: bool = Field(False, description="Apply ffmpeg loudness normalization.")
-    output_format: str = Field("wav", alias="format", description="wav, mp3, flac, or ogg.")
+    output_format: str = Field(
+        "wav",
+        alias="format",
+        validation_alias=AliasChoices("format", "output_format", "response_format"),
+        description="wav, mp3, flac, or ogg.",
+    )
 
 
 class PurgeRequest(BaseModel):

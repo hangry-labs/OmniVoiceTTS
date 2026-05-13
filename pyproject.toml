@@ -8,7 +8,7 @@ version = "0.1.0.dev0"
 description = "Hangry Labs OmniVoiceTTS: easy-to-run multilingual zero-shot text-to-speech"
 readme = "README.md"
 license = "Apache-2.0"
-requires-python = ">=3.11, <3.14"
+requires-python = ">=3.13, <3.14"
 authors = [{name = "Han Zhu"}]
 keywords = [
     "tts",
@@ -28,6 +28,7 @@ classifiers = [
 
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.13",
 ]
 dependencies = [
     "accelerate==1.13.0",

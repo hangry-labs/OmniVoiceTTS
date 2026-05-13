@@ -1,4 +1,4 @@
-FROM python:3.11-slim AS base
+FROM python:3.13-slim AS base
 
 ARG HF_ENDPOINT=
 
@@ -29,7 +29,7 @@ ARG HF_ENDPOINT=
 RUN if [ -n "$HF_ENDPOINT" ]; then export HF_ENDPOINT; else unset HF_ENDPOINT; fi \
     && python -u /app/omnivoice/prefetch_assets.py
 
-FROM python:3.11-slim AS runtime-base
+FROM python:3.13-slim AS runtime-base
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \

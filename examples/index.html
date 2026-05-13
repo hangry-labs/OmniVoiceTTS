@@ -117,7 +117,7 @@
         <section class="mb-8 grid grid-cols-1 gap-4 md:grid-cols-3">
           <article class="brand-card p-5">
             <h2 class="mb-3 text-lg font-bold text-orange-400">Run</h2>
-            <pre class="overflow-auto rounded-lg bg-black/60 p-3 text-xs text-orange-100"><code>docker run -p 7861:7861 --gpus all hangrylabs/omnivoicetts:v0.1</code></pre>
+            <pre class="overflow-auto rounded-lg bg-black/60 p-3 text-xs text-orange-100"><code>docker run -p 7861:7861 --gpus "device=0" -e CUDA_VISIBLE_DEVICES=0 hangrylabs/omnivoicetts:latest</code></pre>
           </article>
           <article class="brand-card p-5">
             <h2 class="mb-3 text-lg font-bold text-orange-400">Open</h2>

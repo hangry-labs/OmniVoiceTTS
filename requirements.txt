@@ -2,6 +2,7 @@ accelerate==1.13.0
 annotated-doc==0.0.4
 annotated-types==0.7.0
 anyio==4.13.0
+audioop-lts==0.2.2
 audioread==3.1.0
 brotli==1.2.0
 certifi==2026.4.22
@@ -80,6 +81,9 @@ shellingham==1.5.4
 six==1.17.0
 soundfile==0.13.1
 soxr==1.1.0
+standard-aifc==3.13.0
+standard-chunk==3.13.0
+standard-sunau==3.13.0
 starlette==1.0.0
 sympy==1.14.0
 threadpoolctl==3.6.0
