@@ -204,6 +204,8 @@ task release DRY_RUN=1
 task release
 ```
 
+The release task is intentionally allowed to create the release commit, annotated tag, and next-snapshot commit. Outside that bounded release flow, normal project changes should be reviewed and committed by the repository owner.
+
 ---
 
 ## Original OmniVoice Project
@@ -278,7 +280,7 @@ If you encounter bugs, have feature requests, or need help using Hangry Labs Omn
 - Added Kokoro-shaped compatibility fields/routes where they can be translated cleanly, including `voice`, `use_gpu`, `/tts/voices`, `/tts/speakers`, `/tts/stream-formats`, `/tts/convert`, and `/tts/stream`.
 - Added advanced generation controls for guidance, denoise/preprocess/postprocess, chunking, temperature, layer penalty, pitch, tempo, volume, and loudness normalization.
 - Added a dependency-free Python HTTP client.
-- Added Taskfile workflows for image build, image run, local bind-mounted run, API smoke testing, logs, cleanup, release, app injection, NAS shell access, and local agent/dev process cleanup.
+- Added Taskfile workflows for image build, image run, local bind-mounted run, API smoke testing, logs, cleanup, release, app injection, NAS shell access, and local dev process cleanup.
 - Removed upstream training, data-preparation, evaluation, fine-tuning, and benchmark workflows from this fork to keep the project focused on inference, UI, API, and Docker runtime.
 - Simplified public docs to README plus Docker Hub docs, with runtime discovery delegated to API endpoints.
 - Added Hangry Labs branding assets, static 404 page, Docker Hub documentation, and a GitHub Pages examples showcase.

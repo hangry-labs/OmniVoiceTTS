@@ -103,12 +103,12 @@ tasks:
       - cmd /c start "" "http://localhost:{{.PORT}}"
 
   localps:
-    desc: Show likely local agent/dev app processes
+    desc: Show likely local dev app processes
     cmds:
       - powershell -NoProfile -ExecutionPolicy Bypass -File scripts/local-processes.ps1 -Mode scan -RepoPath "{{.TASKFILE_DIR}}"
 
   localports:
-    desc: Show likely local agent/dev app processes plus listening ports
+    desc: Show likely local dev app processes plus listening ports
     cmds:
       - powershell -NoProfile -ExecutionPolicy Bypass -File scripts/local-processes.ps1 -Mode scan -RepoPath "{{.TASKFILE_DIR}}" -IncludePorts
 

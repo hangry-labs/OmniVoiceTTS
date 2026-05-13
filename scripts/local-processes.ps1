@@ -9,11 +9,11 @@ $ErrorActionPreference = "Stop"
 
 $resolvedRepo = (Resolve-Path -LiteralPath $RepoPath).Path
 $repoLower = $resolvedRepo.ToLowerInvariant()
-$agentCommandPattern = '(^|\s)(vite|vi|uvicorn|gradio|streamlit|flask|fastapi|jupyter|marimo|chainlit|npm|pnpm|bun|node|python|pythonw|uv|task)(\s|$|\.exe)'
+$devCommandPattern = '(^|\s)(vite|vi|uvicorn|gradio|streamlit|flask|fastapi|jupyter|marimo|chainlit|npm|pnpm|bun|node|python|pythonw|uv|task)(\s|$|\.exe)'
 $appCommandPattern = 'vite|uvicorn|gradio|streamlit|flask|fastapi|jupyter|marimo|chainlit|omnivoice|OmniVoiceTTS'
-$agentPortSet = [System.Collections.Generic.HashSet[int]]::new()
+$devPortSet = [System.Collections.Generic.HashSet[int]]::new()
 @(3000, 3001, 4173, 5000, 5173, 7860, 7861, 8000, 8080, 8501, 8888) | ForEach-Object {
-    [void]$agentPortSet.Add([int]$_)
+    [void]$devPortSet.Add([int]$_)
 }
 $currentProcessId = [int]$PID
 $parentProcessId = [int](Get-CimInstance Win32_Process -Filter "ProcessId=$currentProcessId").ParentProcessId
@@ -21,7 +21,7 @@ $parentProcessId = [int](Get-CimInstance Win32_Process -Filter "ProcessId=$curre
 function Get-DevProcesses {
     $listeners = @{}
     Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue |
-        Where-Object { $agentPortSet.Contains([int]$_.LocalPort) } |
+        Where-Object { $devPortSet.Contains([int]$_.LocalPort) } |
         ForEach-Object { $listeners[[int]$_.OwningProcess] = $true }
 
     $all = Get-CimInstance Win32_Process |
@@ -39,7 +39,7 @@ function Get-DevProcesses {
                 ($commandLine -and (
                     $commandLine.ToLowerInvariant().Contains($repoLower) -or
                     $commandLine -match $appCommandPattern -or
-                    $commandLine -match $agentCommandPattern
+                    $commandLine -match $devCommandPattern
                 )) -or
                 ($name -match '^(vite|uvicorn|gradio|streamlit|flask|jupyter|marimo|chainlit)(\.exe)?$')
         } |
@@ -57,7 +57,7 @@ function Get-RepoProcesses {
                 $commandLine.ToLowerInvariant().Contains($repoLower) -and
                 (($name -match '^(python|pythonw|uv|node|npm|pnpm|bun|task|vite|uvicorn|gradio|streamlit|flask|jupyter|marimo|chainlit)(\.exe)?$') -or
                     ($commandLine -match $appCommandPattern) -or
-                    ($commandLine -match $agentCommandPattern))
+                    ($commandLine -match $devCommandPattern))
         } |
         Select-Object ProcessId, Name, CommandLine
 }
@@ -65,12 +65,12 @@ function Get-RepoProcesses {
 if ($Mode -eq "scan") {
     Write-Host "Repo: $resolvedRepo"
     Write-Host ""
-    Write-Host "Likely agent/dev app processes:"
+    Write-Host "Likely local dev app processes:"
     $processes = Get-DevProcesses
     if ($processes) {
         $processes | Format-List
     } else {
-        Write-Host "No likely agent/dev app processes found."
+        Write-Host "No likely local dev app processes found."
     }
 
     if ($IncludePorts) {

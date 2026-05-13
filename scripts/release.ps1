@@ -6,6 +6,9 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+Write-Host "Release automation may create local commits and tags for this bounded release process."
+Write-Host "Do not use this script for ordinary post-release documentation or code changes."
+
 function Test-Enabled {
     param([string]$Value)
     return $Value -match '^(1|true|yes|y)$'

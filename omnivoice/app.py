@@ -16,6 +16,7 @@ import torch
 import uvicorn
 from fastapi import Body, FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 from omnivoice import OmniVoice, OmniVoiceGenerationConfig, __version__
@@ -28,6 +29,8 @@ LOAD_ASR = os.getenv("OMNIVOICE_LOAD_ASR", "1").lower() in {"1", "true", "yes", 
 APP_VERSION = os.getenv("APP_VERSION", __version__)
 BUILD_ID = os.getenv("BUILD_ID", "stable")
 SAMPLE_RATE = 24000
+ASSET_DIR = Path(__file__).resolve().parent.parent / "hangrylabs"
+BRAND_ASSET_BASE = "/assets/hangrylabs"
 
 OUTPUT_FORMATS = {
     "wav": {
@@ -605,33 +608,337 @@ hardware_choices = get_hardware_choices()
 hardware_values = {value for _, value in hardware_choices}
 default_hardware = DEFAULT_DEVICE if DEFAULT_DEVICE in hardware_values else "auto"
 
-BADGE_CSS = """
-#build-badge {
+APP_CSS = f"""
+:root {{
+    --brand-bg: #080503;
+    --brand-panel: rgba(20, 13, 9, 0.88);
+    --brand-line: rgba(255, 176, 118, 0.22);
+    --brand-orange: #ff6b00;
+    --brand-amber: #ffb076;
+    --brand-cream: #fff3e7;
+    --brand-muted: rgba(255, 243, 231, 0.72);
+}}
+
+body {{
+    background:
+        linear-gradient(180deg, rgba(8, 5, 3, 0.22), var(--brand-bg) 460px),
+        radial-gradient(circle at 80% 10%, rgba(255, 107, 0, 0.22), transparent 34rem),
+        url("{BRAND_ASSET_BASE}/hero_background_small.png") center top / cover no-repeat fixed,
+        var(--brand-bg) !important;
+}}
+
+.gradio-container {{
+    max-width: 1220px !important;
+    margin: 0 auto !important;
+    padding: 24px 18px 36px !important;
+    background: transparent !important;
+    color: var(--brand-cream) !important;
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+}}
+
+.brand-hero {{
+    overflow: hidden;
+    position: relative;
+    min-height: 330px;
+    margin: 0 0 18px;
+    padding: 22px;
+    border: 1px solid rgba(255, 176, 118, 0.24);
+    border-radius: 16px;
+    background:
+        linear-gradient(115deg, rgba(8, 5, 3, 0.96) 0%, rgba(20, 9, 2, 0.86) 48%, rgba(255, 107, 0, 0.24) 100%),
+        url("{BRAND_ASSET_BASE}/hero_background_small.png") center / cover no-repeat;
+    box-shadow: 0 28px 70px rgba(0, 0, 0, 0.58), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}}
+
+.brand-hero::after {{
+    content: "";
+    position: absolute;
+    inset: auto -14% -42% 38%;
+    height: 260px;
+    background: radial-gradient(circle, rgba(255, 107, 0, 0.28), transparent 64%);
+    pointer-events: none;
+}}
+
+.brand-nav {{
+    position: relative;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    margin-bottom: 42px;
+}}
+
+.brand-lockup {{
+    display: flex;
+    align-items: center;
+    gap: 13px;
+    min-width: 0;
+}}
+
+.brand-lockup img {{
+    width: 48px;
+    height: 48px;
+    object-fit: contain;
+    border-radius: 10px;
+    box-shadow: 0 0 0 1px rgba(255, 176, 118, 0.22), 0 12px 24px rgba(0, 0, 0, 0.35);
+}}
+
+.brand-name {{
+    color: var(--brand-cream);
+    font-size: 1.02rem;
+    font-weight: 800;
+    letter-spacing: 0;
+    line-height: 1.08;
+}}
+
+.brand-subname {{
+    margin-top: 3px;
+    color: var(--brand-muted);
+    font-size: 0.82rem;
+}}
+
+.brand-links {{
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 8px;
+}}
+
+.brand-links a {{
+    display: inline-flex;
+    align-items: center;
+    min-height: 34px;
+    padding: 7px 12px;
+    border: 1px solid rgba(255, 176, 118, 0.28);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.065);
+    color: var(--brand-cream) !important;
+    font-size: 0.84rem;
+    font-weight: 700;
+    text-decoration: none !important;
+    backdrop-filter: blur(8px);
+}}
+
+.brand-links a:first-child {{
+    border-color: rgba(255, 107, 0, 0.72);
+    background: linear-gradient(135deg, #ff6b00, #ff9a3d);
+    color: #180a02 !important;
+}}
+
+.brand-copy {{
+    position: relative;
+    z-index: 1;
+    max-width: 760px;
+}}
+
+.brand-copy h1 {{
+    margin: 0 0 12px;
+    color: var(--brand-cream);
+    font-size: clamp(2.4rem, 6vw, 5.15rem);
+    line-height: 0.92;
+    letter-spacing: 0;
+}}
+
+.brand-copy p {{
+    max-width: 660px;
+    margin: 0;
+    color: var(--brand-muted);
+    font-size: 1.04rem;
+    line-height: 1.6;
+}}
+
+.brand-pills {{
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 9px;
+    margin-top: 24px;
+}}
+
+.brand-pills span {{
+    padding: 7px 11px;
+    border: 1px solid rgba(255, 176, 118, 0.24);
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.32);
+    color: var(--brand-cream);
+    font-size: 0.82rem;
+    font-weight: 750;
+}}
+
+.app-grid > .form,
+.app-grid > div {{
+    gap: 18px !important;
+}}
+
+.control-panel,
+.output-panel {{
+    padding: 16px !important;
+    border: 1px solid var(--brand-line) !important;
+    border-radius: 14px !important;
+    background: var(--brand-panel) !important;
+    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.36) !important;
+    backdrop-filter: blur(13px);
+}}
+
+.output-panel {{
+    position: sticky;
+    top: 18px;
+    align-self: flex-start;
+}}
+
+.notice-card {{
+    padding: 12px 14px;
+    border: 1px solid rgba(255, 176, 118, 0.26);
+    border-radius: 10px;
+    background: rgba(255, 107, 0, 0.10);
+    color: var(--brand-cream);
+}}
+
+.notice-card p {{
+    margin: 0;
+}}
+
+.gradio-container .block,
+.gradio-container .form,
+.gradio-container .panel,
+.gradio-container .tabs,
+.gradio-container .tabitem,
+.gradio-container .input-container,
+.gradio-container textarea,
+.gradio-container input,
+.gradio-container select {{
+    border-color: rgba(255, 176, 118, 0.18) !important;
+    background: rgba(255, 255, 255, 0.055) !important;
+    color: var(--brand-cream) !important;
+}}
+
+.gradio-container label,
+.gradio-container .label-wrap,
+.gradio-container .wrap,
+.gradio-container .prose,
+.gradio-container .prose p {{
+    color: var(--brand-cream) !important;
+}}
+
+.gradio-container .secondary-wrap,
+.gradio-container .hint,
+.gradio-container .info,
+.gradio-container .prose code {{
+    color: var(--brand-amber) !important;
+}}
+
+.gradio-container button.primary,
+#generate-btn {{
+    min-height: 48px !important;
+    border: 0 !important;
+    border-radius: 12px !important;
+    background: linear-gradient(135deg, #ff6b00, #ffb076) !important;
+    color: #180a02 !important;
+    font-size: 1rem !important;
+    font-weight: 850 !important;
+    box-shadow: 0 14px 30px rgba(255, 107, 0, 0.26) !important;
+}}
+
+.gradio-container button:not(.primary) {{
+    border-color: rgba(255, 176, 118, 0.18) !important;
+    background: rgba(255, 255, 255, 0.065) !important;
+    color: var(--brand-cream) !important;
+}}
+
+.gradio-container .accordion,
+.gradio-container details {{
+    border-color: rgba(255, 176, 118, 0.20) !important;
+    border-radius: 12px !important;
+    background: rgba(0, 0, 0, 0.20) !important;
+}}
+
+#build-badge {{
     position: fixed;
     top: 12px;
     right: 12px;
     z-index: 9999;
-    background: rgba(0, 0, 0, 0.45);
-    color: #ffffff;
-    border: 1px solid rgba(255, 255, 255, 0.2);
+    background: rgba(8, 5, 3, 0.76);
+    color: var(--brand-cream);
+    border: 1px solid rgba(255, 176, 118, 0.24);
     border-radius: 8px;
     padding: 6px 10px;
     font-size: 12px;
     font-family: Arial, sans-serif;
-    backdrop-filter: blur(2px);
-}
+    backdrop-filter: blur(8px);
+}}
+
+@media (max-width: 760px) {{
+    .gradio-container {{
+        padding: 12px 10px 26px !important;
+    }}
+
+    .brand-hero {{
+        min-height: 0;
+        padding: 16px;
+        border-radius: 12px;
+    }}
+
+    .brand-nav {{
+        align-items: flex-start;
+        flex-direction: column;
+        margin-bottom: 30px;
+    }}
+
+    .brand-links {{
+        justify-content: flex-start;
+    }}
+
+    .brand-copy h1 {{
+        font-size: 2.45rem;
+    }}
+
+    .output-panel {{
+        position: static;
+    }}
+}}
+"""
+
+BRAND_HEADER_HTML = f"""
+<section class="brand-hero">
+    <div class="brand-nav">
+        <div class="brand-lockup">
+            <img src="{BRAND_ASSET_BASE}/logo_small.png" alt="Hangry Labs logo">
+            <div>
+                <div class="brand-name">Hangry Labs</div>
+                <div class="brand-subname">Local voice tools</div>
+            </div>
+        </div>
+        <nav class="brand-links" aria-label="Project links">
+            <a href="https://hangry-labs.github.io/OmniVoiceTTS/examples/" target="_blank" rel="noreferrer">Voice examples</a>
+            <a href="https://github.com/Hangry-Labs/OmniVoiceTTS" target="_blank" rel="noreferrer">GitHub</a>
+            <a href="https://hub.docker.com/r/hangrylabs/omnivoicetts/tags" target="_blank" rel="noreferrer">Docker Hub</a>
+            <a href="/tts/docs" target="_blank" rel="noreferrer">API docs</a>
+        </nav>
+    </div>
+    <div class="brand-copy">
+        <h1>OmniVoiceTTS</h1>
+        <p>
+            Massively multilingual text-to-speech with voice design, voice cloning,
+            local generation, and an HTTP API in the same Docker image.
+        </p>
+    </div>
+    <div class="brand-pills" aria-label="Capabilities">
+        <span>600+ languages</span>
+        <span>Voice design</span>
+        <span>Voice clone</span>
+        <span>Offline baked image</span>
+    </div>
+</section>
 """
 
 with gr.Blocks(title="OmniVoiceTTS") as ui:
-    gr.HTML(f"<style>{BADGE_CSS}</style>")
+    gr.HTML(f"<style>{APP_CSS}</style>")
     gr.HTML(f"<div id='build-badge'>Version: {read_version_file()} | Build: {BUILD_ID}<br>{get_runtime_label()}</div>")
-    gr.Markdown("# OmniVoiceTTS")
-    gr.Markdown(
-        "Massively multilingual zero-shot text-to-speech with voice cloning, voice design, "
-        "browser UI, and HTTP API."
-    )
-    with gr.Row():
-        with gr.Column(scale=1):
+    gr.HTML(BRAND_HEADER_HTML)
+    with gr.Row(elem_classes="app-grid"):
+        with gr.Column(scale=1, elem_classes="control-panel"):
             mode = gr.Radio(["No Voice Prompt", "Voice Design", "Voice Clone"], value="No Voice Prompt", label="Mode")
             text = gr.Textbox(
                 label="Input Text",
@@ -641,7 +948,8 @@ with gr.Blocks(title="OmniVoiceTTS") as ui:
             gr.Markdown(
                 "Bracket expression tags such as `[laughter]`, `[sigh]`, and `[surprise-ah]` work with "
                 "`No Voice Prompt` or `Voice Clone`. Do not combine them with `Voice Design`; the app will block "
-                "that combination because it can produce unstable non-speech audio."
+                "that combination because it can produce unstable non-speech audio.",
+                elem_classes="notice-card",
             )
             language = gr.Dropdown(LANGUAGE_CHOICES, value="Auto", label="Language")
             with gr.Accordion("Voice Design Builder (Voice Design mode only)", open=False):
@@ -721,8 +1029,8 @@ with gr.Blocks(title="OmniVoiceTTS") as ui:
                 tempo = gr.Slider(0.5, 2, value=1, step=0.05, label="Tempo")
                 volume = gr.Slider(0, 2, value=1, step=0.05, label="Volume")
                 loudness_normalize = gr.Checkbox(value=False, label="Normalize Loudness")
-            generate_btn = gr.Button("Generate", variant="primary")
-        with gr.Column(scale=1):
+            generate_btn = gr.Button("Generate", variant="primary", elem_id="generate-btn")
+        with gr.Column(scale=1, elem_classes="output-panel"):
             output_audio = gr.Audio(label="Output Audio", type="filepath", autoplay=True)
             status_box = gr.Textbox(label="Status", lines=2)
 
@@ -771,6 +1079,9 @@ api = FastAPI(
     docs_url="/tts/docs",
     redoc_url="/tts/redoc",
 )
+
+if ASSET_DIR.exists():
+    api.mount(BRAND_ASSET_BASE, StaticFiles(directory=ASSET_DIR), name="hangrylabs-assets")
 
 
 class TTSRequest(BaseModel):
