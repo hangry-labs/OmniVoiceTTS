@@ -62,7 +62,7 @@ Then open:
 
 http://localhost:7861
 
-The `latest` image is the full baked image with OmniVoice model assets, the Higgs audio tokenizer, and Whisper ASR assets included for offline-friendly use after the image is pulled. The release image is based on Python 3.13 and is intended to run without live Hugging Face downloads after pull. Version tags such as `v0.1.1` are also available for reproducible deployments.
+The `latest` image is the full baked image with OmniVoice model assets, the Higgs audio tokenizer, and Whisper ASR assets included for offline-friendly use after the image is pulled. The release image is based on Python 3.13 and is intended to run without live Hugging Face downloads after pull. Version tags such as `v0.2.0` are also available for reproducible deployments.
 
 Tiny tags use the `vX.Y.Z_tiny` pattern. They keep runtime dependencies but skip baked Hugging Face model assets, and are intended for persistent-volume workflows where the cache is warmed on first online use:
 
@@ -166,14 +166,14 @@ curl -X POST "http://localhost:7861/tts/stream-chunks" \
 ## Image Tags
 
 - Recommended tag for most users: `latest`
-- Versioned release tags use the pattern `vX.Y.Z`, for example `v0.1.1`
-- Tiny tags use `latest_tiny` or versioned tags such as `v0.1.1_tiny`
+- Versioned release tags use the pattern `vX.Y.Z`, for example `v0.2.0`
+- Tiny tags use `latest_tiny` or versioned tags such as `v0.2.0_tiny`
 
 ## Release Validation
 
 Before the initial release, the Python 3.13 baked image was built and tested without a host model-cache volume mounted. API validation covered `/tts/ping`, `/tts/status`, discovery routes, OpenAPI docs, metrics, real generation in WAV/MP3/FLAC/OGG, voice design, `/tts/stream`, `/tts/convert`, `/tts/purge`, and generation after purge/reload from baked cache.
 
-The next release adds UI-focused validation targets: multilingual interface selection, separate Generate and Stream playback paths, seed reuse, stop-generation behavior for streaming, and the live GPU monitor.
+The v0.2.0 release adds UI-focused validation targets: multilingual interface selection, separate Generate and Stream playback paths, seed reuse, stop-generation behavior for streaming, and the live GPU monitor.
 
 ## Attribution
 

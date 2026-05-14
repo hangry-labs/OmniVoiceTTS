@@ -274,7 +274,7 @@ If you encounter bugs, have feature requests, or need help using Hangry Labs Omn
 
 ## Version History
 
-### v0.1.1
+### v0.2.0
 
 - Reworked the browser UI into a branded Hangry Labs experience while keeping Gradio controls stable and functional.
 - Added the new top banner artwork, build/runtime badge, project links, and a cleaner right-side output/control layout.
@@ -287,7 +287,7 @@ If you encounter bugs, have feature requests, or need help using Hangry Labs Omn
 - Added a compact live GPU monitor to the browser UI with utilization, VRAM, temperature, power draw, and sparkline history.
 - Added the browser UI screenshot to README and Docker Hub documentation.
 - Updated Docker Hub docs to put the public examples page and browser UI preview front and center.
-- Improved local development helpers and release scripting for the `0.1.x` release line.
+- Improved local development helpers and release scripting for the `0.2.x` release line.
 
 ### v0.1.0
 
