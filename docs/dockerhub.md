@@ -18,6 +18,8 @@ Before pulling the image, hear what OmniVoiceTTS can do:
 
 The examples page includes native-language samples, voice-variety demos, translated intros, and cross-language clone demos across 20 languages.
 
+Maintainers can reuse the same example workload as a local performance benchmark with `task benchmark-examples`; per-category summaries are appended under `benchmarks/` and detailed results are stored in `benchmarks/example-generation.json`. The default benchmark uses 100 deterministic no-prompt calls, 100 deterministic predefined cached-reference calls, and 100 deterministic direct reference-audio calls from `examples/assets/manifest.json`.
+
 ## Browser UI
 
 The image includes a local browser UI for no-prompt generation, voice design, voice cloning, progressive streaming tests, reproducible seeds, output-format control, live GPU visibility, and a multilingual interface with 60 UI languages.
@@ -84,6 +86,8 @@ docker run -p 7861:7861 --gpus "device=0" -e CUDA_VISIBLE_DEVICES=0 -v omnivoice
 - Offline-friendly usage with the standard full image once it is available locally
 - OpenAI-compatible `/v1/audio/speech`, `/v1/models`, and `/v1/models/{model}` routes for tools that can target local OpenAI-style TTS servers
 - Local voice profiles: upload a reference sample in the UI Add Voice tab, manage it in the Manage tab, then use that name as the TTS voice in compatible clients
+- Stored voice profiles reuse cached clone prompts after the first request
+- Optional `OMNIVOICE_RESAMPLE_BACKEND=librosa` fallback if a platform has `torchaudio` issues
 - Kokoro-shaped compatibility fields and routes such as `voice`, `use_gpu`, `response_format`, `/tts/voices`, `/tts/speakers`, `/tts/stream-formats`, `/tts/convert`, progressive `/tts/stream`, and progressive `/tts/stream-chunks`
 
 ## API Example

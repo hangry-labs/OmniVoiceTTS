@@ -18,6 +18,18 @@ vars:
   API_LANGUAGE: 'English'
   API_VOICE: 'af_heart'
   API_FORMAT: 'mp3'
+  BENCHMARK_BASE_URL: 'http://127.0.0.1:7864'
+  BENCHMARK_RESULTS: 'benchmarks\\example-generation.json'
+  BENCHMARK_MARKDOWN_DIR: 'benchmarks'
+  BENCHMARK_VOICE: 'benchmark_original_clone'
+  BENCHMARK_REF_AUDIO: '/app/omnivoice/assets/openai_default_voice.mp3'
+  BENCHMARK_NUM_STEP: '24'
+  BENCHMARK_FORMAT: 'mp3'
+  BENCHMARK_LIMIT_LANGUAGES: '0'
+  BENCHMARK_ITEMS: '100'
+  BENCHMARK_SAMPLES_PER_LANGUAGE: '2'
+  BENCHMARK_RANDOM_WARMUP: '10'
+  BENCHMARK_REFERENCE_WARMUP: '10'
   DRY_RUN: '0'
   NEXT_VERSION: ''
   SKIP_VALIDATION: '0'
@@ -147,6 +159,11 @@ tasks:
       - 'cmd /c if not exist {{.TEMP_AUDIO}}.{{.API_FORMAT}} exit /b 1'
       - 'cmd /c python -c "from pathlib import Path; p=Path(r''{{.TEMP_AUDIO}}.{{.API_FORMAT}}''); assert p.exists() and p.stat().st_size > 0, p"'
       - 'cmd /c del /f /q {{.TEMP_AUDIO}}.{{.API_FORMAT}}'
+
+  benchmark-examples:
+    desc: Benchmark the example-generation workload and append results
+    cmds:
+      - powershell -NoProfile -ExecutionPolicy Bypass -Command ".\.venv\Scripts\python.exe scripts\benchmark-example-generation.py --base-url '{{.BENCHMARK_BASE_URL}}' --manifest examples\assets\manifest.json --results '{{.BENCHMARK_RESULTS}}' --markdown-dir '{{.BENCHMARK_MARKDOWN_DIR}}' --voice '{{.BENCHMARK_VOICE}}' --reference-audio '{{.BENCHMARK_REF_AUDIO}}' --num-step '{{.BENCHMARK_NUM_STEP}}' --format '{{.BENCHMARK_FORMAT}}' --limit-languages '{{.BENCHMARK_LIMIT_LANGUAGES}}' --items-per-round '{{.BENCHMARK_ITEMS}}' --samples-per-language '{{.BENCHMARK_SAMPLES_PER_LANGUAGE}}' --random-warmup '{{.BENCHMARK_RANDOM_WARMUP}}' --reference-warmup '{{.BENCHMARK_REFERENCE_WARMUP}}'"
 
   imagestop:
     desc: Stop running OmniVoiceTTS containers

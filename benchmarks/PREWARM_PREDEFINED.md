@@ -1,0 +1,9 @@
+# warm_predefined
+
+Warmup calls for the predefined cached voice path. These calls are intended to load the model and populate the stored-voice clone prompt cache before `predefined_voice` measurements start.
+
+Baseline hardware: NVIDIA GeForce RTX 5060 Ti.
+
+| Run | Calls | Total seconds | Avg seconds | Min | Max | Bytes |
+|---|---:|---:|---:|---:|---:|---:|
+| 14.05.2026 23:24:54 - 0.2.1-snapshot | 10 | 10.777 | 1.078 | 0.962 | 1.669 | 976760 |
