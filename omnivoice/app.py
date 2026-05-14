@@ -70,6 +70,21 @@ FORMAT_ALIASES = {
 }
 
 BRACKET_TOKEN_PATTERN = re.compile(r"\[[^\]\r\n]{1,80}\]")
+SUPPORTED_NONVERBAL_TAGS = [
+    "[laughter]",
+    "[sigh]",
+    "[confirmation-en]",
+    "[question-en]",
+    "[question-ah]",
+    "[question-oh]",
+    "[question-ei]",
+    "[question-yi]",
+    "[surprise-ah]",
+    "[surprise-oh]",
+    "[surprise-wa]",
+    "[surprise-yo]",
+    "[dissatisfaction-hnn]",
+]
 VOICE_DESIGN_BRACKET_TOKEN_MESSAGE = (
     "Voice Design does not support bracket tags such as [laughter] or [sigh]. "
     "Use No Voice Prompt or Voice Clone for expressive bracket tags, or remove the bracket tag when using Voice Design."
@@ -316,6 +331,20 @@ def has_bracket_token(text: str | None) -> bool:
 def validate_voice_design_text(text: str | None, instruct: str | None) -> None:
     if (instruct or "").strip() and has_bracket_token(text):
         raise ValueError(VOICE_DESIGN_BRACKET_TOKEN_MESSAGE)
+
+
+def nonverbal_tags_markdown() -> str:
+    tags = ", ".join(f"`{tag}`" for tag in SUPPORTED_NONVERBAL_TAGS)
+    return (
+        "### Expressive bracket tags\n\n"
+        "OmniVoice can read these bracket tags inside text when using **No Voice Prompt** or **Voice Clone**:\n\n"
+        f"{tags}\n\n"
+        "Use them inside a sentence or between clauses, not as the first or last thing in the prompt. "
+        "Example: `That joke almost worked. [laughter] Maybe the timing was the problem.`\n\n"
+        "Do **not** use bracket tags with **Voice Design**. Voice Design is for speaker attributes such as "
+        "gender, age, pitch, accent, dialect, or whisper. Combining voice design with bracket tags can produce "
+        "unstable non-speech audio, so the UI and API block that combination."
+    )
 
 
 def coerce_float(value, default: float) -> float:
@@ -946,18 +975,14 @@ with gr.Blocks(title="OmniVoiceTTS") as ui:
                 value="Hello from OmniVoice. This Docker image includes a browser UI and an HTTP API.",
             )
             with gr.Accordion("Hints and safety notes", open=False):
-                gr.Markdown(
-                    "Bracket expression tags such as `[laughter]`, `[sigh]`, and `[surprise-ah]` work with "
-                    "`No Voice Prompt` or `Voice Clone`. Do not combine them with `Voice Design`; the app will block "
-                    "that combination because it can produce unstable non-speech audio.",
-                    elem_classes="notice-card",
-                )
-            language = gr.Dropdown(LANGUAGE_CHOICES, value="Auto", label="Language")
+                gr.Markdown(nonverbal_tags_markdown(), elem_classes="notice-card")
+            generate_btn = gr.Button("Generate", variant="primary", elem_id="generate-btn")
             with gr.Accordion("Voice Design Builder (Voice Design mode only)", open=False):
                 gr.Markdown(
                     "Voice Design controls speaker attributes only. For expressive bracket tags, switch to "
                     "`No Voice Prompt` or `Voice Clone`."
                 )
+                language = gr.Dropdown(LANGUAGE_CHOICES, value="Auto", label="Language")
                 with gr.Row():
                     design_gender = gr.Dropdown(
                         choices=["No preference"] + VOICE_DESIGN_CATEGORIES["gender"]["options"],
@@ -1001,6 +1026,9 @@ with gr.Blocks(title="OmniVoiceTTS") as ui:
                     "which helps separate the sampled voice from the new text you want to generate."
                 ),
             )
+        with gr.Column(scale=1, elem_classes="output-panel"):
+            output_audio = gr.Audio(label="Output Audio", type="filepath", autoplay=True)
+            status_box = gr.Textbox(label="Status", lines=2)
             with gr.Row():
                 hardware = gr.Dropdown(hardware_choices, value=default_hardware, label="Hardware")
                 output_format = gr.Dropdown(
@@ -1034,10 +1062,6 @@ with gr.Blocks(title="OmniVoiceTTS") as ui:
                 tempo = gr.Slider(0.5, 2, value=1, step=0.05, label="Tempo")
                 volume = gr.Slider(0, 2, value=1, step=0.05, label="Volume")
                 loudness_normalize = gr.Checkbox(value=False, label="Normalize Loudness")
-            generate_btn = gr.Button("Generate", variant="primary", elem_id="generate-btn")
-        with gr.Column(scale=1, elem_classes="output-panel"):
-            output_audio = gr.Audio(label="Output Audio", type="filepath", autoplay=True)
-            status_box = gr.Textbox(label="Status", lines=2)
 
     generate_btn.click(
         fn=synthesize_file,
