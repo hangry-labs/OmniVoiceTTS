@@ -11,6 +11,12 @@ from typing import Any
 
 import gradio as gr
 
+from omnivoice.service.paths import (
+    AUDIO_EXTENSIONS,
+    default_gradio_upload_roots,
+    safe_existing_file_path,
+)
+
 OPENAI_CALL_LOG: list[dict[str, str]] = []
 OPENAI_CALL_LOG_LOCK = threading.Lock()
 OPENAI_CALL_LOG_LIMIT = 50
@@ -74,6 +80,7 @@ def save_openai_voice_profile(
     max_seed: int,
     name: str,
     audio_path: str | None,
+    allowed_source_roots: list[Path] | None = None,
     ref_text: str | None = None,
     language: str | None = None,
     seed: int | float | str | None = 12345,
@@ -82,9 +89,12 @@ def save_openai_voice_profile(
     profile_name = normalize_profile_name(name)
     if not audio_path:
         raise ValueError("Upload a reference audio sample before saving the profile.")
-    source = Path(audio_path)
-    if not source.exists():
-        raise ValueError("Uploaded reference audio file is no longer available.")
+    source = safe_existing_file_path(
+        audio_path,
+        allowed_source_roots or default_gradio_upload_roots(),
+        label="Uploaded reference audio path",
+        allowed_extensions=AUDIO_EXTENSIONS,
+    )
     profile_dir.mkdir(parents=True, exist_ok=True)
     suffix = source.suffix.lower() or ".wav"
     if suffix not in {".wav", ".mp3", ".flac", ".ogg", ".m4a"}:
@@ -173,6 +183,7 @@ def save_openai_voice_profile_from_ui(
     profile_dir: Path,
     profile_index: Path,
     max_seed: int,
+    allowed_source_roots: list[Path],
     name: str,
     audio_path: str | None,
     ref_text: str | None,
@@ -181,7 +192,18 @@ def save_openai_voice_profile_from_ui(
     randomize_seed: bool,
 ) -> tuple[str, object, str]:
     try:
-        profile_name = save_openai_voice_profile(profile_dir, profile_index, max_seed, name, audio_path, ref_text, language, seed, randomize_seed)
+        profile_name = save_openai_voice_profile(
+            profile_dir,
+            profile_index,
+            max_seed,
+            name,
+            audio_path,
+            allowed_source_roots,
+            ref_text,
+            language,
+            seed,
+            randomize_seed,
+        )
     except ValueError as exc:
         return f"OpenAI voice profile error: {exc}", openai_voice_profile_dropdown_update(profile_index), render_openai_voice_profile_table(profile_index)
     return f"Saved OpenAI voice profile `{profile_name}`.", openai_voice_profile_dropdown_update(profile_index, profile_name), render_openai_voice_profile_table(profile_index)

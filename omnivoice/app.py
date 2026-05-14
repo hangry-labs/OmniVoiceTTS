@@ -32,6 +32,12 @@ from omnivoice.service.audio import (
     normalize_audio_format,
     to_int16_audio,
 )
+from omnivoice.service.paths import (
+    AUDIO_EXTENSIONS,
+    default_gradio_upload_roots,
+    parse_path_roots,
+    safe_existing_file_path,
+)
 from omnivoice.utils.common import fix_random_seed
 from omnivoice.utils.lang_map import LANG_IDS, LANG_NAMES, LANG_NAME_TO_ID, lang_display_name
 from omnivoice.web.branding import brand_css, brand_header_html
@@ -71,6 +77,7 @@ PACKAGE_DIR = Path(__file__).resolve().parent
 OPENAI_DEFAULT_CLONE_AUDIO = PACKAGE_DIR / "assets" / "openai_default_voice.mp3"
 OPENAI_VOICE_PROFILE_DIR = Path(os.getenv("OMNIVOICE_OPENAI_VOICE_PROFILE_DIR", "/app/openai_voice_profiles"))
 OPENAI_VOICE_PROFILE_INDEX = OPENAI_VOICE_PROFILE_DIR / "profiles.json"
+REF_AUDIO_SAFE_ROOTS_ENV = os.getenv("OMNIVOICE_ALLOWED_REF_AUDIO_ROOTS", "")
 
 OPENAI_MODEL_ALIASES = {
     "omnivoice": "omnivoice",
@@ -308,6 +315,29 @@ def resolve_requested_device(device: str, use_gpu: Optional[bool] = None) -> str
     return device
 
 
+def ref_audio_allowed_roots() -> list[Path]:
+    defaults = [
+        OPENAI_VOICE_PROFILE_DIR,
+        PACKAGE_DIR / "assets",
+        Path("/data"),
+        *default_gradio_upload_roots(),
+    ]
+    return parse_path_roots(REF_AUDIO_SAFE_ROOTS_ENV, defaults)
+
+
+def validate_ref_audio_path(ref_audio: str | None) -> str | None:
+    if not ref_audio:
+        return None
+    return str(
+        safe_existing_file_path(
+            ref_audio,
+            ref_audio_allowed_roots(),
+            label="Reference audio path",
+            allowed_extensions=AUDIO_EXTENSIONS,
+        )
+    )
+
+
 def get_model(device: str) -> OmniVoice:
     resolved_device = normalize_device(device)
     with MODEL_LOCK:
@@ -506,6 +536,7 @@ def save_openai_voice_profile(
         MAX_RANDOM_SEED,
         name,
         audio_path,
+        default_gradio_upload_roots(),
         ref_text,
         language,
         seed,
@@ -541,6 +572,7 @@ def save_openai_voice_profile_from_ui(
         OPENAI_VOICE_PROFILE_DIR,
         OPENAI_VOICE_PROFILE_INDEX,
         MAX_RANDOM_SEED,
+        default_gradio_upload_roots(),
         name,
         audio_path,
         ref_text,
@@ -620,11 +652,12 @@ def synthesize_array(
     if not (text or "").strip():
         raise ValueError("Text must not be empty")
     validate_voice_design_text(text, instruct)
+    safe_ref_audio = validate_ref_audio_path(ref_audio)
     model = get_model(device)
     audios = model.generate(
         text=text.strip(),
         language=normalize_language(language),
-        ref_audio=ref_audio or None,
+        ref_audio=safe_ref_audio,
         ref_text=ref_text or None,
         instruct=instruct or None,
         duration=duration if duration and duration > 0 else None,
@@ -661,6 +694,7 @@ def synthesize_chunks(
     if not (text or "").strip():
         raise ValueError("Text must not be empty")
     validate_voice_design_text(text, instruct)
+    safe_ref_audio = validate_ref_audio_path(ref_audio)
     model = get_model(device)
     sample_rate = int(model.sampling_rate or SAMPLE_RATE)
 
@@ -668,7 +702,7 @@ def synthesize_chunks(
         for chunk in model.generate_stream(
             text=text.strip(),
             language=normalize_language(language),
-            ref_audio=ref_audio or None,
+            ref_audio=safe_ref_audio,
             ref_text=ref_text or None,
             instruct=instruct or None,
             duration=duration if duration and duration > 0 else None,
@@ -1484,7 +1518,13 @@ class TTSRequest(BaseModel):
         description="Kokoro-compatible voice field. Accepted for compatibility; OmniVoice uses ref_audio/instruct/auto voice instead.",
     )
     language: Optional[str] = Field(None, description="Language name or id. Omit for auto/language-agnostic mode.")
-    ref_audio: Optional[str] = Field(None, description="Reference audio path inside the container for voice cloning.")
+    ref_audio: Optional[str] = Field(
+        None,
+        description=(
+            "Reference audio path for voice cloning. The path must be an audio file under a configured safe root "
+            "such as /data, /app/openai_voice_profiles, /app/omnivoice/assets, or /tmp/gradio."
+        ),
+    )
     ref_text: Optional[str] = Field(None, description="Transcript for ref_audio. If omitted, ASR may load on demand.")
     instruct: Optional[str] = Field(
         None,
@@ -1539,7 +1579,13 @@ class OpenAISpeechRequest(BaseModel):
     randomize_seed: bool = Field(False, description="Optional OmniVoice extension: generate a random seed.")
     device: str = Field("auto", description="Optional OmniVoice extension: auto, cpu, mps, or cuda:N.")
     instructions: Optional[str] = Field(None, description="Optional OmniVoice extension: explicit voice-design instruction.")
-    ref_audio: Optional[str] = Field(None, description="Optional OmniVoice extension: reference audio path for stable voice cloning.")
+    ref_audio: Optional[str] = Field(
+        None,
+        description=(
+            "Optional OmniVoice extension: reference audio path for stable voice cloning. The path must be an "
+            "audio file under a configured safe root."
+        ),
+    )
     ref_text: Optional[str] = Field(None, description="Optional OmniVoice extension: transcript for ref_audio.")
     voice_profile: Optional[str] = Field(None, description="Optional OmniVoice extension: saved OpenAI voice profile name.")
 
