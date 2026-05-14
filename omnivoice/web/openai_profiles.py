@@ -218,13 +218,15 @@ def delete_openai_voice_profile_from_ui(profile_dir: Path, profile_index: Path, 
     profile = profiles.get(profile_name)
     if not profile:
         return f"OpenAI voice profile delete error: `{profile_name}` does not exist.", openai_voice_profile_dropdown_update(profile_index), render_openai_voice_profile_table(profile_index)
-    ref_audio = Path(profile.get("ref_audio") or "")
     try:
-        root = profile_dir.resolve()
-        target = ref_audio.resolve()
-        if target.is_file() and (target.parent == root or root in target.parents):
-            target.unlink()
-    except OSError:
+        target = safe_existing_file_path(
+            profile.get("ref_audio") or "",
+            [profile_dir],
+            label="Saved profile audio path",
+            allowed_extensions=AUDIO_EXTENSIONS,
+        )
+        target.unlink()
+    except (OSError, ValueError):
         pass
     profiles.pop(profile_name, None)
     save_openai_voice_profiles(profile_dir, profile_index, profiles)

@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 from typing import Iterable
 
 AUDIO_EXTENSIONS = {".flac", ".m4a", ".mp3", ".ogg", ".wav"}
+SAFE_FILENAME_PATTERN = re.compile(r"[^A-Za-z0-9._-]+")
 
 
 def parse_path_roots(value: str | None, defaults: Iterable[str | Path]) -> list[Path]:
@@ -48,6 +50,30 @@ def safe_existing_file_path(
             return resolved_path
     root_list = ", ".join(str(Path(root)) for root in roots)
     raise ValueError(f"{label} must be inside one of these safe roots: {root_list}.")
+
+
+def secure_filename_stem(value: str | os.PathLike, *, default: str = "output") -> str:
+    stem = Path(value).name
+    if stem.lower().endswith(".wav"):
+        stem = stem[:-4]
+    stem = SAFE_FILENAME_PATTERN.sub("-", stem).strip(".-_")
+    return stem[:120] or default
+
+
+def safe_output_file_path(
+    root: str | Path,
+    filename_stem: str | os.PathLike,
+    *,
+    suffix: str = ".wav",
+) -> Path:
+    if not suffix.startswith("."):
+        raise ValueError("Output file suffix must start with '.'.")
+    resolved_root = Path(root).expanduser().resolve(strict=False)
+    filename = f"{secure_filename_stem(filename_stem)}{suffix}"
+    candidate = (resolved_root / filename).resolve(strict=False)
+    if candidate != resolved_root and resolved_root not in candidate.parents:
+        raise ValueError("Output file path must stay inside the result directory.")
+    return candidate
 
 
 def default_gradio_upload_roots() -> list[Path]:

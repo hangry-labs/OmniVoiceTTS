@@ -47,6 +47,7 @@ from tqdm import tqdm
 from omnivoice.models.omnivoice import OmniVoice
 import soundfile as sf
 
+from omnivoice.service.paths import safe_output_file_path
 from omnivoice.utils.audio import load_audio
 from omnivoice.utils.common import str2bool
 from omnivoice.utils.data_utils import read_test_list
@@ -397,7 +398,7 @@ def run_inference_batch(
 
     results = []
     for save_name, audio in zip(save_names, audios):
-        save_path = os.path.join(res_dir, save_name + ".wav")
+        save_path = safe_output_file_path(res_dir, save_name, suffix=".wav")
         sf.write(save_path, audio, worker_model.sampling_rate)
         audio_duration = audio.shape[-1] / worker_model.sampling_rate
         results.append(
