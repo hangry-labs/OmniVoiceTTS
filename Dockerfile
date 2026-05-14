@@ -21,6 +21,7 @@ COPY hangrylabs /app/hangrylabs
 RUN if [ -n "$HF_ENDPOINT" ]; then export HF_ENDPOINT; else unset HF_ENDPOINT; fi \
     && python -m pip install --upgrade pip setuptools wheel \
     && python -m pip install --extra-index-url https://download.pytorch.org/whl/cu128 -r /app/requirements.txt \
+    && date '+%d:%m:%Y %H:%M:%S' > /app/BUILD_DATE \
     && python -m pip install -e . --no-deps
 
 FROM base AS baked-builder

@@ -7,6 +7,7 @@ import subprocess
 import tempfile
 import threading
 import wave
+from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
@@ -135,6 +136,17 @@ def read_version_file() -> str:
     if version_file.exists():
         return version_file.read_text(encoding="utf-8").strip()
     return APP_VERSION
+
+
+def get_build_label() -> str:
+    build_date = os.getenv("BUILD_DATE", "").strip()
+    if build_date:
+        return build_date
+    build_date_file = Path(__file__).resolve().parent.parent / "BUILD_DATE"
+    if build_date_file.exists():
+        return build_date_file.read_text(encoding="utf-8").strip()
+    timestamp = Path(__file__).stat().st_mtime
+    return datetime.fromtimestamp(timestamp).strftime("%d:%m:%Y %H:%M:%S")
 
 
 def get_cuda_devices() -> list[str]:
@@ -610,37 +622,17 @@ default_hardware = DEFAULT_DEVICE if DEFAULT_DEVICE in hardware_values else "aut
 
 APP_CSS = f"""
 :root {{
-    --brand-bg: #080503;
-    --brand-panel: rgba(20, 13, 9, 0.88);
-    --brand-line: rgba(255, 176, 118, 0.22);
-    --brand-orange: #ff6b00;
-    --brand-amber: #ffb076;
     --brand-cream: #fff3e7;
     --brand-muted: rgba(255, 243, 231, 0.72);
-}}
-
-body {{
-    background:
-        linear-gradient(180deg, rgba(8, 5, 3, 0.22), var(--brand-bg) 460px),
-        radial-gradient(circle at 80% 10%, rgba(255, 107, 0, 0.22), transparent 34rem),
-        url("{BRAND_ASSET_BASE}/hero_background_small.png") center top / cover no-repeat fixed,
-        var(--brand-bg) !important;
-}}
-
-.gradio-container {{
-    max-width: 1220px !important;
-    margin: 0 auto !important;
-    padding: 24px 18px 36px !important;
-    background: transparent !important;
-    color: var(--brand-cream) !important;
-    font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
 }}
 
 .brand-hero {{
     overflow: hidden;
     position: relative;
+    width: calc(100% + 24px);
     min-height: 330px;
-    margin: 0 0 18px;
+    box-sizing: border-box;
+    margin: 0 -12px 18px;
     padding: 22px;
     border: 1px solid rgba(255, 176, 118, 0.24);
     border-radius: 16px;
@@ -676,7 +668,8 @@ body {{
     min-width: 0;
 }}
 
-.brand-lockup img {{
+.brand-logo-wrap img {{
+    display: block;
     width: 48px;
     height: 48px;
     object-fit: contain;
@@ -688,7 +681,6 @@ body {{
     color: var(--brand-cream);
     font-size: 1.02rem;
     font-weight: 800;
-    letter-spacing: 0;
     line-height: 1.08;
 }}
 
@@ -737,7 +729,6 @@ body {{
     color: var(--brand-cream);
     font-size: clamp(2.4rem, 6vw, 5.15rem);
     line-height: 0.92;
-    letter-spacing: 0;
 }}
 
 .brand-copy p {{
@@ -767,115 +758,29 @@ body {{
     font-weight: 750;
 }}
 
-.app-grid > .form,
-.app-grid > div {{
-    gap: 18px !important;
-}}
-
-.control-panel,
-.output-panel {{
-    padding: 16px !important;
-    border: 1px solid var(--brand-line) !important;
-    border-radius: 14px !important;
-    background: var(--brand-panel) !important;
-    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.36) !important;
-    backdrop-filter: blur(13px);
-}}
-
-.output-panel {{
-    position: sticky;
-    top: 18px;
-    align-self: flex-start;
-}}
-
-.notice-card {{
-    padding: 12px 14px;
-    border: 1px solid rgba(255, 176, 118, 0.26);
-    border-radius: 10px;
-    background: rgba(255, 107, 0, 0.10);
-    color: var(--brand-cream);
-}}
-
-.notice-card p {{
-    margin: 0;
-}}
-
-.gradio-container .block,
-.gradio-container .form,
-.gradio-container .panel,
-.gradio-container .tabs,
-.gradio-container .tabitem,
-.gradio-container .input-container,
-.gradio-container textarea,
-.gradio-container input,
-.gradio-container select {{
-    border-color: rgba(255, 176, 118, 0.18) !important;
-    background: rgba(255, 255, 255, 0.055) !important;
-    color: var(--brand-cream) !important;
-}}
-
-.gradio-container label,
-.gradio-container .label-wrap,
-.gradio-container .wrap,
-.gradio-container .prose,
-.gradio-container .prose p {{
-    color: var(--brand-cream) !important;
-}}
-
-.gradio-container .secondary-wrap,
-.gradio-container .hint,
-.gradio-container .info,
-.gradio-container .prose code {{
-    color: var(--brand-amber) !important;
-}}
-
-.gradio-container button.primary,
-#generate-btn {{
-    min-height: 48px !important;
-    border: 0 !important;
-    border-radius: 12px !important;
-    background: linear-gradient(135deg, #ff6b00, #ffb076) !important;
-    color: #180a02 !important;
-    font-size: 1rem !important;
-    font-weight: 850 !important;
-    box-shadow: 0 14px 30px rgba(255, 107, 0, 0.26) !important;
-}}
-
-.gradio-container button:not(.primary) {{
-    border-color: rgba(255, 176, 118, 0.18) !important;
-    background: rgba(255, 255, 255, 0.065) !important;
-    color: var(--brand-cream) !important;
-}}
-
-.gradio-container .accordion,
-.gradio-container details {{
-    border-color: rgba(255, 176, 118, 0.20) !important;
-    border-radius: 12px !important;
-    background: rgba(0, 0, 0, 0.20) !important;
-}}
-
 #build-badge {{
-    position: fixed;
-    top: 12px;
-    right: 12px;
-    z-index: 9999;
+    position: absolute;
+    right: 18px;
+    bottom: 16px;
+    z-index: 3;
+    min-width: max-content;
     background: rgba(8, 5, 3, 0.76);
     color: var(--brand-cream);
     border: 1px solid rgba(255, 176, 118, 0.24);
     border-radius: 8px;
-    padding: 6px 10px;
-    font-size: 12px;
+    padding: 4px 7px;
+    font-size: 10px;
+    line-height: 1.25;
     font-family: Arial, sans-serif;
     backdrop-filter: blur(8px);
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
 }}
 
 @media (max-width: 760px) {{
-    .gradio-container {{
-        padding: 12px 10px 26px !important;
-    }}
-
     .brand-hero {{
+        width: 100%;
         min-height: 0;
+        margin: 0 0 18px;
         padding: 16px;
         border-radius: 12px;
     }}
@@ -893,10 +798,6 @@ body {{
     .brand-copy h1 {{
         font-size: 2.45rem;
     }}
-
-    .output-panel {{
-        position: static;
-    }}
 }}
 """
 
@@ -904,7 +805,9 @@ BRAND_HEADER_HTML = f"""
 <section class="brand-hero">
     <div class="brand-nav">
         <div class="brand-lockup">
-            <img src="{BRAND_ASSET_BASE}/logo_small.png" alt="Hangry Labs logo">
+            <div class="brand-logo-wrap">
+                <img src="{BRAND_ASSET_BASE}/logo_small.png" alt="Hangry Labs logo">
+            </div>
             <div>
                 <div class="brand-name">Hangry Labs</div>
                 <div class="brand-subname">Local voice tools</div>
@@ -930,12 +833,12 @@ BRAND_HEADER_HTML = f"""
         <span>Voice clone</span>
         <span>Offline baked image</span>
     </div>
+    <div id="build-badge">Version: {read_version_file()} | Build: {get_build_label()}<br>{get_runtime_label()}</div>
 </section>
 """
 
 with gr.Blocks(title="OmniVoiceTTS") as ui:
     gr.HTML(f"<style>{APP_CSS}</style>")
-    gr.HTML(f"<div id='build-badge'>Version: {read_version_file()} | Build: {BUILD_ID}<br>{get_runtime_label()}</div>")
     gr.HTML(BRAND_HEADER_HTML)
     with gr.Row(elem_classes="app-grid"):
         with gr.Column(scale=1, elem_classes="control-panel"):
@@ -945,12 +848,13 @@ with gr.Blocks(title="OmniVoiceTTS") as ui:
                 lines=5,
                 value="Hello from OmniVoice. This Docker image includes a browser UI and an HTTP API.",
             )
-            gr.Markdown(
-                "Bracket expression tags such as `[laughter]`, `[sigh]`, and `[surprise-ah]` work with "
-                "`No Voice Prompt` or `Voice Clone`. Do not combine them with `Voice Design`; the app will block "
-                "that combination because it can produce unstable non-speech audio.",
-                elem_classes="notice-card",
-            )
+            with gr.Accordion("Hints and safety notes", open=False):
+                gr.Markdown(
+                    "Bracket expression tags such as `[laughter]`, `[sigh]`, and `[surprise-ah]` work with "
+                    "`No Voice Prompt` or `Voice Clone`. Do not combine them with `Voice Design`; the app will block "
+                    "that combination because it can produce unstable non-speech audio.",
+                    elem_classes="notice-card",
+                )
             language = gr.Dropdown(LANGUAGE_CHOICES, value="Auto", label="Language")
             with gr.Accordion("Voice Design Builder (Voice Design mode only)", open=False):
                 gr.Markdown(
@@ -990,11 +894,15 @@ with gr.Blocks(title="OmniVoiceTTS") as ui:
                         value="No preference",
                         label="Chinese Dialect",
                     )
-            ref_audio = gr.Audio(label="Reference Audio", type="filepath")
+            ref_audio = gr.Audio(label="Reference Audio", sources=["upload"], type="filepath")
             ref_text = gr.Textbox(
                 label="Reference Text",
                 lines=2,
-                placeholder="Optional transcript. If empty, ASR may be loaded on demand.",
+                placeholder="Optional transcript of the reference audio. Leave empty to let ASR transcribe it when available.",
+                info=(
+                    "Used only for Voice Clone. It tells the model what is spoken in the reference audio, "
+                    "which helps separate the sampled voice from the new text you want to generate."
+                ),
             )
             with gr.Row():
                 hardware = gr.Dropdown(hardware_choices, value=default_hardware, label="Hardware")
