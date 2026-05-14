@@ -39,32 +39,24 @@ def safe_existing_file_path(
     if not roots:
         raise ValueError(f"{label} access is disabled because no safe roots are configured.")
 
-    expanded_path = os.path.expanduser(raw_path)
-    resolved_path_text = os.path.realpath(expanded_path)
-    resolved_root_texts = [
-        os.path.realpath(os.path.expanduser(os.fspath(root)))
-        for root in roots
-    ]
-    try:
-        is_allowed = any(
-            os.path.commonpath([resolved_path_text, resolved_root_text]) == resolved_root_text
-            for resolved_root_text in resolved_root_texts
-        )
-    except ValueError:
-        is_allowed = False
-    if not is_allowed:
+    resolved_path_text = os.path.realpath(os.path.expanduser(raw_path))
+    allowed_path = None
+    for root in roots:
+        resolved_root_text = os.path.realpath(os.path.expanduser(os.fspath(root)))
+        try:
+            if os.path.commonpath([resolved_path_text, resolved_root_text]) == resolved_root_text:
+                allowed_path = resolved_path_text
+                break
+        except ValueError:
+            continue
+    if allowed_path is None:
         root_list = ", ".join(str(Path(root)) for root in roots)
         raise ValueError(f"{label} must be inside one of these safe roots: {root_list}.")
 
-    resolved_path = Path(resolved_path_text)
-    if not resolved_path.exists():
-        raise ValueError(f"{label} does not exist or is not accessible.")
-    if not resolved_path.is_file():
-        raise ValueError(f"{label} must point to an existing file.")
-    if allowed_extensions is not None and resolved_path.suffix.lower() not in allowed_extensions:
+    if allowed_extensions is not None and os.path.splitext(allowed_path)[1].lower() not in allowed_extensions:
         supported = ", ".join(sorted(allowed_extensions))
         raise ValueError(f"{label} must use one of these extensions: {supported}.")
-    return resolved_path
+    return Path(allowed_path)
 
 
 def secure_filename_stem(value: str | os.PathLike, *, default: str = "output") -> str:
