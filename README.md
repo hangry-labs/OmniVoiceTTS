@@ -274,6 +274,21 @@ If you encounter bugs, have feature requests, or need help using Hangry Labs Omn
 
 ## Version History
 
+### v0.1.1
+
+- Reworked the browser UI into a branded Hangry Labs experience while keeping Gradio controls stable and functional.
+- Added the new top banner artwork, build/runtime badge, project links, and a cleaner right-side output/control layout.
+- Added multilingual UI locale support with dynamic labels, hints, generation controls, and safety text.
+- Added expanded expressive bracket-tag guidance in the UI, including supported tags and the Voice Design incompatibility warning.
+- Added practical progressive chunk streaming for long-form TTS through `/tts/stream` and `/tts/stream-chunks`.
+- Added a dedicated UI Stream tab with buffered chunk playback and a Stop Generation control, following the stable KokoroTTS-style two-player pattern.
+- Added reproducible generation controls: Seed, Randomize Seed, API `seed` / `randomize_seed` fields, and `X-OmniVoiceTTS-Seed` response headers.
+- Added balanced automatic voice-profile selection for UI No Voice Prompt mode on plain text, while keeping true no-prompt behavior for expressive bracket tags.
+- Added a compact live GPU monitor to the browser UI with utilization, VRAM, temperature, power draw, and sparkline history.
+- Added the browser UI screenshot to README and Docker Hub documentation.
+- Updated Docker Hub docs to put the public examples page and browser UI preview front and center.
+- Improved local development helpers and release scripting for the `0.1.x` release line.
+
 ### v0.1.0
 
 - Forked OmniVoice into a Hangry Labs runtime-focused project for local TTS use.

@@ -20,7 +20,7 @@ The examples page includes native-language samples, voice-variety demos, transla
 
 ## Browser UI
 
-The image includes a local browser UI for voice design, voice cloning, progressive streaming tests, reproducible seeds, output-format control, and live GPU visibility.
+The image includes a local browser UI for no-prompt generation, voice design, voice cloning, progressive streaming tests, reproducible seeds, output-format control, live GPU visibility, and a multilingual interface with 60 UI languages.
 
 <p>
   <img src="https://github.com/Hangry-Labs/OmniVoiceTTS/raw/master/docs/ui.jpg" alt="OmniVoiceTTS browser UI">
@@ -62,7 +62,7 @@ Then open:
 
 http://localhost:7861
 
-The `latest` image is the full baked image with OmniVoice model assets, the Higgs audio tokenizer, and Whisper ASR assets included for offline-friendly use after the image is pulled. The release image is based on Python 3.13 and is intended to run without live Hugging Face downloads after pull. Version tags such as `v0.1.0` are also available for reproducible deployments.
+The `latest` image is the full baked image with OmniVoice model assets, the Higgs audio tokenizer, and Whisper ASR assets included for offline-friendly use after the image is pulled. The release image is based on Python 3.13 and is intended to run without live Hugging Face downloads after pull. Version tags such as `v0.1.1` are also available for reproducible deployments.
 
 Tiny tags use the `vX.Y.Z_tiny` pattern. They keep runtime dependencies but skip baked Hugging Face model assets, and are intended for persistent-volume workflows where the cache is warmed on first online use:
 
@@ -72,13 +72,17 @@ docker run -p 7861:7861 --gpus "device=0" -e CUDA_VISIBLE_DEVICES=0 -v omnivoice
 
 ## What You Get
 
-- Browser UI for auto voice, voice design, and voice cloning
+- Browser UI for no-prompt auto voice, voice design, and voice cloning
+- Multilingual UI language selector with English fallback for missing labels
+- Dedicated Generate and Stream playback tabs for normal output and progressive long-text playback
+- Seed and random-seed controls for repeatable generation
+- Live GPU monitor for visible NVIDIA GPU utilization, VRAM, temperature, and power draw
 - HTTP API for applications and automation
 - 600+ language support inherited from OmniVoice
 - WAV, MP3, FLAC, and OGG output support
 - GPU support when Docker/NVIDIA support is available
 - Offline-friendly usage with the standard full image once it is available locally
-- Kokoro-shaped compatibility fields and routes such as `voice`, `use_gpu`, `response_format`, `/tts/voices`, `/tts/speakers`, `/tts/stream-formats`, `/tts/convert`, and progressive `/tts/stream`
+- Kokoro-shaped compatibility fields and routes such as `voice`, `use_gpu`, `response_format`, `/tts/voices`, `/tts/speakers`, `/tts/stream-formats`, `/tts/convert`, progressive `/tts/stream`, and progressive `/tts/stream-chunks`
 
 ## API Example
 
@@ -99,6 +103,17 @@ curl -X POST "http://localhost:7861/tts/generate" \
   -d '{"text":"Hello from Hangry Labs OmniVoiceTTS","language":"English","output_format":"mp3"}' \
   -o hello.mp3
 ```
+
+Use a fixed seed when you want to recreate the same generation:
+
+```bash
+curl -X POST "http://localhost:7861/tts/generate" \
+  -H "Content-Type: application/json" \
+  -d '{"text":"Repeatable audio from Hangry Labs OmniVoiceTTS","language":"English","output_format":"wav","seed":12345,"randomize_seed":false}' \
+  -o seeded.wav
+```
+
+Responses include the used seed in the `X-OmniVoiceTTS-Seed` header when generation succeeds.
 
 Voice design:
 
@@ -141,15 +156,24 @@ http://localhost:7861/tts/docs
 
 Long text can also be requested through `/tts/stream` or `/tts/stream-chunks`. Those routes start returning encoded audio after each generated text chunk, so playback can begin before the full request completes. For live streaming, WAV requests are returned as MP3 because independent WAV chunks do not form a valid continuous stream.
 
+```bash
+curl -X POST "http://localhost:7861/tts/stream-chunks" \
+  -H "Content-Type: application/json" \
+  -d '{"text":"This longer request can begin playing before the full audio is finished.","language":"English","output_format":"mp3"}' \
+  -o streamed.mp3
+```
+
 ## Image Tags
 
 - Recommended tag for most users: `latest`
-- Versioned release tags use the pattern `vX.Y.Z`, for example `v0.1.0`
-- Tiny tags use `latest_tiny` or versioned tags such as `v0.1.0_tiny`
+- Versioned release tags use the pattern `vX.Y.Z`, for example `v0.1.1`
+- Tiny tags use `latest_tiny` or versioned tags such as `v0.1.1_tiny`
 
 ## Release Validation
 
 Before the initial release, the Python 3.13 baked image was built and tested without a host model-cache volume mounted. API validation covered `/tts/ping`, `/tts/status`, discovery routes, OpenAPI docs, metrics, real generation in WAV/MP3/FLAC/OGG, voice design, `/tts/stream`, `/tts/convert`, `/tts/purge`, and generation after purge/reload from baked cache.
+
+The next release adds UI-focused validation targets: multilingual interface selection, separate Generate and Stream playback paths, seed reuse, stop-generation behavior for streaming, and the live GPU monitor.
 
 ## Attribution
 
