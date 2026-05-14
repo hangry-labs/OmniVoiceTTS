@@ -99,6 +99,28 @@ class OmniVoiceTTSClient:
     def convert(self, **kwargs: Any) -> AudioResponse:
         return self._audio("/tts/convert", kwargs)
 
+    def openai_speech(
+        self,
+        input: str,
+        model: str = "omnivoice",
+        voice: str = "default",
+        response_format: str = "mp3",
+        speed: float = 1.0,
+        **kwargs: Any,
+    ) -> AudioResponse:
+        payload = {
+            "model": model,
+            "input": input,
+            "voice": voice,
+            "response_format": response_format,
+            "speed": speed,
+            **kwargs,
+        }
+        return self._audio("/v1/audio/speech", payload)
+
+    def openai_models(self) -> dict[str, Any]:
+        return self._json("GET", "/v1/models")
+
     def _json(self, method: str, path: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
         response = self._request(method, path, payload)
         if not response:

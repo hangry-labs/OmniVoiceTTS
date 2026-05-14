@@ -8,6 +8,7 @@ vars:
   APP_DEVICE: 'auto'
   HF_TOKEN: ''
   HF_CACHE_VOLUME: omnivoicetts_hf_cache
+  OPENAI_PROFILE_VOLUME: omnivoicetts_openai_voice_profiles
   HF_HUB_OFFLINE: '1'
   TRANSFORMERS_OFFLINE: '1'
   CONTAINER: omnivoicetts
@@ -67,7 +68,8 @@ tasks:
       - cmd /c docker rm -f {{.CONTAINER}} >nul 2>&1
       - cmd /c docker rm -f {{.CONTAINER_LOCAL}} >nul 2>&1
       - task: cache-init
-      - cmd /c docker run -d --name {{.CONTAINER}} -p {{.PORT}}:7861 --gpus all -e CUDA_VISIBLE_DEVICES={{.GPU_DEVICE}} -e OMNIVOICE_DEVICE={{.APP_DEVICE}} -e PORT=7861 -e HF_TOKEN={{.HF_TOKEN}} -e HF_HUB_OFFLINE={{.HF_HUB_OFFLINE}} -e TRANSFORMERS_OFFLINE={{.TRANSFORMERS_OFFLINE}} -v {{.HF_CACHE_VOLUME}}:/app/.cache/huggingface {{.IMAGE}}
+      - cmd /c docker volume create {{.OPENAI_PROFILE_VOLUME}} >nul
+      - cmd /c docker run -d --name {{.CONTAINER}} -p {{.PORT}}:7861 --gpus all -e CUDA_VISIBLE_DEVICES={{.GPU_DEVICE}} -e OMNIVOICE_DEVICE={{.APP_DEVICE}} -e PORT=7861 -e HF_TOKEN={{.HF_TOKEN}} -e HF_HUB_OFFLINE={{.HF_HUB_OFFLINE}} -e TRANSFORMERS_OFFLINE={{.TRANSFORMERS_OFFLINE}} -v {{.HF_CACHE_VOLUME}}:/app/.cache/huggingface -v {{.OPENAI_PROFILE_VOLUME}}:/app/openai_voice_profiles {{.IMAGE}}
       - cmd /c docker ps --filter "name={{.CONTAINER}}"
 
   imagerun-tiny:
@@ -76,7 +78,8 @@ tasks:
       - cmd /c docker rm -f {{.CONTAINER}} >nul 2>&1
       - cmd /c docker rm -f {{.CONTAINER_LOCAL}} >nul 2>&1
       - cmd /c docker volume create {{.HF_CACHE_VOLUME}} >nul
-      - cmd /c docker run -d --name {{.CONTAINER}} -p {{.PORT}}:7861 --gpus all -e CUDA_VISIBLE_DEVICES={{.GPU_DEVICE}} -e OMNIVOICE_DEVICE={{.APP_DEVICE}} -e PORT=7861 -e HF_TOKEN={{.HF_TOKEN}} -e HF_HUB_OFFLINE=0 -e TRANSFORMERS_OFFLINE=0 -v {{.HF_CACHE_VOLUME}}:/app/.cache/huggingface {{.TINY_IMAGE}}
+      - cmd /c docker volume create {{.OPENAI_PROFILE_VOLUME}} >nul
+      - cmd /c docker run -d --name {{.CONTAINER}} -p {{.PORT}}:7861 --gpus all -e CUDA_VISIBLE_DEVICES={{.GPU_DEVICE}} -e OMNIVOICE_DEVICE={{.APP_DEVICE}} -e PORT=7861 -e HF_TOKEN={{.HF_TOKEN}} -e HF_HUB_OFFLINE=0 -e TRANSFORMERS_OFFLINE=0 -v {{.HF_CACHE_VOLUME}}:/app/.cache/huggingface -v {{.OPENAI_PROFILE_VOLUME}}:/app/openai_voice_profiles {{.TINY_IMAGE}}
       - cmd /c docker ps --filter "name={{.CONTAINER}}"
 
   localrun:
@@ -85,7 +88,8 @@ tasks:
       - cmd /c docker rm -f {{.CONTAINER}} >nul 2>&1
       - cmd /c docker rm -f {{.CONTAINER_LOCAL}} >nul 2>&1
       - task: cache-init
-      - cmd /c docker run -d --name {{.CONTAINER_LOCAL}} -p {{.PORT}}:7861 --gpus all -e CUDA_VISIBLE_DEVICES={{.GPU_DEVICE}} -e OMNIVOICE_DEVICE={{.APP_DEVICE}} -e PORT=7861 -e UVICORN_RELOAD=1 -e HF_TOKEN={{.HF_TOKEN}} -e HF_HUB_OFFLINE={{.HF_HUB_OFFLINE}} -e TRANSFORMERS_OFFLINE={{.TRANSFORMERS_OFFLINE}} -v {{.HF_CACHE_VOLUME}}:/app/.cache/huggingface -v "{{.TASKFILE_DIR}}\omnivoice:/app/omnivoice" -v "{{.TASKFILE_DIR}}\hangrylabs:/app/hangrylabs" {{.IMAGE}}
+      - cmd /c docker volume create {{.OPENAI_PROFILE_VOLUME}} >nul
+      - cmd /c docker run -d --name {{.CONTAINER_LOCAL}} -p {{.PORT}}:7861 --gpus all -e CUDA_VISIBLE_DEVICES={{.GPU_DEVICE}} -e OMNIVOICE_DEVICE={{.APP_DEVICE}} -e PORT=7861 -e UVICORN_RELOAD=1 -e HF_TOKEN={{.HF_TOKEN}} -e HF_HUB_OFFLINE={{.HF_HUB_OFFLINE}} -e TRANSFORMERS_OFFLINE={{.TRANSFORMERS_OFFLINE}} -v {{.HF_CACHE_VOLUME}}:/app/.cache/huggingface -v {{.OPENAI_PROFILE_VOLUME}}:/app/openai_voice_profiles -v "{{.TASKFILE_DIR}}\omnivoice:/app/omnivoice" -v "{{.TASKFILE_DIR}}\hangrylabs:/app/hangrylabs" {{.IMAGE}}
       - cmd /c docker ps --filter "name={{.CONTAINER_LOCAL}}"
 
   localrun-tiny:
@@ -94,7 +98,8 @@ tasks:
       - cmd /c docker rm -f {{.CONTAINER}} >nul 2>&1
       - cmd /c docker rm -f {{.CONTAINER_LOCAL}} >nul 2>&1
       - cmd /c docker volume create {{.HF_CACHE_VOLUME}} >nul
-      - cmd /c docker run -d --name {{.CONTAINER_LOCAL}} -p {{.PORT}}:7861 --gpus all -e CUDA_VISIBLE_DEVICES={{.GPU_DEVICE}} -e OMNIVOICE_DEVICE={{.APP_DEVICE}} -e PORT=7861 -e UVICORN_RELOAD=1 -e HF_TOKEN={{.HF_TOKEN}} -e HF_HUB_OFFLINE=0 -e TRANSFORMERS_OFFLINE=0 -v {{.HF_CACHE_VOLUME}}:/app/.cache/huggingface -v "{{.TASKFILE_DIR}}\omnivoice:/app/omnivoice" -v "{{.TASKFILE_DIR}}\hangrylabs:/app/hangrylabs" {{.TINY_IMAGE}}
+      - cmd /c docker volume create {{.OPENAI_PROFILE_VOLUME}} >nul
+      - cmd /c docker run -d --name {{.CONTAINER_LOCAL}} -p {{.PORT}}:7861 --gpus all -e CUDA_VISIBLE_DEVICES={{.GPU_DEVICE}} -e OMNIVOICE_DEVICE={{.APP_DEVICE}} -e PORT=7861 -e UVICORN_RELOAD=1 -e HF_TOKEN={{.HF_TOKEN}} -e HF_HUB_OFFLINE=0 -e TRANSFORMERS_OFFLINE=0 -v {{.HF_CACHE_VOLUME}}:/app/.cache/huggingface -v {{.OPENAI_PROFILE_VOLUME}}:/app/openai_voice_profiles -v "{{.TASKFILE_DIR}}\omnivoice:/app/omnivoice" -v "{{.TASKFILE_DIR}}\hangrylabs:/app/hangrylabs" {{.TINY_IMAGE}}
       - cmd /c docker ps --filter "name={{.CONTAINER_LOCAL}}"
 
   imageweb:

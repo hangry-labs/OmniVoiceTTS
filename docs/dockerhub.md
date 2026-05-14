@@ -82,6 +82,8 @@ docker run -p 7861:7861 --gpus "device=0" -e CUDA_VISIBLE_DEVICES=0 -v omnivoice
 - WAV, MP3, FLAC, and OGG output support
 - GPU support when Docker/NVIDIA support is available
 - Offline-friendly usage with the standard full image once it is available locally
+- OpenAI-compatible `/v1/audio/speech`, `/v1/models`, and `/v1/models/{model}` routes for tools that can target local OpenAI-style TTS servers
+- Local OpenAI voice profiles: upload a reference sample in the UI, name it, then use that name as the TTS voice in compatible clients
 - Kokoro-shaped compatibility fields and routes such as `voice`, `use_gpu`, `response_format`, `/tts/voices`, `/tts/speakers`, `/tts/stream-formats`, `/tts/convert`, progressive `/tts/stream`, and progressive `/tts/stream-chunks`
 
 ## API Example
@@ -114,6 +116,38 @@ curl -X POST "http://localhost:7861/tts/generate" \
 ```
 
 Responses include the used seed in the `X-OmniVoiceTTS-Seed` header when generation succeeds.
+
+OpenAI-compatible speech request:
+
+```bash
+curl -X POST "http://localhost:7861/v1/audio/speech" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"tts-1","voice":"nova","input":"Hello from an OpenAI-compatible local OmniVoiceTTS endpoint.","response_format":"mp3"}' \
+  -o openai-speech.mp3
+```
+
+OpenAI-style model aliases include `omnivoice`, `tts-1`, `tts-1-hd`, and `gpt-4o-mini-tts`. Voice aliases such as `alloy`, `echo`, `fable`, `onyx`, `nova`, and `shimmer` are accepted for client compatibility and mapped to local OmniVoice clone/design behavior.
+
+For steadier OpenAI-style playback, standard voice aliases use a local built-in clone reference by default. Advanced clients may send `language`, `seed`, `randomize_seed`, `voice_profile`, `ref_audio`, and `ref_text` as extra JSON fields when the client allows additional parameters.
+
+The browser UI has an **OpenAI** tab for creating local clone profiles from uploaded reference audio. A profile stores its default language, seed, and seed-randomization behavior. After saving a profile, use its name as the TTS voice in OpenWebUI or another compatible client.
+
+You can still select or override a profile through additional parameters:
+
+```json
+{
+  "voice_profile": "my-voice",
+  "language": "English",
+  "seed": 12345,
+  "randomize_seed": false
+}
+```
+
+Profiles are saved under `/app/openai_voice_profiles`. Mount that path to a Docker volume if you want them to persist across container replacement:
+
+```bash
+docker run -p 7861:7861 --gpus "device=0" -e CUDA_VISIBLE_DEVICES=0 -v omnivoicetts_openai_voice_profiles:/app/openai_voice_profiles hangrylabs/omnivoicetts:latest
+```
 
 Voice design:
 

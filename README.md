@@ -113,8 +113,41 @@ Kokoro-shaped compatibility fields are accepted where they can be translated cle
 
 Output format can be sent as `output_format`, `format`, or Kokoro/OpenAI-style `response_format`.
 
+OpenAI-compatible speech clients can call the local server through `/v1/audio/speech`:
+
+```bash
+curl -X POST "http://localhost:7861/v1/audio/speech" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"tts-1","voice":"nova","input":"Hello from an OpenAI-compatible local OmniVoiceTTS endpoint.","response_format":"mp3"}' \
+  -o openai-speech.mp3
+```
+
+Supported compatibility model ids are `omnivoice`, `tts-1`, `tts-1-hd`, and `gpt-4o-mini-tts`. OpenAI-style voice names such as `alloy`, `echo`, `fable`, `onyx`, `nova`, and `shimmer` are accepted as local compatibility aliases.
+
+For OpenAI-compatible TTS, standard voice aliases use a local built-in clone reference by default so sentence-by-sentence playback stays closer to the same speaker identity. Advanced clients may also pass OmniVoice extensions such as `language`, `seed`, `randomize_seed`, `voice_profile`, `ref_audio`, and `ref_text` in the request body.
+
+The browser UI includes an **OpenAI** tab where you can upload a reference sample and save it as a named local voice profile. The profile stores its default language, seed, and seed-randomization behavior. In OpenWebUI, set the TTS voice to the saved profile name, for example `my-voice`.
+
+OpenAI-compatible clients can also select or override that profile through additional request parameters:
+
+```json
+{
+  "voice_profile": "my-voice",
+  "language": "English",
+  "seed": 12345,
+  "randomize_seed": false
+}
+```
+
+Voice profiles are stored inside the container at `/app/openai_voice_profiles`. Mount that path to a Docker volume if you want profiles to survive container replacement.
+
 Useful endpoints:
 
+- `GET /v1/models`
+- `GET /v1/models/{model}`
+- `GET /v1/audio/models`
+- `GET /v1/audio/voices`
+- `POST /v1/audio/speech`
 - `GET /tts/ping`
 - `GET /tts/status`
 - `GET /tts/defaults`
@@ -154,6 +187,21 @@ audio = tts.generate(
 audio.save("hello.mp3")
 ```
 
+OpenAI-shaped speech calls can also be made through the bundled client:
+
+```python
+from omnivoice import OmniVoiceTTSClient
+
+tts = OmniVoiceTTSClient("http://localhost:7861")
+audio = tts.openai_speech(
+    model="tts-1",
+    voice="nova",
+    input="Hello from an OpenAI-compatible local endpoint.",
+    response_format="mp3",
+)
+audio.save("openai-speech.mp3")
+```
+
 ---
 
 ## Docker Features
@@ -164,6 +212,7 @@ audio.save("hello.mp3")
 - HTTP API + web UI in one container
 - Offline-friendly runtime flags by default
 - Persistent Hugging Face cache volume support in the local Taskfile workflow
+- Persistent OpenAI voice-profile volume support in the local Taskfile workflow
 - Kokoro-shaped compatibility routes for easier integration with existing TTS tooling
 
 ---
@@ -204,7 +253,7 @@ task imagestop
 task nuke
 ```
 
-`task imagerun` and `task localrun` mount a named Docker volume at `/app/.cache/huggingface` so assets can survive container and image rebuilds. Baked run tasks seed missing cache files from the full image before startup.
+`task imagerun` and `task localrun` mount named Docker volumes at `/app/.cache/huggingface` and `/app/openai_voice_profiles` so cache assets and saved OpenAI voice profiles can survive container and image rebuilds. Baked run tasks seed missing cache files from the full image before startup.
 
 Release from a clean tree:
 

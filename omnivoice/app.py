@@ -6,13 +6,14 @@ import json
 import os
 import random
 import re
+import shutil
 import subprocess
 import tempfile
 import threading
 import wave
 from datetime import datetime
 from pathlib import Path
-from typing import Iterator, Optional
+from typing import Any, Iterator, Optional
 
 import gradio as gr
 import numpy as np
@@ -38,6 +39,10 @@ ASSET_DIR = Path(__file__).resolve().parent.parent / "hangrylabs"
 BRAND_ASSET_BASE = "/assets/hangrylabs"
 TRANSLATIONS_FILE = Path(__file__).resolve().parent / "ui_translations.json"
 UI_LOCALE = os.getenv("OMNIVOICE_UI_LOCALE", "en").strip().lower() or "en"
+PACKAGE_DIR = Path(__file__).resolve().parent
+OPENAI_DEFAULT_CLONE_AUDIO = PACKAGE_DIR / "assets" / "openai_default_voice.mp3"
+OPENAI_VOICE_PROFILE_DIR = Path(os.getenv("OMNIVOICE_OPENAI_VOICE_PROFILE_DIR", "/app/openai_voice_profiles"))
+OPENAI_VOICE_PROFILE_INDEX = OPENAI_VOICE_PROFILE_DIR / "profiles.json"
 
 OUTPUT_FORMATS = {
     "wav": {
@@ -72,7 +77,27 @@ FORMAT_ALIASES = {
     ".ogg": "ogg",
     "mpeg": "mp3",
     "vorbis": "ogg",
+    "opus": "ogg",
 }
+OPENAI_MODEL_ALIASES = {
+    "omnivoice": "omnivoice",
+    "omnivoicetts": "omnivoice",
+    "tts-1": "omnivoice",
+    "tts-1-hd": "omnivoice",
+    "gpt-4o-mini-tts": "omnivoice",
+}
+OPENAI_MODEL_IDS = ["omnivoice", "tts-1", "tts-1-hd", "gpt-4o-mini-tts"]
+OPENAI_VOICE_INSTRUCTIONS = {
+    "default": None,
+    "auto": None,
+    "alloy": "female, young adult, moderate pitch",
+    "echo": "male, middle-aged, low pitch",
+    "fable": "female, young adult, high pitch",
+    "onyx": "male, middle-aged, very low pitch",
+    "nova": "female, young adult, high pitch",
+    "shimmer": "female, young adult, moderate pitch",
+}
+OPENAI_CLONE_VOICE_ALIASES = {"default", "alloy", "echo", "fable", "onyx", "nova", "shimmer"}
 
 BRACKET_TOKEN_PATTERN = re.compile(r"\[[^\]\r\n]{1,80}\]")
 SUPPORTED_NONVERBAL_TAGS = [
@@ -101,6 +126,9 @@ UI_CANCEL_EVENT = threading.Event()
 UI_STREAM_LOCK = threading.Lock()
 UI_STREAM_GENERATION = 0
 GPU_HISTORY: dict[int, list[int]] = {}
+OPENAI_CALL_LOG: list[dict[str, str]] = []
+OPENAI_CALL_LOG_LOCK = threading.Lock()
+OPENAI_CALL_LOG_LIMIT = 50
 
 
 def next_ui_stream_generation() -> int:
@@ -282,17 +310,6 @@ VOICE_DESIGN_CATEGORIES = {
     },
 }
 
-AUTO_VOICE_PROFILES = [
-    ("female", "young adult", "moderate pitch"),
-    ("male", "young adult", "moderate pitch"),
-    ("female", "middle-aged", "low pitch"),
-    ("male", "middle-aged", "low pitch"),
-    ("female", "young adult", "high pitch"),
-    ("male", "young adult", "low pitch"),
-    ("female", "middle-aged", "moderate pitch"),
-    ("male", "middle-aged", "moderate pitch"),
-]
-AUTO_VOICE_RANDOM = random.SystemRandom()
 MAX_RANDOM_SEED = 2**32 - 1
 
 
@@ -536,9 +553,7 @@ def build_voice_design_instruct(*selected_options: str | None, manual_instruct: 
 def build_auto_voice_instruct(text: str | None) -> tuple[str | None, str | None]:
     if has_bracket_token(text):
         return None, "True no-prompt mode used because expressive bracket tags are present."
-    profile = AUTO_VOICE_RANDOM.choice(AUTO_VOICE_PROFILES)
-    instruct = build_voice_design_instruct(*profile)
-    return instruct, f"Auto voice profile: {instruct}."
+    return None, "True no-prompt mode used."
 
 
 def has_bracket_token(text: str | None) -> bool:
@@ -651,6 +666,186 @@ def resolve_generation_seed(seed, randomize_seed: bool) -> int:
     if value < 0 or value > MAX_RANDOM_SEED:
         raise ValueError(f"Seed must be between 0 and {MAX_RANDOM_SEED}.")
     return value
+
+
+def normalize_profile_name(name: str | None) -> str:
+    value = (name or "").strip().lower()
+    value = re.sub(r"[^a-z0-9_-]+", "-", value)
+    value = value.strip("-_")
+    if not value:
+        raise ValueError("Voice profile name must contain at least one letter or number.")
+    if len(value) > 48:
+        raise ValueError("Voice profile name must be 48 characters or fewer.")
+    return value
+
+
+def load_openai_voice_profiles() -> dict[str, dict[str, Any]]:
+    if not OPENAI_VOICE_PROFILE_INDEX.exists():
+        return {}
+    try:
+        raw = json.loads(OPENAI_VOICE_PROFILE_INDEX.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    if not isinstance(raw, dict):
+        return {}
+    profiles = {}
+    for name, profile in raw.items():
+        if not isinstance(profile, dict):
+            continue
+        ref_audio = str(profile.get("ref_audio") or "").strip()
+        if not ref_audio:
+            continue
+        raw_seed = profile.get("seed")
+        profiles[str(name)] = {
+            "ref_audio": ref_audio,
+            "ref_text": str(profile.get("ref_text") or ""),
+            "language": str(profile.get("language") or ""),
+            "seed": "" if raw_seed is None or raw_seed == "" else str(raw_seed),
+            "randomize_seed": bool(profile.get("randomize_seed", False)),
+        }
+    return profiles
+
+
+def save_openai_voice_profiles(profiles: dict[str, dict[str, Any]]) -> None:
+    OPENAI_VOICE_PROFILE_DIR.mkdir(parents=True, exist_ok=True)
+    OPENAI_VOICE_PROFILE_INDEX.write_text(json.dumps(profiles, indent=2, sort_keys=True), encoding="utf-8")
+
+
+def normalize_optional_seed(seed: int | float | str | None) -> int | None:
+    if seed is None or seed == "":
+        return None
+    value = int(seed)
+    if value < 0 or value > MAX_RANDOM_SEED:
+        raise ValueError(f"Seed must be between 0 and {MAX_RANDOM_SEED}.")
+    return value
+
+
+def save_openai_voice_profile(
+    name: str,
+    audio_path: str | None,
+    ref_text: str | None = None,
+    language: str | None = None,
+    seed: int | float | str | None = 12345,
+    randomize_seed: bool = False,
+) -> str:
+    profile_name = normalize_profile_name(name)
+    if not audio_path:
+        raise ValueError("Upload a reference audio sample before saving the profile.")
+    source = Path(audio_path)
+    if not source.exists():
+        raise ValueError("Uploaded reference audio file is no longer available.")
+    OPENAI_VOICE_PROFILE_DIR.mkdir(parents=True, exist_ok=True)
+    suffix = source.suffix.lower() or ".wav"
+    if suffix not in {".wav", ".mp3", ".flac", ".ogg", ".m4a"}:
+        suffix = ".wav"
+    destination = OPENAI_VOICE_PROFILE_DIR / f"{profile_name}{suffix}"
+    shutil.copyfile(source, destination)
+    profiles = load_openai_voice_profiles()
+    profiles[profile_name] = {
+        "ref_audio": str(destination),
+        "ref_text": (ref_text or "").strip(),
+        "language": (language or "").strip(),
+        "seed": "" if randomize_seed else normalize_optional_seed(seed),
+        "randomize_seed": bool(randomize_seed),
+    }
+    save_openai_voice_profiles(profiles)
+    return profile_name
+
+
+def render_openai_voice_profiles() -> str:
+    profiles = load_openai_voice_profiles()
+    lines = [
+        "### OpenAI Voice Profiles",
+        "",
+        "Create a profile here, then use its name as the OpenAI TTS voice in OpenWebUI. Additional request parameters are optional and only needed when you want to override the saved profile defaults.",
+        "",
+        "Built-in clone aliases: `default`, `alloy`, `echo`, `fable`, `onyx`, `nova`, `shimmer`.",
+    ]
+    if profiles:
+        lines.extend(["", "Saved profiles:"])
+        for name, profile in sorted(profiles.items()):
+            has_text = "yes" if profile.get("ref_text") else "no"
+            language = profile.get("language") or "request/default"
+            seed = "random" if profile.get("randomize_seed") else profile.get("seed") or "12345"
+            lines.append(f"- `{name}`: language: `{language}` | seed: `{seed}` | transcript: {has_text}")
+    else:
+        lines.extend(["", "No custom profiles saved yet."])
+    lines.extend(
+        [
+            "",
+            "Optional override example:",
+            "",
+            "```json",
+            '{ "voice_profile": "my-voice", "language": "English", "seed": 12345, "randomize_seed": false }',
+            "```",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def save_openai_voice_profile_from_ui(
+    name: str,
+    audio_path: str | None,
+    ref_text: str | None,
+    language: str | None,
+    seed: int | float | str | None,
+    randomize_seed: bool,
+) -> tuple[str, str]:
+    try:
+        profile_name = save_openai_voice_profile(name, audio_path, ref_text, language, seed, randomize_seed)
+    except ValueError as exc:
+        return f"OpenAI voice profile error: {exc}", render_openai_voice_profiles()
+    return f"Saved OpenAI voice profile `{profile_name}`.", render_openai_voice_profiles()
+
+
+def append_openai_call_log(payload: OpenAISpeechRequest, tts_payload: TTSRequest, profile_source: str) -> None:
+    row = {
+        "time": datetime.now().strftime("%H:%M:%S"),
+        "model": payload.model,
+        "voice": payload.voice,
+        "profile": profile_source,
+        "format": payload.response_format,
+        "language": tts_payload.language or "auto",
+        "seed": "" if tts_payload.seed is None else str(tts_payload.seed),
+        "randomize": str(bool(tts_payload.randomize_seed)).lower(),
+        "ref_audio": "yes" if tts_payload.ref_audio else "no",
+        "instructions": "yes" if (payload.instructions or "").strip() else "no",
+    }
+    with OPENAI_CALL_LOG_LOCK:
+        OPENAI_CALL_LOG.append(row)
+        del OPENAI_CALL_LOG[:-OPENAI_CALL_LOG_LIMIT]
+
+
+def render_openai_call_log() -> str:
+    with OPENAI_CALL_LOG_LOCK:
+        rows = list(reversed(OPENAI_CALL_LOG))
+    lines = [
+        "### Recent OpenAI Calls",
+        "",
+        "Prompt text is intentionally not logged here.",
+        "",
+    ]
+    if not rows:
+        lines.append("No OpenAI-compatible speech calls observed since this server started.")
+        return "\n".join(lines)
+    lines.append("| Time | Model | Voice | Profile | Language | Format | Seed | Random | Ref | Instructions |")
+    lines.append("|---|---|---|---|---|---|---|---|---|---|")
+    for row in rows[:20]:
+        values = [
+            row["time"],
+            row["model"],
+            row["voice"],
+            row["profile"],
+            row["language"],
+            row["format"],
+            row["seed"] or "-",
+            row["randomize"],
+            row["ref_audio"],
+            row["instructions"],
+        ]
+        escaped = [html.escape(value) for value in values]
+        lines.append("| " + " | ".join(escaped) + " |")
+    return "\n".join(lines)
 
 
 def to_int16_audio(audio: np.ndarray) -> np.ndarray:
@@ -1029,6 +1224,7 @@ def synthesize_file(
         effective_class_temperature = coerce_float(class_temperature, 0.0)
         if mode == "No Voice Prompt":
             effective_instruct, profile_status = build_auto_voice_instruct(text)
+            effective_class_temperature = 0.0
         if mode == "Voice Design":
             effective_instruct = build_voice_design_instruct(
                 design_gender,
@@ -1126,6 +1322,7 @@ def synthesize_file_streaming(
         effective_class_temperature = coerce_float(class_temperature, 0.0)
         if mode == "No Voice Prompt":
             effective_instruct, profile_status = build_auto_voice_instruct(text)
+            effective_class_temperature = 0.0
         if mode == "Voice Design":
             effective_instruct = build_voice_design_instruct(
                 design_gender,
@@ -1702,6 +1899,52 @@ with gr.Blocks(title="OmniVoiceTTS") as ui:
                     with gr.Row():
                         stream_btn = gr.Button("Stream", variant="primary")
                         stop_generation_btn = gr.Button(ui_text("stop_generation.label"), variant="stop")
+                with gr.Tab("OpenAI"):
+                    gr.Markdown(
+                        "Create local clone profiles for OpenAI-compatible tools. "
+                        "In OpenWebUI, set the TTS voice to the saved profile name. "
+                        "Additional parameters are only needed when you want to override profile defaults."
+                    )
+                    openai_profile_name = gr.Textbox(
+                        label="Voice profile name",
+                        placeholder="my-voice",
+                        info="Use letters, numbers, dash, or underscore. The saved name is normalized for API use.",
+                    )
+                    openai_profile_audio = gr.Audio(
+                        label="Reference audio sample",
+                        sources=["upload"],
+                        type="filepath",
+                    )
+                    openai_profile_text = gr.Textbox(
+                        label="Reference transcript",
+                        lines=2,
+                        placeholder="Optional transcript for the uploaded reference audio.",
+                    )
+                    openai_profile_language = gr.Dropdown(
+                        choices=LANGUAGE_CHOICES,
+                        value="english",
+                        label="Default language",
+                        info="Used when the OpenAI request does not send a language override.",
+                    )
+                    with gr.Row():
+                        openai_profile_seed = gr.Number(
+                            value=12345,
+                            minimum=0,
+                            maximum=MAX_RANDOM_SEED,
+                            precision=0,
+                            label="Default seed",
+                            info="Used for stable profile playback unless a request overrides it.",
+                        )
+                        openai_profile_randomize_seed = gr.Checkbox(
+                            value=False,
+                            label="Randomize seed by default",
+                            info="Leave off for repeatable profile behavior.",
+                        )
+                    openai_profile_save = gr.Button("Save OpenAI Voice Profile", variant="primary")
+                    openai_profile_status = gr.Textbox(label="OpenAI profile status", lines=2)
+                    openai_profile_overview = gr.Markdown(render_openai_voice_profiles())
+                    openai_log_refresh = gr.Button("Refresh OpenAI Call Log")
+                    openai_call_log = gr.Markdown(render_openai_call_log())
             status_box = gr.Textbox(label=ui_text("status.label"), lines=2)
             with gr.Row():
                 hardware = gr.Dropdown(current_hardware_choices(), value=default_hardware, label=ui_text("hardware.label"))
@@ -1791,6 +2034,24 @@ with gr.Blocks(title="OmniVoiceTTS") as ui:
     gpu_timer.tick(
         fn=gpu_monitor_html,
         outputs=gpu_monitor,
+        queue=False,
+    )
+
+    openai_profile_save.click(
+        fn=save_openai_voice_profile_from_ui,
+        inputs=[
+            openai_profile_name,
+            openai_profile_audio,
+            openai_profile_text,
+            openai_profile_language,
+            openai_profile_seed,
+            openai_profile_randomize_seed,
+        ],
+        outputs=[openai_profile_status, openai_profile_overview],
+    )
+    openai_log_refresh.click(
+        fn=render_openai_call_log,
+        outputs=openai_call_log,
         queue=False,
     )
 
@@ -1961,6 +2222,183 @@ class PurgeRequest(BaseModel):
     device: Optional[str] = Field(None, description="Optional cached model device to clear. Omit to clear all.")
 
 
+class OpenAISpeechRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    model: str = Field("omnivoice", description="OpenAI-style model id. Accepted aliases include omnivoice, tts-1, and tts-1-hd.")
+    input: str = Field(..., min_length=1, description="Text to synthesize.")
+    voice: str = Field("default", description="OpenAI-style voice id. Compatibility aliases map to local OmniVoice clone/design behavior.")
+    response_format: str = Field("mp3", description="mp3, wav, flac, or ogg. opus is accepted as an ogg alias.")
+    speed: float = Field(1.0, ge=0.5, le=1.5, description="Speech speed multiplier.")
+    language: Optional[str] = Field(None, description="Optional OmniVoice extension: language name or id.")
+    seed: Optional[int] = Field(None, ge=0, le=MAX_RANDOM_SEED, description="Optional OmniVoice extension: fixed generation seed.")
+    randomize_seed: bool = Field(False, description="Optional OmniVoice extension: generate a random seed.")
+    device: str = Field("auto", description="Optional OmniVoice extension: auto, cpu, mps, or cuda:N.")
+    instructions: Optional[str] = Field(None, description="Optional OmniVoice extension: explicit voice-design instruction.")
+    ref_audio: Optional[str] = Field(None, description="Optional OmniVoice extension: reference audio path for stable voice cloning.")
+    ref_text: Optional[str] = Field(None, description="Optional OmniVoice extension: transcript for ref_audio.")
+    voice_profile: Optional[str] = Field(None, description="Optional OmniVoice extension: saved OpenAI voice profile name.")
+
+
+def normalize_openai_model(model: str | None) -> str:
+    model_id = (model or "omnivoice").strip().lower()
+    if model_id not in OPENAI_MODEL_ALIASES:
+        supported = ", ".join(OPENAI_MODEL_IDS)
+        raise ValueError(f"Unsupported model '{model}'. Supported OpenAI-compatible models: {supported}")
+    return OPENAI_MODEL_ALIASES[model_id]
+
+
+def openai_voice_instruction(voice: str | None, instructions: str | None = None) -> str | None:
+    manual_instruction = (instructions or "").strip()
+    if manual_instruction:
+        return manual_instruction
+    voice_id = (voice or "default").strip().lower()
+    if not voice_id:
+        return None
+    return OPENAI_VOICE_INSTRUCTIONS.get(voice_id)
+
+
+def openai_request_has_field(payload: OpenAISpeechRequest, field_name: str) -> bool:
+    return field_name in getattr(payload, "model_fields_set", set())
+
+
+def openai_profile_from_payload(payload: OpenAISpeechRequest) -> tuple[str | None, dict[str, Any] | None, str | None]:
+    if (payload.ref_audio or "").strip():
+        return None, None, None
+
+    profiles = load_openai_voice_profiles()
+    requested_profile = (payload.voice_profile or "").strip()
+    if requested_profile:
+        profile_name = normalize_profile_name(requested_profile)
+        profile = profiles.get(profile_name)
+        if not profile:
+            raise ValueError(f"OpenAI voice profile '{requested_profile}' does not exist.")
+        return profile_name, profile, f"profile:{profile_name}"
+
+    if (payload.instructions or "").strip():
+        return None, None, None
+
+    voice_id = (payload.voice or "default").strip().lower()
+    try:
+        profile_name = normalize_profile_name(voice_id)
+    except ValueError:
+        return None, None, None
+    profile = profiles.get(profile_name)
+    if profile:
+        return profile_name, profile, f"voice-profile:{profile_name}"
+    return None, None, None
+
+
+def resolve_openai_voice(
+    payload: OpenAISpeechRequest,
+) -> tuple[str | None, str | None, str | None, str]:
+    explicit_ref_audio = (payload.ref_audio or "").strip()
+    if explicit_ref_audio:
+        return explicit_ref_audio, (payload.ref_text or None), None, "request-ref-audio"
+
+    _, profile, profile_source = openai_profile_from_payload(payload)
+    if profile and profile_source:
+        return profile["ref_audio"], profile.get("ref_text") or None, None, profile_source
+
+    manual_instruction = (payload.instructions or "").strip()
+    if manual_instruction:
+        return None, None, manual_instruction, "request-instructions"
+
+    voice_id = (payload.voice or "default").strip().lower()
+    if voice_id in OPENAI_CLONE_VOICE_ALIASES and OPENAI_DEFAULT_CLONE_AUDIO.exists():
+        return str(OPENAI_DEFAULT_CLONE_AUDIO), None, None, "builtin-clone"
+
+    return None, None, openai_voice_instruction(payload.voice), "voice-design"
+
+
+def openai_model_payload(model_id: str) -> dict:
+    return {
+        "id": model_id,
+        "object": "model",
+        "created": 0,
+        "owned_by": "hangrylabs",
+    }
+
+
+def openai_voice_payload(voice_id: str) -> dict:
+    is_clone_profile = voice_id in OPENAI_CLONE_VOICE_ALIASES and OPENAI_DEFAULT_CLONE_AUDIO.exists()
+    return {
+        "id": voice_id,
+        "object": "voice",
+        "owned_by": "hangrylabs",
+        "profile_type": "clone" if is_clone_profile else "design",
+        "compatibility_note": "Local OmniVoiceTTS compatibility voice alias, not an OpenAI-hosted voice.",
+    }
+
+
+def openai_voice_payloads() -> list[dict]:
+    voices = [openai_voice_payload(voice_id) for voice_id in OPENAI_VOICE_INSTRUCTIONS]
+    for name in sorted(load_openai_voice_profiles()):
+        voices.append(
+            {
+                "id": name,
+                "object": "voice",
+                "owned_by": "local",
+                "profile_type": "clone",
+                "compatibility_note": "User-created local OmniVoiceTTS clone profile.",
+            }
+        )
+    return voices
+
+
+def openai_speech_to_tts_request(payload: OpenAISpeechRequest) -> TTSRequest:
+    normalize_openai_model(payload.model)
+    output_format = normalize_output_format(payload.response_format)
+    ref_audio, ref_text, instruct, _ = resolve_openai_voice(payload)
+    _, profile, _ = openai_profile_from_payload(payload)
+    if instruct:
+        validate_voice_design_text(payload.input, instruct)
+    language = payload.language
+    if profile and not openai_request_has_field(payload, "language"):
+        language = profile.get("language") or None
+    randomize_seed = payload.randomize_seed
+    if profile and not openai_request_has_field(payload, "randomize_seed"):
+        randomize_seed = bool(profile.get("randomize_seed", False))
+    seed = payload.seed
+    if profile and not openai_request_has_field(payload, "seed") and not randomize_seed:
+        seed = normalize_optional_seed(profile.get("seed")) or 12345
+    if seed is None and ref_audio and not randomize_seed:
+        seed = 12345
+    return TTSRequest(
+        text=payload.input,
+        voice=payload.voice,
+        language=language,
+        ref_audio=ref_audio,
+        ref_text=ref_text,
+        instruct=instruct,
+        speed=payload.speed,
+        device=payload.device,
+        output_format=output_format,
+        seed=seed,
+        randomize_seed=randomize_seed,
+    )
+
+
+def log_openai_speech_request(payload: OpenAISpeechRequest, tts_payload: TTSRequest) -> None:
+    _, _, _, profile_source = resolve_openai_voice(payload)
+    append_openai_call_log(payload, tts_payload, profile_source)
+    print(
+        "[openai-speech] "
+        f"model={payload.model!r} "
+        f"voice={payload.voice!r} "
+        f"format={payload.response_format!r} "
+        f"language={tts_payload.language!r} "
+        f"seed={tts_payload.seed!r} "
+        f"randomize_seed={tts_payload.randomize_seed!r} "
+        f"instructions_present={bool((payload.instructions or '').strip())} "
+        f"profile={profile_source!r} "
+        f"ref_audio_present={bool(tts_payload.ref_audio)} "
+        f"ref_text_present={bool(tts_payload.ref_text)} "
+        f"instruct={tts_payload.instruct!r}",
+        flush=True,
+    )
+
+
 def synthesize_payload(payload: TTSRequest) -> tuple[str, int, np.ndarray, int]:
     try:
         output_format = normalize_output_format(payload.output_format)
@@ -2096,6 +2534,57 @@ def progressive_audio_response(payload: TTSRequest, route_name: str) -> Streamin
 @api.get("/tts/ping")
 def ping() -> dict:
     return {"msg": "pong", "type": "OmniVoiceTTS", "version": read_version_file(), "build_id": BUILD_ID}
+
+
+@api.get("/v1")
+@api.get("/v1/")
+def openai_index() -> dict:
+    return {
+        "object": "api",
+        "name": "OmniVoiceTTS OpenAI-compatible API",
+        "version": read_version_file(),
+        "endpoints": ["/v1/models", "/v1/audio/speech"],
+    }
+
+
+@api.get("/v1/models")
+def openai_models() -> dict:
+    return {
+        "object": "list",
+        "data": [openai_model_payload(model_id) for model_id in OPENAI_MODEL_IDS],
+    }
+
+
+@api.get("/v1/models/{model_id}")
+def openai_model(model_id: str) -> dict:
+    try:
+        normalize_openai_model(model_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return openai_model_payload(model_id)
+
+
+@api.get("/v1/audio/models")
+def openai_audio_models() -> dict:
+    return openai_models()
+
+
+@api.get("/v1/audio/voices")
+def openai_audio_voices() -> dict:
+    return {
+        "object": "list",
+        "data": openai_voice_payloads(),
+    }
+
+
+@api.post("/v1/audio/speech")
+def openai_audio_speech(payload: OpenAISpeechRequest = Body(...)) -> StreamingResponse:
+    try:
+        tts_payload = openai_speech_to_tts_request(payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    log_openai_speech_request(payload, tts_payload)
+    return stream_audio_response(tts_payload, "/v1/audio/speech")
 
 
 @api.get("/tts/status")
