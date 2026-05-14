@@ -7,6 +7,7 @@ import os
 import random
 import re
 import threading
+from collections import OrderedDict
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Iterator, Optional
@@ -38,6 +39,7 @@ from omnivoice.service.paths import (
     parse_path_roots,
     safe_existing_file_path,
 )
+from omnivoice.utils.audio import RESAMPLE_BACKEND
 from omnivoice.utils.common import fix_random_seed
 from omnivoice.utils.lang_map import LANG_IDS, LANG_NAMES, LANG_NAME_TO_ID, lang_display_name
 from omnivoice.web.branding import brand_css, brand_header_html
@@ -96,8 +98,9 @@ OPENAI_VOICE_INSTRUCTIONS = {
     "onyx": "male, middle-aged, very low pitch",
     "nova": "female, young adult, high pitch",
     "shimmer": "female, young adult, moderate pitch",
+    "benchmark_original_clone": None,
 }
-OPENAI_CLONE_VOICE_ALIASES = {"default", "alloy", "echo", "fable", "onyx", "nova", "shimmer"}
+OPENAI_CLONE_VOICE_ALIASES = {"default", "alloy", "echo", "fable", "onyx", "nova", "shimmer", "benchmark_original_clone"}
 
 BRACKET_TOKEN_PATTERN = re.compile(r"\[[^\]\r\n]{1,80}\]")
 SUPPORTED_NONVERBAL_TAGS = [
@@ -122,6 +125,9 @@ VOICE_DESIGN_BRACKET_TOKEN_MESSAGE = (
 
 MODEL_CACHE: dict[str, OmniVoice] = {}
 MODEL_LOCK = threading.Lock()
+VOICE_CLONE_PROMPT_CACHE: OrderedDict[tuple[Any, ...], Any] = OrderedDict()
+VOICE_CLONE_PROMPT_CACHE_LOCK = threading.Lock()
+VOICE_CLONE_PROMPT_CACHE_LIMIT = int(os.getenv("OMNIVOICE_VOICE_PROMPT_CACHE_LIMIT", "32"))
 UI_CANCEL_EVENT = threading.Event()
 UI_STREAM_LOCK = threading.Lock()
 UI_STREAM_GENERATION = 0
@@ -351,6 +357,86 @@ def get_model(device: str) -> OmniVoice:
                 asr_model_name=DEFAULT_ASR_MODEL,
             )
         return MODEL_CACHE[resolved_device]
+
+
+def should_cache_voice_clone_prompt(ref_audio: str | None) -> bool:
+    if not ref_audio:
+        return False
+    try:
+        ref_path = Path(ref_audio).resolve(strict=True)
+    except OSError:
+        return False
+    try:
+        if OPENAI_DEFAULT_CLONE_AUDIO.exists() and ref_path == OPENAI_DEFAULT_CLONE_AUDIO.resolve(strict=True):
+            return True
+    except OSError:
+        pass
+    try:
+        return OPENAI_VOICE_PROFILE_DIR.resolve(strict=False) in ref_path.parents
+    except OSError:
+        return False
+
+
+def voice_clone_prompt_cache_key(
+    device: str,
+    ref_audio: str,
+    ref_text: str | None,
+    preprocess_prompt: bool,
+) -> tuple[Any, ...]:
+    ref_path = Path(ref_audio).resolve(strict=True)
+    stat = ref_path.stat()
+    return (
+        device,
+        str(ref_path),
+        stat.st_size,
+        stat.st_mtime_ns,
+        ref_text or "",
+        bool(preprocess_prompt),
+    )
+
+
+def get_cached_voice_clone_prompt(
+    model: OmniVoice,
+    device: str,
+    ref_audio: str | None,
+    ref_text: str | None,
+    preprocess_prompt: bool,
+    cache_enabled: bool = False,
+):
+    if not cache_enabled:
+        return None
+    if not should_cache_voice_clone_prompt(ref_audio):
+        return None
+    assert ref_audio is not None
+    key = voice_clone_prompt_cache_key(device, ref_audio, ref_text, preprocess_prompt)
+    with VOICE_CLONE_PROMPT_CACHE_LOCK:
+        cached = VOICE_CLONE_PROMPT_CACHE.get(key)
+        if cached is not None:
+            VOICE_CLONE_PROMPT_CACHE.move_to_end(key)
+            return cached
+    prompt = model.create_voice_clone_prompt(
+        ref_audio=ref_audio,
+        ref_text=ref_text or None,
+        preprocess_prompt=preprocess_prompt,
+    )
+    with VOICE_CLONE_PROMPT_CACHE_LOCK:
+        VOICE_CLONE_PROMPT_CACHE[key] = prompt
+        VOICE_CLONE_PROMPT_CACHE.move_to_end(key)
+        while len(VOICE_CLONE_PROMPT_CACHE) > max(0, VOICE_CLONE_PROMPT_CACHE_LIMIT):
+            VOICE_CLONE_PROMPT_CACHE.popitem(last=False)
+    return prompt
+
+
+def clear_voice_clone_prompt_cache(device: str | None = None) -> int:
+    with VOICE_CLONE_PROMPT_CACHE_LOCK:
+        if device is None:
+            count = len(VOICE_CLONE_PROMPT_CACHE)
+            VOICE_CLONE_PROMPT_CACHE.clear()
+            return count
+        keys = [key for key in VOICE_CLONE_PROMPT_CACHE if key and key[0] == device]
+        for key in keys:
+            VOICE_CLONE_PROMPT_CACHE.pop(key, None)
+        return len(keys)
 
 
 def normalize_language(language: str | None) -> str | None:
@@ -583,7 +669,10 @@ def save_openai_voice_profile_from_ui(
 
 
 def delete_openai_voice_profile_from_ui(name: str | None) -> tuple[str, object, str]:
-    return _delete_openai_voice_profile_from_ui(OPENAI_VOICE_PROFILE_DIR, OPENAI_VOICE_PROFILE_INDEX, name)
+    result = _delete_openai_voice_profile_from_ui(OPENAI_VOICE_PROFILE_DIR, OPENAI_VOICE_PROFILE_INDEX, name)
+    if result[0].startswith("Deleted OpenAI voice profile"):
+        clear_voice_clone_prompt_cache()
+    return result
 
 
 def show_generation_side_controls():
@@ -648,17 +737,29 @@ def synthesize_array(
     tempo: float = 1.0,
     volume: float = 1.0,
     normalize: bool = False,
+    cache_voice_prompt: bool = False,
 ) -> tuple[int, np.ndarray]:
     if not (text or "").strip():
         raise ValueError("Text must not be empty")
     validate_voice_design_text(text, instruct)
     safe_ref_audio = validate_ref_audio_path(ref_audio)
-    model = get_model(device)
+    resolved_device = normalize_device(device)
+    model = get_model(resolved_device)
+    preprocess_prompt = True if generation_config is None else bool(generation_config.preprocess_prompt)
+    voice_clone_prompt = get_cached_voice_clone_prompt(
+        model,
+        resolved_device,
+        safe_ref_audio,
+        ref_text,
+        preprocess_prompt,
+        cache_voice_prompt,
+    )
     audios = model.generate(
         text=text.strip(),
         language=normalize_language(language),
-        ref_audio=safe_ref_audio,
-        ref_text=ref_text or None,
+        ref_audio=None if voice_clone_prompt is not None else safe_ref_audio,
+        ref_text=None if voice_clone_prompt is not None else ref_text or None,
+        voice_clone_prompt=voice_clone_prompt,
         instruct=instruct or None,
         duration=duration if duration and duration > 0 else None,
         speed=speed,
@@ -690,20 +791,32 @@ def synthesize_chunks(
     tempo: float = 1.0,
     volume: float = 1.0,
     normalize: bool = False,
+    cache_voice_prompt: bool = False,
 ) -> tuple[int, Iterator[np.ndarray]]:
     if not (text or "").strip():
         raise ValueError("Text must not be empty")
     validate_voice_design_text(text, instruct)
     safe_ref_audio = validate_ref_audio_path(ref_audio)
-    model = get_model(device)
+    resolved_device = normalize_device(device)
+    model = get_model(resolved_device)
+    preprocess_prompt = True if generation_config is None else bool(generation_config.preprocess_prompt)
+    voice_clone_prompt = get_cached_voice_clone_prompt(
+        model,
+        resolved_device,
+        safe_ref_audio,
+        ref_text,
+        preprocess_prompt,
+        cache_voice_prompt,
+    )
     sample_rate = int(model.sampling_rate or SAMPLE_RATE)
 
     def chunk_iterator() -> Iterator[np.ndarray]:
         for chunk in model.generate_stream(
             text=text.strip(),
             language=normalize_language(language),
-            ref_audio=safe_ref_audio,
-            ref_text=ref_text or None,
+            ref_audio=None if voice_clone_prompt is not None else safe_ref_audio,
+            ref_text=None if voice_clone_prompt is not None else ref_text or None,
+            voice_clone_prompt=voice_clone_prompt,
             instruct=instruct or None,
             duration=duration if duration and duration > 0 else None,
             speed=speed,
@@ -947,9 +1060,14 @@ def get_status_payload() -> dict:
         "sample_rate": SAMPLE_RATE,
         "load_asr": LOAD_ASR,
         "asr_model": DEFAULT_ASR_MODEL if LOAD_ASR else None,
+        "resample_backend": RESAMPLE_BACKEND,
         "languages": len(LANG_IDS),
         "voice_compatibility": "Kokoro-compatible voice fields are accepted but translated to OmniVoice auto/design/clone generation.",
         "loaded_model_devices": list(MODEL_CACHE),
+        "voice_prompt_cache": {
+            "entries": len(VOICE_CLONE_PROMPT_CACHE),
+            "limit": VOICE_CLONE_PROMPT_CACHE_LIMIT,
+        },
         "output_formats": get_supported_output_formats(),
     }
 
@@ -1554,6 +1672,11 @@ class TTSRequest(BaseModel):
     tempo: float = Field(1.0, ge=0.5, le=2.0, description="Post-synthesis tempo multiplier.")
     volume: float = Field(1.0, ge=0.0, le=2.0, description="Output volume multiplier.")
     normalize: bool = Field(False, description="Apply ffmpeg loudness normalization.")
+    cache_voice_prompt: bool = Field(
+        False,
+        description="Internal optimization flag used for saved/built-in voice profiles.",
+        exclude=True,
+    )
     output_format: str = Field(
         "wav",
         alias="format",
@@ -1578,6 +1701,7 @@ class OpenAISpeechRequest(BaseModel):
     seed: Optional[int] = Field(None, ge=0, le=MAX_RANDOM_SEED, description="Optional OmniVoice extension: fixed generation seed.")
     randomize_seed: bool = Field(False, description="Optional OmniVoice extension: generate a random seed.")
     device: str = Field("auto", description="Optional OmniVoice extension: auto, cpu, mps, or cuda:N.")
+    num_step: int = Field(32, ge=4, le=64, description="Optional OmniVoice extension: diffusion decoding steps.")
     instructions: Optional[str] = Field(None, description="Optional OmniVoice extension: explicit voice-design instruction.")
     ref_audio: Optional[str] = Field(
         None,
@@ -1699,7 +1823,7 @@ def openai_voice_payloads() -> list[dict]:
 def openai_speech_to_tts_request(payload: OpenAISpeechRequest) -> TTSRequest:
     normalize_openai_model(payload.model)
     output_format = normalize_output_format(payload.response_format)
-    ref_audio, ref_text, instruct, _ = resolve_openai_voice(payload)
+    ref_audio, ref_text, instruct, profile_source = resolve_openai_voice(payload)
     _, profile, _ = openai_profile_from_payload(payload)
     if instruct:
         validate_voice_design_text(payload.input, instruct)
@@ -1723,9 +1847,11 @@ def openai_speech_to_tts_request(payload: OpenAISpeechRequest) -> TTSRequest:
         instruct=instruct,
         speed=payload.speed,
         device=payload.device,
+        num_step=payload.num_step,
         output_format=output_format,
         seed=seed,
         randomize_seed=randomize_seed,
+        cache_voice_prompt=profile_source.startswith(("profile:", "voice-profile:", "builtin-clone")),
     )
 
 
@@ -1783,6 +1909,7 @@ def synthesize_payload(payload: TTSRequest) -> tuple[str, int, np.ndarray, int]:
             tempo=payload.tempo,
             volume=payload.volume,
             normalize=payload.normalize,
+            cache_voice_prompt=payload.cache_voice_prompt,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -1828,6 +1955,7 @@ def synthesize_payload_chunks(payload: TTSRequest) -> tuple[str, int, Iterator[n
             tempo=payload.tempo,
             volume=payload.volume,
             normalize=payload.normalize,
+            cache_voice_prompt=payload.cache_voice_prompt,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -2054,10 +2182,16 @@ def purge_models(payload: PurgeRequest | None = Body(None)) -> dict:
         if device not in MODEL_CACHE:
             return {"purged": [], "remaining_model_devices": list(MODEL_CACHE)}
         del MODEL_CACHE[device]
-        return {"purged": [device], "remaining_model_devices": list(MODEL_CACHE)}
+        purged_voice_prompts = clear_voice_clone_prompt_cache(device)
+        return {
+            "purged": [device],
+            "purged_voice_prompts": purged_voice_prompts,
+            "remaining_model_devices": list(MODEL_CACHE),
+        }
     purged = list(MODEL_CACHE)
     MODEL_CACHE.clear()
-    return {"purged": purged, "remaining_model_devices": []}
+    purged_voice_prompts = clear_voice_clone_prompt_cache()
+    return {"purged": purged, "purged_voice_prompts": purged_voice_prompts, "remaining_model_devices": []}
 
 
 app = gr.mount_gradio_app(api, ui, path="/")

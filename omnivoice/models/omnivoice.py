@@ -38,7 +38,6 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import torchaudio
 
 try:
     from torch.nn.attention.flex_attention import create_block_mask
@@ -62,6 +61,7 @@ from omnivoice.utils.audio import (
     fade_and_pad_audio,
     load_audio,
     remove_silence,
+    resample_audio,
     trim_long_audio,
 )
 from omnivoice.utils.duration import RuleDurationEstimator
@@ -698,11 +698,11 @@ class OmniVoice(PreTrainedModel):
             if waveform.shape[0] > 1:
                 waveform = np.mean(waveform, axis=0, keepdims=True)
             if sr != self.sampling_rate:
-                waveform = torchaudio.functional.resample(
-                    torch.from_numpy(waveform),
+                waveform = resample_audio(
+                    waveform,
                     orig_freq=sr,
                     new_freq=self.sampling_rate,
-                ).numpy()
+                )
             ref_wav = waveform
 
         ref_rms = float(np.sqrt(np.mean(ref_wav**2)))

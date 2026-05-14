@@ -26,6 +26,7 @@ with shape ``(C, T)`` (channels-first).
 
 import io
 import logging
+import os
 
 import numpy as np
 import soundfile as sf
@@ -35,6 +36,25 @@ from pydub import AudioSegment
 from pydub.silence import detect_leading_silence, detect_nonsilent, split_on_silence
 
 logger = logging.getLogger(__name__)
+RESAMPLE_BACKEND = os.getenv("OMNIVOICE_RESAMPLE_BACKEND", "torchaudio").strip().lower()
+
+
+def resample_audio(data: np.ndarray, orig_freq: int, new_freq: int) -> np.ndarray:
+    """Resample channels-first float32 audio with a configurable backend."""
+    if orig_freq == new_freq:
+        return data
+    if RESAMPLE_BACKEND in {"librosa", "fallback", "no-torchaudio"}:
+        import librosa
+
+        return librosa.resample(data, orig_sr=orig_freq, target_sr=new_freq, axis=-1).astype(
+            np.float32,
+            copy=False,
+        )
+    return torchaudio.functional.resample(
+        torch.from_numpy(data),
+        orig_freq=orig_freq,
+        new_freq=new_freq,
+    ).numpy()
 
 
 # ---------------------------------------------------------------------------
@@ -81,9 +101,7 @@ def load_audio(audio_path: str, sampling_rate: int) -> np.ndarray:
     if data.shape[0] > 1:
         data = np.mean(data, axis=0, keepdims=True)
     if sr != sampling_rate:
-        data = torchaudio.functional.resample(
-            torch.from_numpy(data), orig_freq=sr, new_freq=sampling_rate
-        ).numpy()
+        data = resample_audio(data, orig_freq=sr, new_freq=sampling_rate)
 
     return data
 
@@ -114,9 +132,7 @@ def load_audio_bytes(raw: bytes, sampling_rate: int) -> np.ndarray:
     if data.shape[0] > 1:
         data = np.mean(data, axis=0, keepdims=True)
     if sr != sampling_rate:
-        data = torchaudio.functional.resample(
-            torch.from_numpy(data), orig_freq=sr, new_freq=sampling_rate
-        ).numpy()
+        data = resample_audio(data, orig_freq=sr, new_freq=sampling_rate)
 
     return data
 

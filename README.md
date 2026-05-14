@@ -209,6 +209,8 @@ audio.save("openai-speech.mp3")
 - Full baked image with OmniVoice model assets and Whisper ASR assets included
 - Optional tiny image target for cache-volume workflows
 - GPU acceleration when available
+- Stored OpenAI voice profiles reuse cached clone prompts after the first request
+- Optional `OMNIVOICE_RESAMPLE_BACKEND=librosa` fallback if a platform has `torchaudio` issues
 - HTTP API + web UI in one container
 - Offline-friendly runtime flags by default
 - Persistent Hugging Face cache volume support in the local Taskfile workflow
@@ -236,6 +238,16 @@ Build and run the tiny image:
 task image-tiny
 task imagerun-tiny
 ```
+
+Run the example-generation benchmark against the active local API:
+
+```bash
+task benchmark-examples
+```
+
+The benchmark reuses the public example workload, prewarms the model and benchmark reference voice, then runs no-prompt, predefined cached-reference, and direct reference-audio rounds. Results are appended to per-category Markdown tables under `benchmarks/` for human tracking and `benchmarks/example-generation.json` for detailed machine-readable history. Use `BENCHMARK_ITEMS=1` or `BENCHMARK_LIMIT_LANGUAGES=1` for quick smoke checks.
+
+By default each measured stage prewarms immediately before it runs: 10 no-prompt warmup calls before `random_voice`, 10 predefined-reference warmup calls before `predefined_voice`, and 10 direct-reference warmup calls before `direct_reference_audio`. It then runs 100 no-prompt measured calls, 100 predefined cached-reference measured calls, and 100 direct `ref_audio` measured calls. The measured set is deterministic: the first two random samples from each language in `examples/assets/manifest.json`, repeated in the same order as needed to reach 100 calls per round.
 
 Hot-swap local service code into the container without rebuilding:
 
