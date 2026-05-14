@@ -2,15 +2,10 @@ from __future__ import annotations
 
 import io
 import html
-import json
 import os
 import random
 import re
-import shutil
-import subprocess
-import tempfile
 import threading
-import wave
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Iterator, Optional
@@ -25,8 +20,41 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 from omnivoice import OmniVoice, OmniVoiceGenerationConfig, __version__
+from omnivoice.service.audio import (
+    FORMAT_ALIASES,
+    OUTPUT_FORMATS,
+    SAMPLE_RATE,
+    apply_audio_effects,
+    encode_audio_bytes,
+    encode_audio_stream,
+    encoded_audio_to_temp_file,
+    to_int16_audio,
+)
 from omnivoice.utils.common import fix_random_seed
 from omnivoice.utils.lang_map import LANG_IDS, LANG_NAMES, LANG_NAME_TO_ID, lang_display_name
+from omnivoice.web.gpu import gpu_monitor_html
+from omnivoice.web.openai_profiles import (
+    append_openai_call_log,
+    delete_openai_voice_profile_from_ui as _delete_openai_voice_profile_from_ui,
+    load_openai_voice_profiles as _load_openai_voice_profiles,
+    normalize_optional_seed as _normalize_optional_seed,
+    normalize_profile_name,
+    openai_voice_profile_choices as _openai_voice_profile_choices,
+    openai_voice_profile_dropdown_update as _openai_voice_profile_dropdown_update,
+    render_openai_call_log,
+    render_openai_voice_profile_table as _render_openai_voice_profile_table,
+    render_openai_voice_profiles as _render_openai_voice_profiles,
+    save_openai_voice_profile as _save_openai_voice_profile,
+    save_openai_voice_profile_from_ui as _save_openai_voice_profile_from_ui,
+)
+from omnivoice.web.translations import (
+    UI_LOCALE,
+    UI_STRINGS,
+    normalize_ui_locale,
+    ui_locale_choices,
+    ui_text,
+    ui_text_for,
+)
 
 DEFAULT_MODEL = os.getenv("OMNIVOICE_MODEL", "k2-fsa/OmniVoice")
 DEFAULT_DEVICE = os.getenv("OMNIVOICE_DEVICE", "auto")
@@ -34,51 +62,13 @@ DEFAULT_ASR_MODEL = os.getenv("OMNIVOICE_ASR_MODEL", "openai/whisper-large-v3-tu
 LOAD_ASR = os.getenv("OMNIVOICE_LOAD_ASR", "1").lower() in {"1", "true", "yes", "y"}
 APP_VERSION = os.getenv("APP_VERSION", __version__)
 BUILD_ID = os.getenv("BUILD_ID", "stable")
-SAMPLE_RATE = 24000
 ASSET_DIR = Path(__file__).resolve().parent.parent / "hangrylabs"
 BRAND_ASSET_BASE = "/assets/hangrylabs"
-TRANSLATIONS_FILE = Path(__file__).resolve().parent / "ui_translations.json"
-UI_LOCALE = os.getenv("OMNIVOICE_UI_LOCALE", "en").strip().lower() or "en"
 PACKAGE_DIR = Path(__file__).resolve().parent
 OPENAI_DEFAULT_CLONE_AUDIO = PACKAGE_DIR / "assets" / "openai_default_voice.mp3"
 OPENAI_VOICE_PROFILE_DIR = Path(os.getenv("OMNIVOICE_OPENAI_VOICE_PROFILE_DIR", "/app/openai_voice_profiles"))
 OPENAI_VOICE_PROFILE_INDEX = OPENAI_VOICE_PROFILE_DIR / "profiles.json"
 
-OUTPUT_FORMATS = {
-    "wav": {
-        "label": "WAV",
-        "extension": "wav",
-        "media_type": "audio/wav",
-        "ffmpeg_args": None,
-    },
-    "mp3": {
-        "label": "MP3",
-        "extension": "mp3",
-        "media_type": "audio/mpeg",
-        "ffmpeg_args": ["-f", "mp3", "-codec:a", "libmp3lame", "-b:a", "192k"],
-    },
-    "flac": {
-        "label": "FLAC",
-        "extension": "flac",
-        "media_type": "audio/flac",
-        "ffmpeg_args": ["-f", "flac", "-codec:a", "flac"],
-    },
-    "ogg": {
-        "label": "OGG Vorbis",
-        "extension": "ogg",
-        "media_type": "audio/ogg",
-        "ffmpeg_args": ["-f", "ogg", "-codec:a", "libvorbis", "-q:a", "5"],
-    },
-}
-FORMAT_ALIASES = {
-    ".wav": "wav",
-    ".mp3": "mp3",
-    ".flac": "flac",
-    ".ogg": "ogg",
-    "mpeg": "mp3",
-    "vorbis": "ogg",
-    "opus": "ogg",
-}
 OPENAI_MODEL_ALIASES = {
     "omnivoice": "omnivoice",
     "omnivoicetts": "omnivoice",
@@ -125,10 +115,6 @@ MODEL_LOCK = threading.Lock()
 UI_CANCEL_EVENT = threading.Event()
 UI_STREAM_LOCK = threading.Lock()
 UI_STREAM_GENERATION = 0
-GPU_HISTORY: dict[int, list[int]] = {}
-OPENAI_CALL_LOG: list[dict[str, str]] = []
-OPENAI_CALL_LOG_LOCK = threading.Lock()
-OPENAI_CALL_LOG_LIMIT = 50
 
 
 def next_ui_stream_generation() -> int:
@@ -148,114 +134,6 @@ def stop_active_ui_stream():
     next_ui_stream_generation()
     return SAMPLE_RATE, np.zeros(1, dtype=np.int16)
 
-
-def read_gpu_stats() -> list[dict[str, float | int | str]]:
-    try:
-        result = subprocess.run(
-            [
-                "nvidia-smi",
-                "--query-gpu=index,name,utilization.gpu,memory.used,memory.total,temperature.gpu,power.draw",
-                "--format=csv,noheader,nounits",
-            ],
-            capture_output=True,
-            text=True,
-            timeout=2,
-            check=False,
-        )
-    except (FileNotFoundError, subprocess.SubprocessError):
-        return []
-    if result.returncode != 0 or not result.stdout.strip():
-        return []
-
-    rows = []
-    for line in result.stdout.splitlines():
-        parts = [part.strip() for part in line.split(",")]
-        if len(parts) < 7:
-            continue
-        try:
-            rows.append(
-                {
-                    "index": int(float(parts[0])),
-                    "name": parts[1],
-                    "utilization": int(float(parts[2])),
-                    "memory_used": int(float(parts[3])),
-                    "memory_total": int(float(parts[4])),
-                    "temperature": int(float(parts[5])),
-                    "power": float(parts[6]),
-                }
-            )
-        except ValueError:
-            continue
-    return rows
-
-
-def gpu_monitor_html() -> str:
-    stats = read_gpu_stats()
-    if not stats:
-        return """
-<div class="gpu-monitor">
-  <div class="gpu-monitor-title">GPU Monitor</div>
-  <div class="gpu-monitor-muted">nvidia-smi unavailable</div>
-</div>
-"""
-
-    cards = []
-    for item in stats:
-        index = int(item["index"])
-        usage = int(item["utilization"])
-        history = GPU_HISTORY.setdefault(index, [])
-        history.append(usage)
-        del history[:-60]
-        points = gpu_history_points(history)
-        mem_used = float(item["memory_used"]) / 1024
-        mem_total = float(item["memory_total"]) / 1024
-        mem_pct = 0 if mem_total <= 0 else min(100, max(0, mem_used / mem_total * 100))
-        cards.append(
-            f"""
-  <div class="gpu-card">
-    <div class="gpu-card-head">
-      <strong>GPU {index}</strong>
-      <span>{html.escape(str(item["name"]))}</span>
-    </div>
-    <div class="gpu-metric-row">
-      <span>Load</span>
-      <strong>{usage}%</strong>
-    </div>
-    <div class="gpu-bar"><span style="width:{usage}%"></span></div>
-    <svg class="gpu-sparkline" viewBox="0 0 180 44" preserveAspectRatio="none" aria-hidden="true">
-      <polyline points="{points}" fill="none" stroke="#ff8a1f" stroke-width="3" stroke-linejoin="round" stroke-linecap="round" />
-    </svg>
-    <div class="gpu-metric-row">
-      <span>VRAM</span>
-      <strong>{mem_used:.1f}/{mem_total:.1f} GB</strong>
-    </div>
-    <div class="gpu-bar gpu-vram"><span style="width:{mem_pct:.1f}%"></span></div>
-    <div class="gpu-foot">
-      <span>{int(item["temperature"])} C</span>
-      <span>{float(item["power"]):.0f} W</span>
-    </div>
-  </div>
-"""
-        )
-
-    return f"""
-<div class="gpu-monitor">
-  <div class="gpu-monitor-title">GPU Monitor</div>
-  {''.join(cards)}
-</div>
-"""
-
-
-def gpu_history_points(values: list[int], width: int = 180, height: int = 44) -> str:
-    if not values:
-        return f"0,{height} {width},{height}"
-    if len(values) == 1:
-        y = height - (values[0] / 100 * height)
-        return f"0,{y:.1f} {width},{y:.1f}"
-    return " ".join(
-        f"{i * width / (len(values) - 1):.1f},{height - (value / 100 * height):.1f}"
-        for i, value in enumerate(values)
-    )
 
 VOICE_DESIGN_CATEGORIES = {
     "gender": {
@@ -318,66 +196,6 @@ def read_version_file() -> str:
     if version_file.exists():
         return version_file.read_text(encoding="utf-8").strip()
     return APP_VERSION
-
-
-def load_ui_translations() -> dict[str, dict[str, str]]:
-    if not TRANSLATIONS_FILE.exists():
-        return {}
-    try:
-        return json.loads(TRANSLATIONS_FILE.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return {}
-
-
-UI_TRANSLATIONS = load_ui_translations()
-
-
-def normalize_ui_translations(raw_translations: dict) -> tuple[dict[str, str], dict[str, dict[str, str]], str]:
-    if not isinstance(raw_translations, dict):
-        return {"en": "English"}, {}, "en"
-    if isinstance(raw_translations.get("locales"), dict) and isinstance(raw_translations.get("strings"), dict):
-        meta = raw_translations.get("_meta", {})
-        fallback = str(meta.get("fallback_locale") or "en") if isinstance(meta, dict) else "en"
-        return raw_translations["locales"], raw_translations["strings"], fallback
-
-    locales = {}
-    strings: dict[str, dict[str, str]] = {}
-    for locale, values in raw_translations.items():
-        if locale.startswith("_") or not isinstance(values, dict):
-            continue
-        locales[locale] = str(values.get("locale.name") or locale)
-        for key, value in values.items():
-            if key == "locale.name":
-                continue
-            strings.setdefault(key, {})[locale] = str(value)
-    return locales or {"en": "English"}, strings, "en"
-
-
-UI_LOCALES, UI_STRINGS, UI_FALLBACK_LOCALE = normalize_ui_translations(UI_TRANSLATIONS)
-
-
-def normalize_ui_locale(locale: str | None = None) -> str:
-    value = (locale or UI_LOCALE).strip().lower()
-    if value in UI_LOCALES:
-        return value
-    return UI_FALLBACK_LOCALE if UI_FALLBACK_LOCALE in UI_LOCALES else "en"
-
-
-def ui_text_for(locale: str | None, key: str) -> str:
-    selected_locale = normalize_ui_locale(locale)
-    translations = UI_STRINGS.get(key, {})
-    if not isinstance(translations, dict):
-        return key
-    return translations.get(selected_locale) or translations.get(UI_FALLBACK_LOCALE) or translations.get("en") or key
-
-
-def ui_text(key: str) -> str:
-    return ui_text_for(UI_LOCALE, key)
-
-
-def ui_locale_choices() -> list[tuple[str, str]]:
-    choices = [(label, locale) for locale, label in sorted(UI_LOCALES.items(), key=lambda item: item[1].casefold())]
-    return choices or [("English", "en")]
 
 
 def get_build_label() -> str:
@@ -668,56 +486,12 @@ def resolve_generation_seed(seed, randomize_seed: bool) -> int:
     return value
 
 
-def normalize_profile_name(name: str | None) -> str:
-    value = (name or "").strip().lower()
-    value = re.sub(r"[^a-z0-9_-]+", "-", value)
-    value = value.strip("-_")
-    if not value:
-        raise ValueError("Voice profile name must contain at least one letter or number.")
-    if len(value) > 48:
-        raise ValueError("Voice profile name must be 48 characters or fewer.")
-    return value
-
-
 def load_openai_voice_profiles() -> dict[str, dict[str, Any]]:
-    if not OPENAI_VOICE_PROFILE_INDEX.exists():
-        return {}
-    try:
-        raw = json.loads(OPENAI_VOICE_PROFILE_INDEX.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return {}
-    if not isinstance(raw, dict):
-        return {}
-    profiles = {}
-    for name, profile in raw.items():
-        if not isinstance(profile, dict):
-            continue
-        ref_audio = str(profile.get("ref_audio") or "").strip()
-        if not ref_audio:
-            continue
-        raw_seed = profile.get("seed")
-        profiles[str(name)] = {
-            "ref_audio": ref_audio,
-            "ref_text": str(profile.get("ref_text") or ""),
-            "language": str(profile.get("language") or ""),
-            "seed": "" if raw_seed is None or raw_seed == "" else str(raw_seed),
-            "randomize_seed": bool(profile.get("randomize_seed", False)),
-        }
-    return profiles
-
-
-def save_openai_voice_profiles(profiles: dict[str, dict[str, Any]]) -> None:
-    OPENAI_VOICE_PROFILE_DIR.mkdir(parents=True, exist_ok=True)
-    OPENAI_VOICE_PROFILE_INDEX.write_text(json.dumps(profiles, indent=2, sort_keys=True), encoding="utf-8")
+    return _load_openai_voice_profiles(OPENAI_VOICE_PROFILE_INDEX)
 
 
 def normalize_optional_seed(seed: int | float | str | None) -> int | None:
-    if seed is None or seed == "":
-        return None
-    value = int(seed)
-    if value < 0 or value > MAX_RANDOM_SEED:
-        raise ValueError(f"Seed must be between 0 and {MAX_RANDOM_SEED}.")
-    return value
+    return _normalize_optional_seed(seed, MAX_RANDOM_SEED)
 
 
 def save_openai_voice_profile(
@@ -728,94 +502,33 @@ def save_openai_voice_profile(
     seed: int | float | str | None = 12345,
     randomize_seed: bool = False,
 ) -> str:
-    profile_name = normalize_profile_name(name)
-    if not audio_path:
-        raise ValueError("Upload a reference audio sample before saving the profile.")
-    source = Path(audio_path)
-    if not source.exists():
-        raise ValueError("Uploaded reference audio file is no longer available.")
-    OPENAI_VOICE_PROFILE_DIR.mkdir(parents=True, exist_ok=True)
-    suffix = source.suffix.lower() or ".wav"
-    if suffix not in {".wav", ".mp3", ".flac", ".ogg", ".m4a"}:
-        suffix = ".wav"
-    destination = OPENAI_VOICE_PROFILE_DIR / f"{profile_name}{suffix}"
-    shutil.copyfile(source, destination)
-    profiles = load_openai_voice_profiles()
-    profiles[profile_name] = {
-        "ref_audio": str(destination),
-        "ref_text": (ref_text or "").strip(),
-        "language": (language or "").strip(),
-        "seed": "" if randomize_seed else normalize_optional_seed(seed),
-        "randomize_seed": bool(randomize_seed),
-    }
-    save_openai_voice_profiles(profiles)
-    return profile_name
+    return _save_openai_voice_profile(
+        OPENAI_VOICE_PROFILE_DIR,
+        OPENAI_VOICE_PROFILE_INDEX,
+        MAX_RANDOM_SEED,
+        name,
+        audio_path,
+        ref_text,
+        language,
+        seed,
+        randomize_seed,
+    )
 
 
 def render_openai_voice_profiles() -> str:
-    profiles = load_openai_voice_profiles()
-    lines = [
-        "### OpenAI Voice Profiles",
-        "",
-        "Create a profile here, then use its name as the OpenAI TTS voice in OpenWebUI. Additional request parameters are optional and only needed when you want to override the saved profile defaults.",
-        "",
-        "Built-in clone aliases: `default`, `alloy`, `echo`, `fable`, `onyx`, `nova`, `shimmer`.",
-    ]
-    if profiles:
-        lines.extend(["", "Saved profiles:"])
-        for name, profile in sorted(profiles.items()):
-            has_text = "yes" if profile.get("ref_text") else "no"
-            language = profile.get("language") or "request/default"
-            seed = "random" if profile.get("randomize_seed") else profile.get("seed") or "12345"
-            lines.append(f"- `{name}`: language: `{language}` | seed: `{seed}` | transcript: {has_text}")
-    else:
-        lines.extend(["", "No custom profiles saved yet."])
-    lines.extend(
-        [
-            "",
-            "Optional override example:",
-            "",
-            "```json",
-            '{ "voice_profile": "my-voice", "language": "English", "seed": 12345, "randomize_seed": false }',
-            "```",
-        ]
-    )
-    return "\n".join(lines)
+    return _render_openai_voice_profiles(OPENAI_VOICE_PROFILE_INDEX)
 
 
 def render_openai_voice_profile_table() -> str:
-    profiles = load_openai_voice_profiles()
-    lines = [
-        "### Saved Voices",
-        "",
-        "| Delete | Voice | Language | Seed | Transcript |",
-        "|---|---|---|---|---|",
-    ]
-    if not profiles:
-        lines.append("|  | No saved voices yet |  |  |  |")
-        return "\n".join(lines)
-    for name, profile in sorted(profiles.items()):
-        language = profile.get("language") or "request/default"
-        seed = "random" if profile.get("randomize_seed") else profile.get("seed") or "12345"
-        transcript = "yes" if profile.get("ref_text") else "no"
-        lines.append(
-            "| x | "
-            f"`{html.escape(name)}` | "
-            f"`{html.escape(str(language))}` | "
-            f"`{html.escape(str(seed))}` | "
-            f"{transcript} |"
-        )
-    return "\n".join(lines)
+    return _render_openai_voice_profile_table(OPENAI_VOICE_PROFILE_INDEX)
 
 
 def openai_voice_profile_choices() -> list[str]:
-    return sorted(load_openai_voice_profiles())
+    return _openai_voice_profile_choices(OPENAI_VOICE_PROFILE_INDEX)
 
 
 def openai_voice_profile_dropdown_update(selected: str | None = None):
-    choices = openai_voice_profile_choices()
-    value = selected if selected in choices else None
-    return gr.update(choices=choices, value=value)
+    return _openai_voice_profile_dropdown_update(OPENAI_VOICE_PROFILE_INDEX, selected)
 
 
 def save_openai_voice_profile_from_ui(
@@ -826,83 +539,21 @@ def save_openai_voice_profile_from_ui(
     seed: int | float | str | None,
     randomize_seed: bool,
 ) -> tuple[str, object, str]:
-    try:
-        profile_name = save_openai_voice_profile(name, audio_path, ref_text, language, seed, randomize_seed)
-    except ValueError as exc:
-        return f"OpenAI voice profile error: {exc}", openai_voice_profile_dropdown_update(), render_openai_voice_profile_table()
-    return f"Saved OpenAI voice profile `{profile_name}`.", openai_voice_profile_dropdown_update(profile_name), render_openai_voice_profile_table()
+    return _save_openai_voice_profile_from_ui(
+        OPENAI_VOICE_PROFILE_DIR,
+        OPENAI_VOICE_PROFILE_INDEX,
+        MAX_RANDOM_SEED,
+        name,
+        audio_path,
+        ref_text,
+        language,
+        seed,
+        randomize_seed,
+    )
 
 
 def delete_openai_voice_profile_from_ui(name: str | None) -> tuple[str, object, str]:
-    try:
-        profile_name = normalize_profile_name(name)
-    except ValueError as exc:
-        return f"OpenAI voice profile delete error: {exc}", openai_voice_profile_dropdown_update(), render_openai_voice_profile_table()
-    profiles = load_openai_voice_profiles()
-    profile = profiles.get(profile_name)
-    if not profile:
-        return f"OpenAI voice profile delete error: `{profile_name}` does not exist.", openai_voice_profile_dropdown_update(), render_openai_voice_profile_table()
-    ref_audio = Path(profile.get("ref_audio") or "")
-    try:
-        root = OPENAI_VOICE_PROFILE_DIR.resolve()
-        target = ref_audio.resolve()
-        if target.is_file() and (target.parent == root or root in target.parents):
-            target.unlink()
-    except OSError:
-        pass
-    profiles.pop(profile_name, None)
-    save_openai_voice_profiles(profiles)
-    return f"Deleted OpenAI voice profile `{profile_name}`.", openai_voice_profile_dropdown_update(), render_openai_voice_profile_table()
-
-
-def append_openai_call_log(payload: OpenAISpeechRequest, tts_payload: TTSRequest, profile_source: str) -> None:
-    row = {
-        "time": datetime.now().strftime("%H:%M:%S"),
-        "model": payload.model,
-        "voice": payload.voice,
-        "profile": profile_source,
-        "format": payload.response_format,
-        "language": tts_payload.language or "auto",
-        "seed": "" if tts_payload.seed is None else str(tts_payload.seed),
-        "randomize": str(bool(tts_payload.randomize_seed)).lower(),
-        "ref_audio": "yes" if tts_payload.ref_audio else "no",
-        "instructions": "yes" if (payload.instructions or "").strip() else "no",
-    }
-    with OPENAI_CALL_LOG_LOCK:
-        OPENAI_CALL_LOG.append(row)
-        del OPENAI_CALL_LOG[:-OPENAI_CALL_LOG_LIMIT]
-
-
-def render_openai_call_log() -> str:
-    with OPENAI_CALL_LOG_LOCK:
-        rows = list(reversed(OPENAI_CALL_LOG))
-    lines = [
-        "### Recent OpenAI Calls",
-        "",
-        "Prompt text is intentionally not logged here.",
-        "",
-    ]
-    if not rows:
-        lines.append("No OpenAI-compatible speech calls observed since this server started.")
-        return "\n".join(lines)
-    lines.append("| Time | Model | Voice | Profile | Language | Format | Seed | Random | Ref | Instructions |")
-    lines.append("|---|---|---|---|---|---|---|---|---|---|")
-    for row in rows[:20]:
-        values = [
-            row["time"],
-            row["model"],
-            row["voice"],
-            row["profile"],
-            row["language"],
-            row["format"],
-            row["seed"] or "-",
-            row["randomize"],
-            row["ref_audio"],
-            row["instructions"],
-        ]
-        escaped = [html.escape(value) for value in values]
-        lines.append("| " + " | ".join(escaped) + " |")
-    return "\n".join(lines)
+    return _delete_openai_voice_profile_from_ui(OPENAI_VOICE_PROFILE_DIR, OPENAI_VOICE_PROFILE_INDEX, name)
 
 
 def show_generation_side_controls():
@@ -923,226 +574,6 @@ def show_add_voice_tab_state():
 
 def show_manage_tab_state():
     return gr.update(visible=False), openai_voice_profile_dropdown_update(), render_openai_voice_profile_table()
-
-
-def to_int16_audio(audio: np.ndarray) -> np.ndarray:
-    if audio.dtype == np.int16:
-        return audio
-    return (np.clip(audio, -1.0, 1.0) * 32767).astype(np.int16)
-
-
-def audio_to_wav_bytes(audio: np.ndarray, sample_rate: int = SAMPLE_RATE) -> bytes:
-    audio_int16 = to_int16_audio(audio)
-    buffer = io.BytesIO()
-    with wave.open(buffer, "wb") as wav_file:
-        wav_file.setnchannels(1)
-        wav_file.setsampwidth(2)
-        wav_file.setframerate(sample_rate)
-        wav_file.writeframes(audio_int16.tobytes())
-    return buffer.getvalue()
-
-
-def atempo_filters(multiplier: float) -> list[str]:
-    filters = []
-    current = multiplier
-    while current > 2.0:
-        filters.append("atempo=2.0")
-        current /= 2.0
-    while current < 0.5:
-        filters.append("atempo=0.5")
-        current /= 0.5
-    filters.append(f"atempo={current:.6f}")
-    return filters
-
-
-def build_audio_effect_filters(
-    sample_rate: int,
-    pitch_semitones: float = 0.0,
-    tempo: float = 1.0,
-    volume: float = 1.0,
-    normalize: bool = False,
-) -> list[str]:
-    filters = []
-    if abs(pitch_semitones) > 0.001:
-        pitch_factor = 2 ** (pitch_semitones / 12)
-        shifted_rate = max(1, int(round(sample_rate * pitch_factor)))
-        filters.extend([f"asetrate={shifted_rate}", f"aresample={sample_rate}"])
-        filters.extend(atempo_filters(1 / pitch_factor))
-    if abs(tempo - 1.0) > 0.001:
-        filters.extend(atempo_filters(tempo))
-    if abs(volume - 1.0) > 0.001:
-        filters.append(f"volume={volume:.6f}")
-    if normalize:
-        filters.append("loudnorm=I=-16:TP=-1.5:LRA=11")
-    return filters
-
-
-def apply_audio_effects(
-    audio: np.ndarray,
-    sample_rate: int,
-    pitch_semitones: float = 0.0,
-    tempo: float = 1.0,
-    volume: float = 1.0,
-    normalize: bool = False,
-) -> np.ndarray:
-    filters = build_audio_effect_filters(sample_rate, pitch_semitones, tempo, volume, normalize)
-    if not filters or audio.size == 0:
-        return to_int16_audio(audio)
-    command = [
-        "ffmpeg",
-        "-hide_banner",
-        "-loglevel",
-        "error",
-        "-f",
-        "wav",
-        "-i",
-        "pipe:0",
-        "-af",
-        ",".join(filters),
-        "-f",
-        "s16le",
-        "-acodec",
-        "pcm_s16le",
-        "-ac",
-        "1",
-        "-ar",
-        str(sample_rate),
-        "pipe:1",
-    ]
-    try:
-        result = subprocess.run(
-            command,
-            input=audio_to_wav_bytes(audio, sample_rate),
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            check=True,
-        )
-    except FileNotFoundError as exc:
-        raise RuntimeError("ffmpeg is required for pitch, tempo, volume, or normalization controls") from exc
-    except subprocess.CalledProcessError as exc:
-        stderr = exc.stderr.decode("utf-8", errors="replace").strip()
-        raise RuntimeError(f"ffmpeg failed to apply audio controls: {stderr}") from exc
-    return np.frombuffer(result.stdout, dtype="<i2").astype(np.int16, copy=True)
-
-
-def encode_audio_bytes(audio: np.ndarray, output_format: str = "wav", sample_rate: int = SAMPLE_RATE) -> bytes:
-    normalized_format = normalize_output_format(output_format)
-    wav_bytes = audio_to_wav_bytes(audio, sample_rate)
-    ffmpeg_args = OUTPUT_FORMATS[normalized_format]["ffmpeg_args"]
-    if ffmpeg_args is None:
-        return wav_bytes
-    command = [
-        "ffmpeg",
-        "-hide_banner",
-        "-loglevel",
-        "error",
-        "-f",
-        "wav",
-        "-i",
-        "pipe:0",
-        *ffmpeg_args,
-        "pipe:1",
-    ]
-    try:
-        result = subprocess.run(
-            command,
-            input=wav_bytes,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            check=True,
-        )
-    except FileNotFoundError as exc:
-        raise RuntimeError("ffmpeg is required for non-WAV output formats") from exc
-    except subprocess.CalledProcessError as exc:
-        stderr = exc.stderr.decode("utf-8", errors="replace").strip()
-        raise RuntimeError(f"ffmpeg failed to encode {normalized_format}: {stderr}") from exc
-    return result.stdout
-
-
-def encode_audio_stream(
-    chunks: Iterator[np.ndarray],
-    output_format: str = "mp3",
-    sample_rate: int = SAMPLE_RATE,
-) -> Iterator[bytes]:
-    normalized_format = normalize_output_format(output_format)
-    ffmpeg_args = OUTPUT_FORMATS[normalized_format]["ffmpeg_args"]
-    if ffmpeg_args is None:
-        for chunk in chunks:
-            yield audio_to_wav_bytes(chunk, sample_rate)
-        return
-
-    command = [
-        "ffmpeg",
-        "-hide_banner",
-        "-loglevel",
-        "error",
-        "-f",
-        "s16le",
-        "-acodec",
-        "pcm_s16le",
-        "-ac",
-        "1",
-        "-ar",
-        str(sample_rate),
-        "-i",
-        "pipe:0",
-        *ffmpeg_args,
-        "pipe:1",
-    ]
-    try:
-        process = subprocess.Popen(
-            command,
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-        )
-    except FileNotFoundError as exc:
-        raise RuntimeError(f"ffmpeg is required to stream {normalized_format}") from exc
-
-    writer_error: list[BaseException] = []
-
-    def write_chunks() -> None:
-        assert process.stdin is not None
-        try:
-            for chunk in chunks:
-                process.stdin.write(to_int16_audio(chunk).tobytes())
-                process.stdin.flush()
-        except BaseException as exc:  # noqa: BLE001 - surfaced after ffmpeg exits.
-            writer_error.append(exc)
-        finally:
-            try:
-                process.stdin.close()
-            except OSError:
-                pass
-
-    writer = threading.Thread(target=write_chunks, daemon=True)
-    writer.start()
-
-    assert process.stdout is not None
-    while True:
-        data = process.stdout.read(65536)
-        if data:
-            yield data
-            continue
-        if process.poll() is not None:
-            break
-
-    writer.join()
-    stderr = process.stderr.read().decode("utf-8", errors="replace").strip() if process.stderr else ""
-    return_code = process.wait()
-    if writer_error:
-        raise RuntimeError(f"Audio streaming failed: {writer_error[0]}")
-    if return_code != 0:
-        raise RuntimeError(f"ffmpeg failed to stream {normalized_format}: {stderr}")
-
-
-def encoded_audio_to_temp_file(audio: np.ndarray, output_format: str, sample_rate: int) -> str:
-    normalized_format = normalize_output_format(output_format)
-    extension = OUTPUT_FORMATS[normalized_format]["extension"]
-    audio_bytes = encode_audio_bytes(audio, normalized_format, sample_rate)
-    with tempfile.NamedTemporaryFile(delete=False, suffix=f".{extension}") as file:
-        file.write(audio_bytes)
-        return file.name
 
 
 def build_generation_config(
