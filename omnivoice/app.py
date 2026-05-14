@@ -24,6 +24,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 from omnivoice import OmniVoice, OmniVoiceGenerationConfig, __version__
+from omnivoice.utils.common import fix_random_seed
 from omnivoice.utils.lang_map import LANG_IDS, LANG_NAMES, LANG_NAME_TO_ID, lang_display_name
 
 DEFAULT_MODEL = os.getenv("OMNIVOICE_MODEL", "k2-fsa/OmniVoice")
@@ -182,6 +183,7 @@ AUTO_VOICE_PROFILES = [
     ("male", "middle-aged", "moderate pitch"),
 ]
 AUTO_VOICE_RANDOM = random.SystemRandom()
+MAX_RANDOM_SEED = 2**32 - 1
 
 
 def read_version_file() -> str:
@@ -515,6 +517,8 @@ def ui_locale_updates(locale: str, current_mode: str, current_text: str):
         gr.update(label=ui_text_for(selected_locale, "layer_penalty.label"), info=ui_text_for(selected_locale, "layer_penalty.info")),
         gr.update(label=ui_text_for(selected_locale, "position_temperature.label"), info=ui_text_for(selected_locale, "position_temperature.info")),
         gr.update(label=ui_text_for(selected_locale, "class_temperature.label"), info=ui_text_for(selected_locale, "class_temperature.info")),
+        gr.update(label=ui_text_for(selected_locale, "seed.label"), info=ui_text_for(selected_locale, "seed.info")),
+        gr.update(label=ui_text_for(selected_locale, "randomize_seed.label"), info=ui_text_for(selected_locale, "randomize_seed.info")),
         gr.update(label=ui_text_for(selected_locale, "audio_chunk_duration.label"), info=ui_text_for(selected_locale, "audio_chunk_duration.info")),
         gr.update(label=ui_text_for(selected_locale, "audio_chunk_threshold.label"), info=ui_text_for(selected_locale, "audio_chunk_threshold.info")),
         gr.update(label=ui_text_for(selected_locale, "pitch.label"), info=ui_text_for(selected_locale, "pitch.info")),
@@ -528,6 +532,15 @@ def coerce_float(value, default: float) -> float:
     if value is None or value == "":
         return default
     return float(value)
+
+
+def resolve_generation_seed(seed, randomize_seed: bool) -> int:
+    if randomize_seed:
+        return random.randint(0, MAX_RANDOM_SEED)
+    value = 42 if seed is None or seed == "" else int(seed)
+    if value < 0 or value > MAX_RANDOM_SEED:
+        raise ValueError(f"Seed must be between 0 and {MAX_RANDOM_SEED}.")
+    return value
 
 
 def to_int16_audio(audio: np.ndarray) -> np.ndarray:
@@ -882,6 +895,8 @@ def synthesize_file(
     layer_penalty_factor,
     position_temperature,
     class_temperature,
+    seed,
+    randomize_seed,
     audio_chunk_duration,
     audio_chunk_threshold,
     pitch_semitones,
@@ -897,6 +912,8 @@ def synthesize_file(
 ):
     try:
         UI_CANCEL_EVENT.clear()
+        used_seed = resolve_generation_seed(seed, bool(randomize_seed))
+        fix_random_seed(used_seed)
         effective_instruct = None
         profile_status = None
         effective_class_temperature = coerce_float(class_temperature, 0.0)
@@ -942,11 +959,13 @@ def synthesize_file(
             volume=float(volume),
             normalize=bool(normalize),
         )
-        status = "Done." if not profile_status else f"Done. {profile_status}"
-        return encoded_audio_to_temp_file(waveform, output_format, sample_rate), status
+        status = f"Done. Seed: {used_seed}."
+        if profile_status:
+            status = f"{status} {profile_status}"
+        return encoded_audio_to_temp_file(waveform, output_format, sample_rate), status, used_seed
     except RuntimeError as exc:
         if str(exc) == "Generation cancelled.":
-            return None, "Generation cancelled."
+            return None, "Generation cancelled.", gr.skip()
         raise gr.Error(f"{type(exc).__name__}: {exc}") from exc
     except Exception as exc:
         raise gr.Error(f"{type(exc).__name__}: {exc}") from exc
@@ -971,6 +990,8 @@ def synthesize_file_streaming(
     layer_penalty_factor,
     position_temperature,
     class_temperature,
+    seed,
+    randomize_seed,
     audio_chunk_duration,
     audio_chunk_threshold,
     pitch_semitones,
@@ -987,7 +1008,9 @@ def synthesize_file_streaming(
     try:
         stream_generation = next_ui_stream_generation()
         UI_CANCEL_EVENT.clear()
-        yield (SAMPLE_RATE, np.zeros(1, dtype=np.int16)), "Preparing stream..."
+        used_seed = resolve_generation_seed(seed, bool(randomize_seed))
+        fix_random_seed(used_seed)
+        yield (SAMPLE_RATE, np.zeros(1, dtype=np.int16)), f"Preparing stream. Seed: {used_seed}.", used_seed
         effective_instruct = None
         profile_status = None
         effective_class_temperature = coerce_float(class_temperature, 0.0)
@@ -1038,13 +1061,15 @@ def synthesize_file_streaming(
                 return
             status = f"Streaming chunk {index}."
             if index == 1 and profile_status:
-                status = f"{status} {profile_status}"
-            yield (sample_rate, to_int16_audio(chunk)), status
+                status = f"{status} Seed: {used_seed}. {profile_status}"
+            elif index == 1:
+                status = f"{status} Seed: {used_seed}."
+            yield (sample_rate, to_int16_audio(chunk)), status, gr.skip()
         if is_current_ui_stream_generation(stream_generation):
-            yield gr.skip(), "Streaming complete."
+            yield gr.skip(), "Streaming complete.", gr.skip()
     except RuntimeError as exc:
         if str(exc) == "Generation cancelled.":
-            yield gr.skip(), "Generation cancelled."
+            yield gr.skip(), "Generation cancelled.", gr.skip()
             return
         raise gr.Error(f"{type(exc).__name__}: {exc}") from exc
     except Exception as exc:
@@ -1512,6 +1537,9 @@ with gr.Blocks(title="OmniVoiceTTS") as ui:
                         info=ui_text("position_temperature.info"),
                     )
                     class_temperature = gr.Slider(0.0, 2.0, value=0.0, step=0.05, label=ui_text("class_temperature.label"), info=ui_text("class_temperature.info"))
+                    with gr.Row():
+                        seed = gr.Number(value=42, minimum=0, maximum=MAX_RANDOM_SEED, precision=0, label=ui_text("seed.label"), info=ui_text("seed.info"))
+                        randomize_seed = gr.Checkbox(value=True, label=ui_text("randomize_seed.label"), info=ui_text("randomize_seed.info"))
                     audio_chunk_duration = gr.Number(value=15.0, label=ui_text("audio_chunk_duration.label"), info=ui_text("audio_chunk_duration.info"))
                     audio_chunk_threshold = gr.Number(value=30.0, label=ui_text("audio_chunk_threshold.label"), info=ui_text("audio_chunk_threshold.info"))
             with gr.Accordion(ui_text("audio_controls.title"), open=False):
@@ -1554,6 +1582,8 @@ with gr.Blocks(title="OmniVoiceTTS") as ui:
             layer_penalty_factor,
             position_temperature,
             class_temperature,
+            seed,
+            randomize_seed,
             audio_chunk_duration,
             audio_chunk_threshold,
             pitch_semitones,
@@ -1561,6 +1591,12 @@ with gr.Blocks(title="OmniVoiceTTS") as ui:
             volume,
             loudness_normalize,
         ],
+    )
+
+    seed.input(
+        fn=lambda: False,
+        outputs=randomize_seed,
+        queue=False,
     )
 
     generate_event = generate_btn.click(
@@ -1584,6 +1620,8 @@ with gr.Blocks(title="OmniVoiceTTS") as ui:
             layer_penalty_factor,
             position_temperature,
             class_temperature,
+            seed,
+            randomize_seed,
             audio_chunk_duration,
             audio_chunk_threshold,
             pitch_semitones,
@@ -1597,7 +1635,7 @@ with gr.Blocks(title="OmniVoiceTTS") as ui:
             design_english_accent,
             design_chinese_dialect,
         ],
-        outputs=[output_audio, status_box],
+        outputs=[output_audio, status_box, seed],
     )
 
     output_stream.pause(
@@ -1632,6 +1670,8 @@ with gr.Blocks(title="OmniVoiceTTS") as ui:
             layer_penalty_factor,
             position_temperature,
             class_temperature,
+            seed,
+            randomize_seed,
             audio_chunk_duration,
             audio_chunk_threshold,
             pitch_semitones,
@@ -1645,7 +1685,7 @@ with gr.Blocks(title="OmniVoiceTTS") as ui:
             design_english_accent,
             design_chinese_dialect,
         ],
-        outputs=[output_stream, status_box],
+        outputs=[output_stream, status_box, seed],
         trigger_mode="always_last",
     )
 
@@ -1700,6 +1740,8 @@ class TTSRequest(BaseModel):
     layer_penalty_factor: float = Field(5.0, ge=0.0, le=20.0, description="Penalty encouraging lower codebook layers to unmask first.")
     position_temperature: float = Field(5.0, ge=0.0, le=20.0, description="Temperature for mask-position selection.")
     class_temperature: float = Field(0.0, ge=0.0, le=5.0, description="Temperature for token sampling.")
+    seed: Optional[int] = Field(None, ge=0, le=MAX_RANDOM_SEED, description="Optional random seed for reproducible generation.")
+    randomize_seed: bool = Field(False, description="Generate and use a random seed for this request.")
     audio_chunk_duration: float = Field(15.0, ge=0.0, le=120.0, description="Target chunk duration for long text.")
     audio_chunk_threshold: float = Field(30.0, ge=0.0, le=300.0, description="Estimated duration threshold before long-text chunking activates.")
     pitch_semitones: float = Field(0.0, ge=-12.0, le=12.0, description="Post-synthesis pitch shift.")
@@ -1718,11 +1760,13 @@ class PurgeRequest(BaseModel):
     device: Optional[str] = Field(None, description="Optional cached model device to clear. Omit to clear all.")
 
 
-def synthesize_payload(payload: TTSRequest) -> tuple[str, int, np.ndarray]:
+def synthesize_payload(payload: TTSRequest) -> tuple[str, int, np.ndarray, int]:
     try:
         output_format = normalize_output_format(payload.output_format)
         requested_device = resolve_requested_device(payload.device, payload.use_gpu)
         normalize_device(requested_device)
+        used_seed = resolve_generation_seed(payload.seed, payload.randomize_seed)
+        fix_random_seed(used_seed)
         config = build_generation_config(
             num_step=payload.num_step,
             guidance_scale=payload.guidance_scale,
@@ -1757,15 +1801,17 @@ def synthesize_payload(payload: TTSRequest) -> tuple[str, int, np.ndarray]:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"{type(exc).__name__}: {exc}") from exc
-    return output_format, sample_rate, waveform
+    return output_format, sample_rate, waveform, used_seed
 
 
-def synthesize_payload_chunks(payload: TTSRequest) -> tuple[str, int, Iterator[np.ndarray]]:
+def synthesize_payload_chunks(payload: TTSRequest) -> tuple[str, int, Iterator[np.ndarray], int]:
     try:
         requested_format = normalize_output_format(payload.output_format)
         output_format = "mp3" if requested_format == "wav" else requested_format
         requested_device = resolve_requested_device(payload.device, payload.use_gpu)
         normalize_device(requested_device)
+        used_seed = resolve_generation_seed(payload.seed, payload.randomize_seed)
+        fix_random_seed(used_seed)
         config = build_generation_config(
             num_step=payload.num_step,
             guidance_scale=payload.guidance_scale,
@@ -1800,11 +1846,11 @@ def synthesize_payload_chunks(payload: TTSRequest) -> tuple[str, int, Iterator[n
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"{type(exc).__name__}: {exc}") from exc
-    return output_format, sample_rate, chunks
+    return output_format, sample_rate, chunks, used_seed
 
 
 def stream_audio_response(payload: TTSRequest, route_name: str) -> StreamingResponse:
-    output_format, sample_rate, waveform = synthesize_payload(payload)
+    output_format, sample_rate, waveform, used_seed = synthesize_payload(payload)
     try:
         audio_bytes = encode_audio_bytes(waveform, output_format, sample_rate)
     except RuntimeError as exc:
@@ -1818,6 +1864,7 @@ def stream_audio_response(payload: TTSRequest, route_name: str) -> StreamingResp
         "X-OmniVoiceTTS-Duration": f"{duration:.3f}",
         "X-OmniVoiceTTS-Route": route_name,
         "X-OmniVoiceTTS-Format": output_format,
+        "X-OmniVoiceTTS-Seed": str(used_seed),
     }
     if payload.voice:
         headers["X-OmniVoiceTTS-Requested-Voice"] = payload.voice
@@ -1825,7 +1872,7 @@ def stream_audio_response(payload: TTSRequest, route_name: str) -> StreamingResp
 
 
 def progressive_audio_response(payload: TTSRequest, route_name: str) -> StreamingResponse:
-    output_format, sample_rate, chunks = synthesize_payload_chunks(payload)
+    output_format, sample_rate, chunks, used_seed = synthesize_payload_chunks(payload)
     extension = OUTPUT_FORMATS[output_format]["extension"]
     media_type = OUTPUT_FORMATS[output_format]["media_type"]
 
@@ -1838,6 +1885,7 @@ def progressive_audio_response(payload: TTSRequest, route_name: str) -> Streamin
         "X-OmniVoiceTTS-Route": route_name,
         "X-OmniVoiceTTS-Format": output_format,
         "X-OmniVoiceTTS-Streaming": "progressive-chunks",
+        "X-OmniVoiceTTS-Seed": str(used_seed),
     }
     if payload.voice:
         headers["X-OmniVoiceTTS-Requested-Voice"] = payload.voice
