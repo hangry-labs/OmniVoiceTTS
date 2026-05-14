@@ -169,18 +169,43 @@ def load_ui_translations() -> dict[str, dict[str, str]]:
 UI_TRANSLATIONS = load_ui_translations()
 
 
+def normalize_ui_translations(raw_translations: dict) -> tuple[dict[str, str], dict[str, dict[str, str]], str]:
+    if not isinstance(raw_translations, dict):
+        return {"en": "English"}, {}, "en"
+    if isinstance(raw_translations.get("locales"), dict) and isinstance(raw_translations.get("strings"), dict):
+        meta = raw_translations.get("_meta", {})
+        fallback = str(meta.get("fallback_locale") or "en") if isinstance(meta, dict) else "en"
+        return raw_translations["locales"], raw_translations["strings"], fallback
+
+    locales = {}
+    strings: dict[str, dict[str, str]] = {}
+    for locale, values in raw_translations.items():
+        if locale.startswith("_") or not isinstance(values, dict):
+            continue
+        locales[locale] = str(values.get("locale.name") or locale)
+        for key, value in values.items():
+            if key == "locale.name":
+                continue
+            strings.setdefault(key, {})[locale] = str(value)
+    return locales or {"en": "English"}, strings, "en"
+
+
+UI_LOCALES, UI_STRINGS, UI_FALLBACK_LOCALE = normalize_ui_translations(UI_TRANSLATIONS)
+
+
 def normalize_ui_locale(locale: str | None = None) -> str:
     value = (locale or UI_LOCALE).strip().lower()
-    if value in UI_TRANSLATIONS:
+    if value in UI_LOCALES:
         return value
-    return "en"
+    return UI_FALLBACK_LOCALE if UI_FALLBACK_LOCALE in UI_LOCALES else "en"
 
 
 def ui_text_for(locale: str | None, key: str) -> str:
     selected_locale = normalize_ui_locale(locale)
-    english = UI_TRANSLATIONS.get("en", {})
-    selected = UI_TRANSLATIONS.get(selected_locale, {})
-    return selected.get(key) or english.get(key) or key
+    translations = UI_STRINGS.get(key, {})
+    if not isinstance(translations, dict):
+        return key
+    return translations.get(selected_locale) or translations.get(UI_FALLBACK_LOCALE) or translations.get("en") or key
 
 
 def ui_text(key: str) -> str:
@@ -188,10 +213,7 @@ def ui_text(key: str) -> str:
 
 
 def ui_locale_choices() -> list[tuple[str, str]]:
-    choices = []
-    for locale in sorted(UI_TRANSLATIONS):
-        label = ui_text_for(locale, "locale.name")
-        choices.append((label, locale))
+    choices = [(label, locale) for locale, label in sorted(UI_LOCALES.items(), key=lambda item: item[1].casefold())]
     return choices or [("English", "en")]
 
 
@@ -398,23 +420,38 @@ def mode_choices_for(locale: str | None) -> list[tuple[str, str]]:
     ]
 
 
-def ui_locale_updates(locale: str, current_mode: str):
+def default_input_values() -> set[str]:
+    defaults = UI_STRINGS.get("input_text.default", {})
+    if not isinstance(defaults, dict):
+        return set()
+    return {str(value).strip() for value in defaults.values() if str(value).strip()}
+
+
+def input_text_update_for(locale: str | None, current_text: str | None):
+    update = gr.update(label=ui_text_for(locale, "input_text.label"))
+    current = (current_text or "").strip()
+    if not current or current in default_input_values():
+        update["value"] = ui_text_for(locale, "input_text.default")
+    return update
+
+
+def ui_locale_updates(locale: str, current_mode: str, current_text: str):
     selected_locale = normalize_ui_locale(locale)
     stable_mode = current_mode if current_mode in {"No Voice Prompt", "Voice Design", "Voice Clone"} else "No Voice Prompt"
     return (
         gr.update(label=ui_text_for(selected_locale, "mode.label"), choices=mode_choices_for(selected_locale), value=stable_mode),
         gr.update(label=ui_text_for(selected_locale, "ui_language.label")),
-        gr.update(label=ui_text_for(selected_locale, "input_text.label")),
+        input_text_update_for(selected_locale, current_text),
         nonverbal_tags_markdown_for(selected_locale),
         gr.update(value=ui_text_for(selected_locale, "generate.label")),
         ui_text_for(selected_locale, "voice_design.note"),
-        gr.update(label=ui_text_for(selected_locale, "language.label")),
-        gr.update(label=ui_text_for(selected_locale, "design.gender")),
-        gr.update(label=ui_text_for(selected_locale, "design.age")),
-        gr.update(label=ui_text_for(selected_locale, "design.pitch")),
-        gr.update(label=ui_text_for(selected_locale, "design.style")),
-        gr.update(label=ui_text_for(selected_locale, "design.english_accent")),
-        gr.update(label=ui_text_for(selected_locale, "design.chinese_dialect")),
+        gr.update(label=ui_text_for(selected_locale, "language.label"), choices=language_choices_for(selected_locale)),
+        gr.update(label=ui_text_for(selected_locale, "design.gender"), choices=design_choices_for(selected_locale, "gender")),
+        gr.update(label=ui_text_for(selected_locale, "design.age"), choices=design_choices_for(selected_locale, "age")),
+        gr.update(label=ui_text_for(selected_locale, "design.pitch"), choices=design_choices_for(selected_locale, "pitch")),
+        gr.update(label=ui_text_for(selected_locale, "design.style"), choices=design_choices_for(selected_locale, "style")),
+        gr.update(label=ui_text_for(selected_locale, "design.english_accent"), choices=design_choices_for(selected_locale, "english_accent")),
+        gr.update(label=ui_text_for(selected_locale, "design.chinese_dialect"), choices=design_choices_for(selected_locale, "chinese_dialect")),
         gr.update(label=ui_text_for(selected_locale, "reference_audio.label")),
         gr.update(
             label=ui_text_for(selected_locale, "reference_text.label"),
@@ -423,25 +460,25 @@ def ui_locale_updates(locale: str, current_mode: str):
         ),
         gr.update(label=ui_text_for(selected_locale, "output_audio.label")),
         gr.update(label=ui_text_for(selected_locale, "status.label")),
-        gr.update(label=ui_text_for(selected_locale, "hardware.label")),
+        gr.update(label=ui_text_for(selected_locale, "hardware.label"), choices=hardware_choices_for(selected_locale)),
         gr.update(label=ui_text_for(selected_locale, "output_format.label")),
-        gr.update(label=ui_text_for(selected_locale, "speed.label")),
-        gr.update(label=ui_text_for(selected_locale, "duration.label")),
-        gr.update(label=ui_text_for(selected_locale, "num_step.label")),
-        gr.update(label=ui_text_for(selected_locale, "guidance_scale.label")),
-        gr.update(label=ui_text_for(selected_locale, "denoise.label")),
-        gr.update(label=ui_text_for(selected_locale, "preprocess_prompt.label")),
-        gr.update(label=ui_text_for(selected_locale, "postprocess_output.label")),
-        gr.update(label=ui_text_for(selected_locale, "t_shift.label")),
-        gr.update(label=ui_text_for(selected_locale, "layer_penalty.label")),
-        gr.update(label=ui_text_for(selected_locale, "position_temperature.label")),
-        gr.update(label=ui_text_for(selected_locale, "class_temperature.label")),
-        gr.update(label=ui_text_for(selected_locale, "audio_chunk_duration.label")),
-        gr.update(label=ui_text_for(selected_locale, "audio_chunk_threshold.label")),
-        gr.update(label=ui_text_for(selected_locale, "pitch.label")),
-        gr.update(label=ui_text_for(selected_locale, "tempo.label")),
-        gr.update(label=ui_text_for(selected_locale, "volume.label")),
-        gr.update(label=ui_text_for(selected_locale, "normalize_loudness.label")),
+        gr.update(label=ui_text_for(selected_locale, "speed.label"), info=ui_text_for(selected_locale, "speed.info")),
+        gr.update(label=ui_text_for(selected_locale, "duration.label"), info=ui_text_for(selected_locale, "duration.info")),
+        gr.update(label=ui_text_for(selected_locale, "num_step.label"), info=ui_text_for(selected_locale, "num_step.info")),
+        gr.update(label=ui_text_for(selected_locale, "guidance_scale.label"), info=ui_text_for(selected_locale, "guidance_scale.info")),
+        gr.update(label=ui_text_for(selected_locale, "denoise.label"), info=ui_text_for(selected_locale, "denoise.info")),
+        gr.update(label=ui_text_for(selected_locale, "preprocess_prompt.label"), info=ui_text_for(selected_locale, "preprocess_prompt.info")),
+        gr.update(label=ui_text_for(selected_locale, "postprocess_output.label"), info=ui_text_for(selected_locale, "postprocess_output.info")),
+        gr.update(label=ui_text_for(selected_locale, "t_shift.label"), info=ui_text_for(selected_locale, "t_shift.info")),
+        gr.update(label=ui_text_for(selected_locale, "layer_penalty.label"), info=ui_text_for(selected_locale, "layer_penalty.info")),
+        gr.update(label=ui_text_for(selected_locale, "position_temperature.label"), info=ui_text_for(selected_locale, "position_temperature.info")),
+        gr.update(label=ui_text_for(selected_locale, "class_temperature.label"), info=ui_text_for(selected_locale, "class_temperature.info")),
+        gr.update(label=ui_text_for(selected_locale, "audio_chunk_duration.label"), info=ui_text_for(selected_locale, "audio_chunk_duration.info")),
+        gr.update(label=ui_text_for(selected_locale, "audio_chunk_threshold.label"), info=ui_text_for(selected_locale, "audio_chunk_threshold.info")),
+        gr.update(label=ui_text_for(selected_locale, "pitch.label"), info=ui_text_for(selected_locale, "pitch.info")),
+        gr.update(label=ui_text_for(selected_locale, "tempo.label"), info=ui_text_for(selected_locale, "tempo.info")),
+        gr.update(label=ui_text_for(selected_locale, "volume.label"), info=ui_text_for(selected_locale, "volume.info")),
+        gr.update(label=ui_text_for(selected_locale, "normalize_loudness.label"), info=ui_text_for(selected_locale, "normalize_loudness.info")),
     )
 
 
@@ -777,6 +814,41 @@ hardware_choices = get_hardware_choices()
 hardware_values = {value for _, value in hardware_choices}
 default_hardware = DEFAULT_DEVICE if DEFAULT_DEVICE in hardware_values else "auto"
 
+
+def language_choices_for(locale: str | None) -> list[tuple[str, str]]:
+    return [(ui_text_for(locale, "option.auto"), "Auto")] + sorted(
+        (lang_display_name(name), name) for name in LANG_NAMES
+    )
+
+
+def design_choices_for(locale: str | None, category: str) -> list[tuple[str, str]]:
+    return [(ui_text_for(locale, "option.no_preference"), "No preference")] + [
+        (option, option) for option in VOICE_DESIGN_CATEGORIES[category]["options"]
+    ]
+
+
+def hardware_choices_for(locale: str | None) -> list[tuple[str, str]]:
+    choices = []
+    for label, value in hardware_choices:
+        if value == "auto":
+            label = ui_text_for(locale, "option.auto")
+        elif value == "cpu":
+            label = ui_text_for(locale, "hardware.cpu")
+        choices.append((label, value))
+    return choices
+
+
+def current_language_choices() -> list[tuple[str, str]]:
+    return language_choices_for(UI_LOCALE)
+
+
+def current_design_choices(category: str) -> list[tuple[str, str]]:
+    return design_choices_for(UI_LOCALE, category)
+
+
+def current_hardware_choices() -> list[tuple[str, str]]:
+    return hardware_choices_for(UI_LOCALE)
+
 APP_CSS = f"""
 :root {{
     --brand-cream: #fff3e7;
@@ -1089,37 +1161,37 @@ with gr.Blocks(title="OmniVoiceTTS") as ui:
             generate_btn = gr.Button(ui_text("generate.label"), variant="primary", elem_id="generate-btn")
             with gr.Accordion(ui_text("voice_design.title"), open=False):
                 voice_design_note = gr.Markdown(ui_text("voice_design.note"))
-                language = gr.Dropdown(LANGUAGE_CHOICES, value="Auto", label=ui_text("language.label"))
+                language = gr.Dropdown(current_language_choices(), value="Auto", label=ui_text("language.label"))
                 with gr.Row():
                     design_gender = gr.Dropdown(
-                        choices=["No preference"] + VOICE_DESIGN_CATEGORIES["gender"]["options"],
+                        choices=current_design_choices("gender"),
                         value="No preference",
                         label=ui_text("design.gender"),
                     )
                     design_age = gr.Dropdown(
-                        choices=["No preference"] + VOICE_DESIGN_CATEGORIES["age"]["options"],
+                        choices=current_design_choices("age"),
                         value="No preference",
                         label=ui_text("design.age"),
                     )
                 with gr.Row():
                     design_pitch = gr.Dropdown(
-                        choices=["No preference"] + VOICE_DESIGN_CATEGORIES["pitch"]["options"],
+                        choices=current_design_choices("pitch"),
                         value="No preference",
                         label=ui_text("design.pitch"),
                     )
                     design_style = gr.Dropdown(
-                        choices=["No preference"] + VOICE_DESIGN_CATEGORIES["style"]["options"],
+                        choices=current_design_choices("style"),
                         value="No preference",
                         label=ui_text("design.style"),
                     )
                 with gr.Row():
                     design_english_accent = gr.Dropdown(
-                        choices=["No preference"] + VOICE_DESIGN_CATEGORIES["english_accent"]["options"],
+                        choices=current_design_choices("english_accent"),
                         value="No preference",
                         label=ui_text("design.english_accent"),
                     )
                     design_chinese_dialect = gr.Dropdown(
-                        choices=["No preference"] + VOICE_DESIGN_CATEGORIES["chinese_dialect"]["options"],
+                        choices=current_design_choices("chinese_dialect"),
                         value="No preference",
                         label=ui_text("design.chinese_dialect"),
                     )
@@ -1134,42 +1206,43 @@ with gr.Blocks(title="OmniVoiceTTS") as ui:
             output_audio = gr.Audio(label=ui_text("output_audio.label"), type="filepath", autoplay=True)
             status_box = gr.Textbox(label=ui_text("status.label"), lines=2)
             with gr.Row():
-                hardware = gr.Dropdown(hardware_choices, value=default_hardware, label=ui_text("hardware.label"))
+                hardware = gr.Dropdown(current_hardware_choices(), value=default_hardware, label=ui_text("hardware.label"))
                 output_format = gr.Dropdown(
                     choices=[(config["label"], key) for key, config in OUTPUT_FORMATS.items()],
                     value="mp3",
                     label=ui_text("output_format.label"),
                 )
             with gr.Accordion(ui_text("generation_settings.title"), open=False):
-                speed = gr.Slider(0.5, 1.5, value=1.0, step=0.05, label=ui_text("speed.label"))
-                duration = gr.Number(value=None, label=ui_text("duration.label"))
-                num_step = gr.Slider(4, 64, value=32, step=1, label=ui_text("num_step.label"))
-                guidance_scale = gr.Slider(0.0, 4.0, value=2.0, step=0.1, label=ui_text("guidance_scale.label"))
-                denoise = gr.Checkbox(value=True, label=ui_text("denoise.label"))
-                preprocess_prompt = gr.Checkbox(value=True, label=ui_text("preprocess_prompt.label"))
-                postprocess_output = gr.Checkbox(value=True, label=ui_text("postprocess_output.label"))
+                speed = gr.Slider(0.5, 1.5, value=1.0, step=0.05, label=ui_text("speed.label"), info=ui_text("speed.info"))
+                duration = gr.Number(value=None, label=ui_text("duration.label"), info=ui_text("duration.info"))
+                num_step = gr.Slider(4, 64, value=32, step=1, label=ui_text("num_step.label"), info=ui_text("num_step.info"))
+                guidance_scale = gr.Slider(0.0, 4.0, value=2.0, step=0.1, label=ui_text("guidance_scale.label"), info=ui_text("guidance_scale.info"))
+                denoise = gr.Checkbox(value=True, label=ui_text("denoise.label"), info=ui_text("denoise.info"))
+                preprocess_prompt = gr.Checkbox(value=True, label=ui_text("preprocess_prompt.label"), info=ui_text("preprocess_prompt.info"))
+                postprocess_output = gr.Checkbox(value=True, label=ui_text("postprocess_output.label"), info=ui_text("postprocess_output.info"))
                 with gr.Accordion(ui_text("advanced_controls.title"), open=False):
-                    t_shift = gr.Slider(0.01, 1.0, value=0.1, step=0.01, label=ui_text("t_shift.label"))
-                    layer_penalty_factor = gr.Slider(0.0, 10.0, value=5.0, step=0.1, label=ui_text("layer_penalty.label"))
+                    t_shift = gr.Slider(0.01, 1.0, value=0.1, step=0.01, label=ui_text("t_shift.label"), info=ui_text("t_shift.info"))
+                    layer_penalty_factor = gr.Slider(0.0, 10.0, value=5.0, step=0.1, label=ui_text("layer_penalty.label"), info=ui_text("layer_penalty.info"))
                     position_temperature = gr.Slider(
                         0.0,
                         10.0,
                         value=5.0,
                         step=0.1,
                         label=ui_text("position_temperature.label"),
+                        info=ui_text("position_temperature.info"),
                     )
-                    class_temperature = gr.Slider(0.0, 2.0, value=0.0, step=0.05, label=ui_text("class_temperature.label"))
-                    audio_chunk_duration = gr.Number(value=15.0, label=ui_text("audio_chunk_duration.label"))
-                    audio_chunk_threshold = gr.Number(value=30.0, label=ui_text("audio_chunk_threshold.label"))
+                    class_temperature = gr.Slider(0.0, 2.0, value=0.0, step=0.05, label=ui_text("class_temperature.label"), info=ui_text("class_temperature.info"))
+                    audio_chunk_duration = gr.Number(value=15.0, label=ui_text("audio_chunk_duration.label"), info=ui_text("audio_chunk_duration.info"))
+                    audio_chunk_threshold = gr.Number(value=30.0, label=ui_text("audio_chunk_threshold.label"), info=ui_text("audio_chunk_threshold.info"))
             with gr.Accordion(ui_text("audio_controls.title"), open=False):
-                pitch_semitones = gr.Slider(-12, 12, value=0, step=0.5, label=ui_text("pitch.label"))
-                tempo = gr.Slider(0.5, 2, value=1, step=0.05, label=ui_text("tempo.label"))
-                volume = gr.Slider(0, 2, value=1, step=0.05, label=ui_text("volume.label"))
-                loudness_normalize = gr.Checkbox(value=False, label=ui_text("normalize_loudness.label"))
+                pitch_semitones = gr.Slider(-12, 12, value=0, step=0.5, label=ui_text("pitch.label"), info=ui_text("pitch.info"))
+                tempo = gr.Slider(0.5, 2, value=1, step=0.05, label=ui_text("tempo.label"), info=ui_text("tempo.info"))
+                volume = gr.Slider(0, 2, value=1, step=0.05, label=ui_text("volume.label"), info=ui_text("volume.info"))
+                loudness_normalize = gr.Checkbox(value=False, label=ui_text("normalize_loudness.label"), info=ui_text("normalize_loudness.info"))
 
     ui_locale.change(
         fn=ui_locale_updates,
-        inputs=[ui_locale, mode],
+        inputs=[ui_locale, mode, text],
         outputs=[
             mode,
             ui_locale,
