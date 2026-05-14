@@ -67,6 +67,37 @@ def secure_filename_stem(value: str | os.PathLike, *, default: str = "output") -
     return stem[:120] or default
 
 
+def secure_filename(value: str | os.PathLike, *, default: str = "upload") -> str:
+    filename = Path(value).name
+    safe_name = SAFE_FILENAME_PATTERN.sub("-", filename).strip(".-_")
+    if not safe_name:
+        return default
+    return safe_name[:160]
+
+
+def find_safe_file_by_name(
+    filename_value: str | os.PathLike,
+    allowed_roots: Iterable[str | Path],
+    *,
+    label: str = "File path",
+    allowed_extensions: set[str] | None = None,
+) -> Path:
+    filename = secure_filename(filename_value)
+    suffix = os.path.splitext(filename)[1].lower()
+    if allowed_extensions is not None and suffix not in allowed_extensions:
+        supported = ", ".join(sorted(allowed_extensions))
+        raise ValueError(f"{label} must use one of these extensions: {supported}.")
+
+    for root in allowed_roots:
+        root_path = Path(root).expanduser()
+        if not root_path.exists() or not root_path.is_dir():
+            continue
+        for candidate in root_path.rglob(filename):
+            if is_path_within_root(candidate, root_path) and candidate.is_file():
+                return candidate
+    raise ValueError(f"{label} does not exist under an allowed upload directory.")
+
+
 def safe_output_file_path(
     root: str | Path,
     filename_stem: str | os.PathLike,

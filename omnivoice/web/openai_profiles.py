@@ -4,6 +4,7 @@ import html
 import json
 import re
 import shutil
+import tempfile
 import threading
 from datetime import datetime
 from pathlib import Path
@@ -14,6 +15,7 @@ import gradio as gr
 from omnivoice.service.paths import (
     AUDIO_EXTENSIONS,
     default_gradio_upload_roots,
+    find_safe_file_by_name,
     safe_existing_file_path,
 )
 
@@ -89,17 +91,23 @@ def save_openai_voice_profile(
     profile_name = normalize_profile_name(name)
     if not audio_path:
         raise ValueError("Upload a reference audio sample before saving the profile.")
-    source = safe_existing_file_path(
+    source = find_safe_file_by_name(
         audio_path,
         allowed_source_roots or default_gradio_upload_roots(),
-        label="Uploaded reference audio path",
+        label="Uploaded reference audio file",
         allowed_extensions=AUDIO_EXTENSIONS,
     )
     profile_dir.mkdir(parents=True, exist_ok=True)
     suffix = source.suffix.lower() or ".wav"
     if suffix not in {".wav", ".mp3", ".flac", ".ogg", ".m4a"}:
         suffix = ".wav"
-    destination = profile_dir / f"{profile_name}{suffix}"
+    with tempfile.NamedTemporaryFile(
+        delete=False,
+        dir=profile_dir,
+        prefix="voice-",
+        suffix=suffix,
+    ) as output_file:
+        destination = Path(output_file.name)
     shutil.copyfile(source, destination)
     profiles = load_openai_voice_profiles(profile_index)
     profiles[profile_name] = {
