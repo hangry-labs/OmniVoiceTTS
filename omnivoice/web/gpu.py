@@ -18,6 +18,7 @@ def read_gpu_stats() -> list[dict[str, float | int | str]]:
             text=True,
             timeout=2,
             check=False,
+            shell=False,
         )
     except (FileNotFoundError, subprocess.SubprocessError):
         return []

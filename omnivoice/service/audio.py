@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import math
 import subprocess
 import tempfile
 import wave
@@ -9,6 +10,15 @@ from collections.abc import Iterator
 import numpy as np
 
 SAMPLE_RATE = 24000
+MIN_SAMPLE_RATE = 8000
+MAX_SAMPLE_RATE = 192000
+FFMPEG_BIN = "ffmpeg"
+
+FFMPEG_ENCODING_ARGS = {
+    "mp3": ("-f", "mp3", "-codec:a", "libmp3lame", "-b:a", "192k"),
+    "flac": ("-f", "flac", "-codec:a", "flac"),
+    "ogg": ("-f", "ogg", "-codec:a", "libvorbis", "-q:a", "5"),
+}
 
 OUTPUT_FORMATS = {
     "wav": {
@@ -21,19 +31,19 @@ OUTPUT_FORMATS = {
         "label": "MP3",
         "extension": "mp3",
         "media_type": "audio/mpeg",
-        "ffmpeg_args": ["-f", "mp3", "-codec:a", "libmp3lame", "-b:a", "192k"],
+        "ffmpeg_args": list(FFMPEG_ENCODING_ARGS["mp3"]),
     },
     "flac": {
         "label": "FLAC",
         "extension": "flac",
         "media_type": "audio/flac",
-        "ffmpeg_args": ["-f", "flac", "-codec:a", "flac"],
+        "ffmpeg_args": list(FFMPEG_ENCODING_ARGS["flac"]),
     },
     "ogg": {
         "label": "OGG Vorbis",
         "extension": "ogg",
         "media_type": "audio/ogg",
-        "ffmpeg_args": ["-f", "ogg", "-codec:a", "libvorbis", "-q:a", "5"],
+        "ffmpeg_args": list(FFMPEG_ENCODING_ARGS["ogg"]),
     },
 }
 
@@ -48,6 +58,53 @@ FORMAT_ALIASES = {
 }
 
 
+def normalize_audio_format(output_format: str | None) -> str:
+    requested_format = (output_format or "wav").strip().lower()
+    normalized_format = FORMAT_ALIASES.get(requested_format, requested_format)
+    if normalized_format not in OUTPUT_FORMATS:
+        supported = ", ".join(sorted(OUTPUT_FORMATS))
+        raise ValueError(f"Unsupported output format '{output_format}'. Supported formats: {supported}")
+    return normalized_format
+
+
+def validate_sample_rate(sample_rate: int | float) -> int:
+    if not isinstance(sample_rate, (int, float)) or not math.isfinite(float(sample_rate)):
+        raise ValueError("Sample rate must be a finite number.")
+    value = int(sample_rate)
+    if value < MIN_SAMPLE_RATE or value > MAX_SAMPLE_RATE:
+        raise ValueError(f"Sample rate must be between {MIN_SAMPLE_RATE} and {MAX_SAMPLE_RATE}.")
+    return value
+
+
+def validate_audio_effect_values(
+    pitch_semitones: float,
+    tempo: float,
+    volume: float,
+) -> tuple[float, float, float]:
+    values = {
+        "pitch_semitones": float(pitch_semitones),
+        "tempo": float(tempo),
+        "volume": float(volume),
+    }
+    for name, value in values.items():
+        if not math.isfinite(value):
+            raise ValueError(f"{name} must be finite.")
+    if values["pitch_semitones"] < -12.0 or values["pitch_semitones"] > 12.0:
+        raise ValueError("pitch_semitones must be between -12.0 and 12.0.")
+    if values["tempo"] < 0.5 or values["tempo"] > 2.0:
+        raise ValueError("tempo must be between 0.5 and 2.0.")
+    if values["volume"] < 0.0 or values["volume"] > 2.0:
+        raise ValueError("volume must be between 0.0 and 2.0.")
+    return values["pitch_semitones"], values["tempo"], values["volume"]
+
+
+def ffmpeg_encoding_args(output_format: str) -> tuple[str, ...] | None:
+    normalized_format = normalize_audio_format(output_format)
+    if normalized_format == "wav":
+        return None
+    return FFMPEG_ENCODING_ARGS[normalized_format]
+
+
 def to_int16_audio(audio: np.ndarray) -> np.ndarray:
     if audio.dtype == np.int16:
         return audio
@@ -55,6 +112,7 @@ def to_int16_audio(audio: np.ndarray) -> np.ndarray:
 
 
 def audio_to_wav_bytes(audio: np.ndarray, sample_rate: int = SAMPLE_RATE) -> bytes:
+    sample_rate = validate_sample_rate(sample_rate)
     audio_int16 = to_int16_audio(audio)
     buffer = io.BytesIO()
     with wave.open(buffer, "wb") as wav_file:
@@ -66,6 +124,8 @@ def audio_to_wav_bytes(audio: np.ndarray, sample_rate: int = SAMPLE_RATE) -> byt
 
 
 def atempo_filters(multiplier: float) -> list[str]:
+    if not math.isfinite(float(multiplier)) or multiplier <= 0:
+        raise ValueError("Audio tempo multiplier must be a finite positive number.")
     filters = []
     current = multiplier
     while current > 2.0:
@@ -85,6 +145,12 @@ def build_audio_effect_filters(
     volume: float = 1.0,
     normalize: bool = False,
 ) -> list[str]:
+    sample_rate = validate_sample_rate(sample_rate)
+    pitch_semitones, tempo, volume = validate_audio_effect_values(
+        pitch_semitones,
+        tempo,
+        volume,
+    )
     filters = []
     if abs(pitch_semitones) > 0.001:
         pitch_factor = 2 ** (pitch_semitones / 12)
@@ -108,11 +174,18 @@ def apply_audio_effects(
     volume: float = 1.0,
     normalize: bool = False,
 ) -> np.ndarray:
-    filters = build_audio_effect_filters(sample_rate, pitch_semitones, tempo, volume, normalize)
+    sample_rate = validate_sample_rate(sample_rate)
+    filters = build_audio_effect_filters(
+        sample_rate,
+        pitch_semitones,
+        tempo,
+        volume,
+        normalize,
+    )
     if not filters or audio.size == 0:
         return to_int16_audio(audio)
     command = [
-        "ffmpeg",
+        FFMPEG_BIN,
         "-hide_banner",
         "-loglevel",
         "error",
@@ -139,6 +212,7 @@ def apply_audio_effects(
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             check=True,
+            shell=False,
         )
     except FileNotFoundError as exc:
         raise RuntimeError("ffmpeg is required for pitch, tempo, volume, or normalization controls") from exc
@@ -149,13 +223,14 @@ def apply_audio_effects(
 
 
 def encode_audio_bytes(audio: np.ndarray, output_format: str = "wav", sample_rate: int = SAMPLE_RATE) -> bytes:
-    normalized_format = FORMAT_ALIASES.get(output_format, output_format)
+    normalized_format = normalize_audio_format(output_format)
+    sample_rate = validate_sample_rate(sample_rate)
     wav_bytes = audio_to_wav_bytes(audio, sample_rate)
-    ffmpeg_args = OUTPUT_FORMATS[normalized_format]["ffmpeg_args"]
+    ffmpeg_args = ffmpeg_encoding_args(normalized_format)
     if ffmpeg_args is None:
         return wav_bytes
     command = [
-        "ffmpeg",
+        FFMPEG_BIN,
         "-hide_banner",
         "-loglevel",
         "error",
@@ -173,6 +248,7 @@ def encode_audio_bytes(audio: np.ndarray, output_format: str = "wav", sample_rat
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             check=True,
+            shell=False,
         )
     except FileNotFoundError as exc:
         raise RuntimeError("ffmpeg is required for non-WAV output formats") from exc
@@ -187,15 +263,16 @@ def encode_audio_stream(
     output_format: str = "mp3",
     sample_rate: int = SAMPLE_RATE,
 ) -> Iterator[bytes]:
-    normalized_format = FORMAT_ALIASES.get(output_format, output_format)
-    ffmpeg_args = OUTPUT_FORMATS[normalized_format]["ffmpeg_args"]
+    normalized_format = normalize_audio_format(output_format)
+    sample_rate = validate_sample_rate(sample_rate)
+    ffmpeg_args = ffmpeg_encoding_args(normalized_format)
     if ffmpeg_args is None:
         for chunk in chunks:
             yield audio_to_wav_bytes(chunk, sample_rate)
         return
 
     command = [
-        "ffmpeg",
+        FFMPEG_BIN,
         "-hide_banner",
         "-loglevel",
         "error",
@@ -218,6 +295,7 @@ def encode_audio_stream(
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
+            shell=False,
         )
     except FileNotFoundError as exc:
         raise RuntimeError(f"ffmpeg is required to stream {normalized_format}") from exc
@@ -260,7 +338,8 @@ def encode_audio_stream(
 
 
 def encoded_audio_to_temp_file(audio: np.ndarray, output_format: str, sample_rate: int) -> str:
-    normalized_format = FORMAT_ALIASES.get(output_format, output_format)
+    normalized_format = normalize_audio_format(output_format)
+    sample_rate = validate_sample_rate(sample_rate)
     extension = OUTPUT_FORMATS[normalized_format]["extension"]
     audio_bytes = encode_audio_bytes(audio, normalized_format, sample_rate)
     with tempfile.NamedTemporaryFile(delete=False, suffix=f".{extension}") as file:

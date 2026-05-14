@@ -29,6 +29,7 @@ from omnivoice.service.audio import (
     encode_audio_bytes,
     encode_audio_stream,
     encoded_audio_to_temp_file,
+    normalize_audio_format,
     to_int16_audio,
 )
 from omnivoice.utils.common import fix_random_seed
@@ -333,12 +334,7 @@ def normalize_language(language: str | None) -> str | None:
 
 
 def normalize_output_format(output_format: str | None) -> str:
-    normalized = (output_format or "wav").strip().lower()
-    normalized = FORMAT_ALIASES.get(normalized, normalized)
-    if normalized not in OUTPUT_FORMATS:
-        supported = ", ".join(OUTPUT_FORMATS)
-        raise ValueError(f"Unsupported output format '{output_format}'. Supported formats: {supported}")
-    return normalized
+    return normalize_audio_format(output_format)
 
 
 def voice_design_options_payload() -> dict:
