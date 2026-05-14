@@ -26,6 +26,9 @@ on:
 env:
   IMAGE_NAME: hangrylabs/omnivoicetts
 
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
