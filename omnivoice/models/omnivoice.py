@@ -32,7 +32,7 @@ import os
 import re
 from dataclasses import dataclass, fields
 from functools import partial
-from typing import Any, List, Optional, Union
+from typing import Any, Iterator, List, Optional, Union
 
 import numpy as np
 import torch
@@ -105,6 +105,7 @@ class OmniVoiceGenerationConfig:
     postprocess_output: bool = True
     audio_chunk_duration: float = 15.0
     audio_chunk_threshold: float = 30.0
+    cancel_event: Optional[Any] = None
 
     @classmethod
     def from_dict(cls, kwargs_dict):
@@ -598,6 +599,67 @@ class OmniVoice(PreTrainedModel):
 
         return generated_audios
 
+    @torch.inference_mode()
+    def generate_stream(
+        self,
+        text: str,
+        language: Optional[str] = None,
+        ref_text: Optional[str] = None,
+        ref_audio: Union[str, tuple[torch.Tensor, int], None] = None,
+        voice_clone_prompt: Optional[VoiceClonePrompt] = None,
+        instruct: Optional[str] = None,
+        duration: Optional[float] = None,
+        speed: Optional[float] = None,
+        generation_config: Optional[OmniVoiceGenerationConfig] = None,
+        **kwargs,
+    ) -> Iterator[np.ndarray]:
+        """Yield generated audio progressively.
+
+        Short requests still produce one completed waveform. Long requests use
+        the same sentence-aware chunking path as :meth:`generate`, but decode
+        and yield each chunk as soon as its audio tokens are available.
+        """
+        if self.audio_tokenizer is None or self.text_tokenizer is None:
+            raise RuntimeError(
+                "Model is not loaded with audio/text tokenizers. Make sure you "
+                "loaded the model with OmniVoice.from_pretrained()."
+            )
+
+        gen_config = (
+            generation_config
+            if generation_config is not None
+            else OmniVoiceGenerationConfig.from_dict(kwargs)
+        )
+        self.eval()
+        full_task = self._preprocess_all(
+            text=text,
+            language=language,
+            ref_text=ref_text,
+            ref_audio=ref_audio,
+            voice_clone_prompt=voice_clone_prompt,
+            instruct=instruct,
+            preprocess_prompt=gen_config.preprocess_prompt,
+            speed=speed,
+            duration=duration,
+        )
+        short_idx, long_idx = full_task.get_indices(
+            gen_config, self.audio_tokenizer.config.frame_rate
+        )
+
+        if short_idx:
+            short_task = full_task.slice_task(short_idx)
+            for tokens in self._generate_iterative(short_task, gen_config):
+                yield self._decode_and_post_process(
+                    tokens,
+                    full_task.ref_rms[0],
+                    gen_config,
+                )
+            return
+
+        if long_idx:
+            long_task = full_task.slice_task(long_idx)
+            yield from self._generate_chunked_stream(long_task, gen_config)
+
     def create_voice_clone_prompt(
         self,
         ref_audio: Union[str, tuple[torch.Tensor, int]],
@@ -858,6 +920,7 @@ class OmniVoice(PreTrainedModel):
             # batch across items for the same chunk index. This allows to keep
             # the VRAM usage manageable while still benefiting from batching.
             for ci in range(max_num_chunks):
+                self._raise_if_cancelled(gen_config)
                 indices = [i for i in range(task.batch_size) if ci < len(all_chunks[i])]
                 if not indices:
                     continue
@@ -871,6 +934,7 @@ class OmniVoice(PreTrainedModel):
             # No reference audio — generate chunk 0 for all items first,
             # then use chunk 0 output as reference for all subsequent chunks.
             indices_0 = [i for i in range(task.batch_size) if len(all_chunks[i]) > 0]
+            self._raise_if_cancelled(gen_config)
             _run_batch(
                 indices_0,
                 texts=[all_chunks[i][0] for i in indices_0],
@@ -881,6 +945,7 @@ class OmniVoice(PreTrainedModel):
 
             # Batch all remaining chunks, using chunk 0 as fixed reference
             for ci in range(1, max_num_chunks):
+                self._raise_if_cancelled(gen_config)
                 indices = [i for i in range(task.batch_size) if ci < len(all_chunks[i])]
                 if not indices:
                     continue
@@ -892,6 +957,79 @@ class OmniVoice(PreTrainedModel):
                 )
 
         return chunk_results
+
+    def _generate_chunked_stream(
+        self, task: GenerationTask, gen_config: OmniVoiceGenerationConfig
+    ) -> Iterator[np.ndarray]:
+        """Generate one long item and yield decoded audio chunks progressively."""
+        if task.batch_size != 1:
+            raise ValueError("Streaming generation currently supports one item per request.")
+
+        avg_tokens_per_char = task.target_lens[0] / len(task.texts[0])
+        text_chunk_len = int(
+            gen_config.audio_chunk_duration
+            * self.audio_tokenizer.config.frame_rate
+            / avg_tokens_per_char
+        )
+        chunks = chunk_text_punctuation(
+            text=task.texts[0],
+            chunk_len=text_chunk_len,
+            min_chunk_len=3,
+        )
+        logger.debug("Streaming item chunked into %d pieces: %s", len(chunks), chunks)
+        if not chunks:
+            return
+
+        first_chunk_tokens = None
+        has_ref = task.ref_audio_tokens[0] is not None
+
+        def _run_chunk(
+            text_chunk: str,
+            ref_audio_tokens: Optional[torch.Tensor],
+            ref_text: Optional[str],
+        ) -> torch.Tensor:
+            speed_value = task.speed[0] if task.speed else 1.0
+            target_len = self._estimate_target_tokens(
+                text_chunk,
+                ref_text,
+                ref_audio_tokens.size(-1) if ref_audio_tokens is not None else None,
+                speed=speed_value,
+            )
+            sub_task = GenerationTask(
+                batch_size=1,
+                texts=[text_chunk],
+                target_lens=[target_len],
+                langs=[task.langs[0]],
+                instructs=[task.instructs[0]],
+                ref_texts=[ref_text],
+                ref_audio_tokens=[ref_audio_tokens],
+                ref_rms=[task.ref_rms[0]],
+                speed=[speed_value],
+            )
+            return self._generate_iterative(sub_task, gen_config)[0]
+
+        for chunk_index, text_chunk in enumerate(chunks):
+            self._raise_if_cancelled(gen_config)
+            if has_ref:
+                ref_audio_tokens = task.ref_audio_tokens[0]
+                ref_text = task.ref_texts[0]
+            elif chunk_index == 0:
+                ref_audio_tokens = None
+                ref_text = None
+            else:
+                ref_audio_tokens = first_chunk_tokens
+                ref_text = chunks[0]
+
+            tokens = _run_chunk(text_chunk, ref_audio_tokens, ref_text)
+            if chunk_index == 0:
+                first_chunk_tokens = tokens
+            yield self._decode_and_post_process(tokens, task.ref_rms[0], gen_config)
+
+    @staticmethod
+    def _raise_if_cancelled(gen_config: OmniVoiceGenerationConfig) -> None:
+        cancel_event = getattr(gen_config, "cancel_event", None)
+        if cancel_event is not None and cancel_event.is_set():
+            raise RuntimeError("Generation cancelled.")
 
     def _preprocess_all(
         self,
@@ -1250,6 +1388,7 @@ class OmniVoice(PreTrainedModel):
         ).view(1, -1, 1)
 
         for step in range(gen_config.num_step):
+            self._raise_if_cancelled(gen_config)
             batch_logits = self(
                 input_ids=batch_input_ids,
                 audio_mask=batch_audio_mask,

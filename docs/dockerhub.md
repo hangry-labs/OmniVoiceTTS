@@ -70,7 +70,7 @@ docker run -p 7861:7861 --gpus "device=0" -e CUDA_VISIBLE_DEVICES=0 -v omnivoice
 - WAV, MP3, FLAC, and OGG output support
 - GPU support when Docker/NVIDIA support is available
 - Offline-friendly usage with the standard full image once it is available locally
-- Kokoro-shaped compatibility fields and routes such as `voice`, `use_gpu`, `response_format`, `/tts/voices`, `/tts/speakers`, `/tts/stream-formats`, `/tts/convert`, and `/tts/stream`
+- Kokoro-shaped compatibility fields and routes such as `voice`, `use_gpu`, `response_format`, `/tts/voices`, `/tts/speakers`, `/tts/stream-formats`, `/tts/convert`, and progressive `/tts/stream`
 
 ## API Example
 
@@ -130,6 +130,8 @@ curl http://localhost:7861/tts/ping
 API docs are available at:
 
 http://localhost:7861/tts/docs
+
+Long text can also be requested through `/tts/stream` or `/tts/stream-chunks`. Those routes start returning encoded audio after each generated text chunk, so playback can begin before the full request completes. For live streaming, WAV requests are returned as MP3 because independent WAV chunks do not form a valid continuous stream.
 
 ## Image Tags
 

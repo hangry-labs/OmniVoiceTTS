@@ -4,6 +4,7 @@ import io
 import html
 import json
 import os
+import random
 import re
 import subprocess
 import tempfile
@@ -11,7 +12,7 @@ import threading
 import wave
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import Iterator, Optional
 
 import gradio as gr
 import numpy as np
@@ -95,6 +96,27 @@ VOICE_DESIGN_BRACKET_TOKEN_MESSAGE = (
 
 MODEL_CACHE: dict[str, OmniVoice] = {}
 MODEL_LOCK = threading.Lock()
+UI_CANCEL_EVENT = threading.Event()
+UI_STREAM_LOCK = threading.Lock()
+UI_STREAM_GENERATION = 0
+
+
+def next_ui_stream_generation() -> int:
+    global UI_STREAM_GENERATION
+    with UI_STREAM_LOCK:
+        UI_STREAM_GENERATION += 1
+        return UI_STREAM_GENERATION
+
+
+def is_current_ui_stream_generation(stream_generation: int) -> bool:
+    with UI_STREAM_LOCK:
+        return stream_generation == UI_STREAM_GENERATION
+
+
+def stop_active_ui_stream():
+    UI_CANCEL_EVENT.set()
+    next_ui_stream_generation()
+    return SAMPLE_RATE, np.zeros(1, dtype=np.int16)
 
 VOICE_DESIGN_CATEGORIES = {
     "gender": {
@@ -148,6 +170,18 @@ VOICE_DESIGN_CATEGORIES = {
         "note": "Only effective for Chinese speech.",
     },
 }
+
+AUTO_VOICE_PROFILES = [
+    ("female", "young adult", "moderate pitch"),
+    ("male", "young adult", "moderate pitch"),
+    ("female", "middle-aged", "low pitch"),
+    ("male", "middle-aged", "low pitch"),
+    ("female", "young adult", "high pitch"),
+    ("male", "young adult", "low pitch"),
+    ("female", "middle-aged", "moderate pitch"),
+    ("male", "middle-aged", "moderate pitch"),
+]
+AUTO_VOICE_RANDOM = random.SystemRandom()
 
 
 def read_version_file() -> str:
@@ -387,6 +421,14 @@ def build_voice_design_instruct(*selected_options: str | None, manual_instruct: 
     return ", ".join(parts)
 
 
+def build_auto_voice_instruct(text: str | None) -> tuple[str | None, str | None]:
+    if has_bracket_token(text):
+        return None, "True no-prompt mode used because expressive bracket tags are present."
+    profile = AUTO_VOICE_RANDOM.choice(AUTO_VOICE_PROFILES)
+    instruct = build_voice_design_instruct(*profile)
+    return instruct, f"Auto voice profile: {instruct}."
+
+
 def has_bracket_token(text: str | None) -> bool:
     return bool(BRACKET_TOKEN_PATTERN.search(text or ""))
 
@@ -622,6 +664,83 @@ def encode_audio_bytes(audio: np.ndarray, output_format: str = "wav", sample_rat
     return result.stdout
 
 
+def encode_audio_stream(
+    chunks: Iterator[np.ndarray],
+    output_format: str = "mp3",
+    sample_rate: int = SAMPLE_RATE,
+) -> Iterator[bytes]:
+    normalized_format = normalize_output_format(output_format)
+    ffmpeg_args = OUTPUT_FORMATS[normalized_format]["ffmpeg_args"]
+    if ffmpeg_args is None:
+        for chunk in chunks:
+            yield audio_to_wav_bytes(chunk, sample_rate)
+        return
+
+    command = [
+        "ffmpeg",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-f",
+        "s16le",
+        "-acodec",
+        "pcm_s16le",
+        "-ac",
+        "1",
+        "-ar",
+        str(sample_rate),
+        "-i",
+        "pipe:0",
+        *ffmpeg_args,
+        "pipe:1",
+    ]
+    try:
+        process = subprocess.Popen(
+            command,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+    except FileNotFoundError as exc:
+        raise RuntimeError(f"ffmpeg is required to stream {normalized_format}") from exc
+
+    writer_error: list[BaseException] = []
+
+    def write_chunks() -> None:
+        assert process.stdin is not None
+        try:
+            for chunk in chunks:
+                process.stdin.write(to_int16_audio(chunk).tobytes())
+                process.stdin.flush()
+        except BaseException as exc:  # noqa: BLE001 - surfaced after ffmpeg exits.
+            writer_error.append(exc)
+        finally:
+            try:
+                process.stdin.close()
+            except OSError:
+                pass
+
+    writer = threading.Thread(target=write_chunks, daemon=True)
+    writer.start()
+
+    assert process.stdout is not None
+    while True:
+        data = process.stdout.read(65536)
+        if data:
+            yield data
+            continue
+        if process.poll() is not None:
+            break
+
+    writer.join()
+    stderr = process.stderr.read().decode("utf-8", errors="replace").strip() if process.stderr else ""
+    return_code = process.wait()
+    if writer_error:
+        raise RuntimeError(f"Audio streaming failed: {writer_error[0]}")
+    if return_code != 0:
+        raise RuntimeError(f"ffmpeg failed to stream {normalized_format}: {stderr}")
+
+
 def encoded_audio_to_temp_file(audio: np.ndarray, output_format: str, sample_rate: int) -> str:
     normalized_format = normalize_output_format(output_format)
     extension = OUTPUT_FORMATS[normalized_format]["extension"]
@@ -700,6 +819,50 @@ def synthesize_array(
     return sample_rate, waveform
 
 
+def synthesize_chunks(
+    text: str,
+    language: str | None = None,
+    ref_audio: str | None = None,
+    ref_text: str | None = None,
+    instruct: str | None = None,
+    duration: float | None = None,
+    speed: float | None = 1.0,
+    device: str = "auto",
+    generation_config: OmniVoiceGenerationConfig | None = None,
+    pitch_semitones: float = 0.0,
+    tempo: float = 1.0,
+    volume: float = 1.0,
+    normalize: bool = False,
+) -> tuple[int, Iterator[np.ndarray]]:
+    if not (text or "").strip():
+        raise ValueError("Text must not be empty")
+    validate_voice_design_text(text, instruct)
+    model = get_model(device)
+    sample_rate = int(model.sampling_rate or SAMPLE_RATE)
+
+    def chunk_iterator() -> Iterator[np.ndarray]:
+        for chunk in model.generate_stream(
+            text=text.strip(),
+            language=normalize_language(language),
+            ref_audio=ref_audio or None,
+            ref_text=ref_text or None,
+            instruct=instruct or None,
+            duration=duration if duration and duration > 0 else None,
+            speed=speed,
+            generation_config=generation_config,
+        ):
+            yield apply_audio_effects(
+                chunk,
+                sample_rate,
+                pitch_semitones,
+                tempo,
+                volume,
+                normalize,
+            )
+
+    return sample_rate, chunk_iterator()
+
+
 def synthesize_file(
     text,
     language,
@@ -733,7 +896,12 @@ def synthesize_file(
     design_chinese_dialect,
 ):
     try:
+        UI_CANCEL_EVENT.clear()
         effective_instruct = None
+        profile_status = None
+        effective_class_temperature = coerce_float(class_temperature, 0.0)
+        if mode == "No Voice Prompt":
+            effective_instruct, profile_status = build_auto_voice_instruct(text)
         if mode == "Voice Design":
             effective_instruct = build_voice_design_instruct(
                 design_gender,
@@ -753,10 +921,11 @@ def synthesize_file(
             t_shift=coerce_float(t_shift, 0.1),
             layer_penalty_factor=coerce_float(layer_penalty_factor, 5.0),
             position_temperature=coerce_float(position_temperature, 5.0),
-            class_temperature=coerce_float(class_temperature, 0.0),
+            class_temperature=effective_class_temperature,
             audio_chunk_duration=coerce_float(audio_chunk_duration, 15.0),
             audio_chunk_threshold=coerce_float(audio_chunk_threshold, 30.0),
         )
+        config.cancel_event = UI_CANCEL_EVENT
         clone_ref_audio = ref_audio if mode == "Voice Clone" else None
         sample_rate, waveform = synthesize_array(
             text=text,
@@ -773,7 +942,111 @@ def synthesize_file(
             volume=float(volume),
             normalize=bool(normalize),
         )
-        return encoded_audio_to_temp_file(waveform, output_format, sample_rate), "Done."
+        status = "Done." if not profile_status else f"Done. {profile_status}"
+        return encoded_audio_to_temp_file(waveform, output_format, sample_rate), status
+    except RuntimeError as exc:
+        if str(exc) == "Generation cancelled.":
+            return None, "Generation cancelled."
+        raise gr.Error(f"{type(exc).__name__}: {exc}") from exc
+    except Exception as exc:
+        raise gr.Error(f"{type(exc).__name__}: {exc}") from exc
+
+
+def synthesize_file_streaming(
+    text,
+    language,
+    ref_audio,
+    ref_text,
+    mode,
+    num_step,
+    guidance_scale,
+    speed,
+    duration,
+    device,
+    output_format,
+    denoise,
+    preprocess_prompt,
+    postprocess_output,
+    t_shift,
+    layer_penalty_factor,
+    position_temperature,
+    class_temperature,
+    audio_chunk_duration,
+    audio_chunk_threshold,
+    pitch_semitones,
+    tempo,
+    volume,
+    normalize,
+    design_gender,
+    design_age,
+    design_pitch,
+    design_style,
+    design_english_accent,
+    design_chinese_dialect,
+):
+    try:
+        stream_generation = next_ui_stream_generation()
+        UI_CANCEL_EVENT.clear()
+        yield (SAMPLE_RATE, np.zeros(1, dtype=np.int16)), "Preparing stream..."
+        effective_instruct = None
+        profile_status = None
+        effective_class_temperature = coerce_float(class_temperature, 0.0)
+        if mode == "No Voice Prompt":
+            effective_instruct, profile_status = build_auto_voice_instruct(text)
+        if mode == "Voice Design":
+            effective_instruct = build_voice_design_instruct(
+                design_gender,
+                design_age,
+                design_pitch,
+                design_style,
+                design_english_accent,
+                design_chinese_dialect,
+            )
+            validate_voice_design_text(text, effective_instruct)
+        config = build_generation_config(
+            num_step=int(num_step),
+            guidance_scale=float(guidance_scale),
+            denoise=bool(denoise),
+            preprocess_prompt=bool(preprocess_prompt),
+            postprocess_output=bool(postprocess_output),
+            t_shift=coerce_float(t_shift, 0.1),
+            layer_penalty_factor=coerce_float(layer_penalty_factor, 5.0),
+            position_temperature=coerce_float(position_temperature, 5.0),
+            class_temperature=effective_class_temperature,
+            audio_chunk_duration=coerce_float(audio_chunk_duration, 15.0),
+            audio_chunk_threshold=coerce_float(audio_chunk_threshold, 30.0),
+        )
+        config.cancel_event = UI_CANCEL_EVENT
+        clone_ref_audio = ref_audio if mode == "Voice Clone" else None
+        sample_rate, chunks = synthesize_chunks(
+            text=text,
+            language=language,
+            ref_audio=clone_ref_audio,
+            ref_text=ref_text,
+            instruct=effective_instruct,
+            duration=float(duration) if duration else None,
+            speed=float(speed) if speed else None,
+            device=device,
+            generation_config=config,
+            pitch_semitones=float(pitch_semitones),
+            tempo=float(tempo),
+            volume=float(volume),
+            normalize=bool(normalize),
+        )
+        for index, chunk in enumerate(chunks, start=1):
+            if not is_current_ui_stream_generation(stream_generation):
+                return
+            status = f"Streaming chunk {index}."
+            if index == 1 and profile_status:
+                status = f"{status} {profile_status}"
+            yield (sample_rate, to_int16_audio(chunk)), status
+        if is_current_ui_stream_generation(stream_generation):
+            yield gr.skip(), "Streaming complete."
+    except RuntimeError as exc:
+        if str(exc) == "Generation cancelled.":
+            yield gr.skip(), "Generation cancelled."
+            return
+        raise gr.Error(f"{type(exc).__name__}: {exc}") from exc
     except Exception as exc:
         raise gr.Error(f"{type(exc).__name__}: {exc}") from exc
 
@@ -1203,7 +1476,14 @@ with gr.Blocks(title="OmniVoiceTTS") as ui:
                 info=ui_text("reference_text.info"),
             )
         with gr.Column(scale=1, elem_classes="output-panel"):
-            output_audio = gr.Audio(label=ui_text("output_audio.label"), type="filepath", autoplay=True)
+            with gr.Tabs():
+                with gr.Tab("Generate"):
+                    output_audio = gr.Audio(label=ui_text("output_audio.label"), type="filepath", autoplay=True, streaming=False)
+                with gr.Tab("Stream"):
+                    output_stream = gr.Audio(label="Output Audio Stream", interactive=False, streaming=True, autoplay=True)
+                    with gr.Row():
+                        stream_btn = gr.Button("Stream", variant="primary")
+                        stop_generation_btn = gr.Button(ui_text("stop_generation.label"), variant="stop")
             status_box = gr.Textbox(label=ui_text("status.label"), lines=2)
             with gr.Row():
                 hardware = gr.Dropdown(current_hardware_choices(), value=default_hardware, label=ui_text("hardware.label"))
@@ -1283,7 +1563,7 @@ with gr.Blocks(title="OmniVoiceTTS") as ui:
         ],
     )
 
-    generate_btn.click(
+    generate_event = generate_btn.click(
         fn=synthesize_file,
         inputs=[
             text,
@@ -1318,6 +1598,62 @@ with gr.Blocks(title="OmniVoiceTTS") as ui:
             design_chinese_dialect,
         ],
         outputs=[output_audio, status_box],
+    )
+
+    output_stream.pause(
+        fn=lambda: "Playback paused. Use Stop Generation to cancel ongoing synthesis.",
+        outputs=status_box,
+    )
+
+    output_stream.stop(
+        fn=lambda: "Playback stopped. Use Stop Generation to cancel ongoing synthesis.",
+        outputs=status_box,
+    )
+
+    stream_btn.click(fn=stop_active_ui_stream, outputs=[output_stream], queue=False)
+    stream_event = stream_btn.click(
+        fn=synthesize_file_streaming,
+        inputs=[
+            text,
+            language,
+            ref_audio,
+            ref_text,
+            mode,
+            num_step,
+            guidance_scale,
+            speed,
+            duration,
+            hardware,
+            output_format,
+            denoise,
+            preprocess_prompt,
+            postprocess_output,
+            t_shift,
+            layer_penalty_factor,
+            position_temperature,
+            class_temperature,
+            audio_chunk_duration,
+            audio_chunk_threshold,
+            pitch_semitones,
+            tempo,
+            volume,
+            loudness_normalize,
+            design_gender,
+            design_age,
+            design_pitch,
+            design_style,
+            design_english_accent,
+            design_chinese_dialect,
+        ],
+        outputs=[output_stream, status_box],
+        trigger_mode="always_last",
+    )
+
+    stop_generation_btn.click(
+        fn=stop_active_ui_stream,
+        outputs=[output_stream],
+        cancels=[stream_event],
+        queue=False,
     )
 
 api = FastAPI(
@@ -1424,6 +1760,49 @@ def synthesize_payload(payload: TTSRequest) -> tuple[str, int, np.ndarray]:
     return output_format, sample_rate, waveform
 
 
+def synthesize_payload_chunks(payload: TTSRequest) -> tuple[str, int, Iterator[np.ndarray]]:
+    try:
+        requested_format = normalize_output_format(payload.output_format)
+        output_format = "mp3" if requested_format == "wav" else requested_format
+        requested_device = resolve_requested_device(payload.device, payload.use_gpu)
+        normalize_device(requested_device)
+        config = build_generation_config(
+            num_step=payload.num_step,
+            guidance_scale=payload.guidance_scale,
+            denoise=payload.denoise,
+            preprocess_prompt=payload.preprocess_prompt,
+            postprocess_output=payload.postprocess_output,
+            t_shift=payload.t_shift,
+            layer_penalty_factor=payload.layer_penalty_factor,
+            position_temperature=payload.position_temperature,
+            class_temperature=payload.class_temperature,
+            audio_chunk_duration=payload.audio_chunk_duration,
+            audio_chunk_threshold=payload.audio_chunk_threshold,
+        )
+        sample_rate, chunks = synthesize_chunks(
+            text=payload.text,
+            language=payload.language,
+            ref_audio=payload.ref_audio,
+            ref_text=payload.ref_text,
+            instruct=payload.instruct,
+            duration=payload.duration,
+            speed=payload.speed,
+            device=requested_device,
+            generation_config=config,
+            pitch_semitones=payload.pitch_semitones,
+            tempo=payload.tempo,
+            volume=payload.volume,
+            normalize=payload.normalize,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"{type(exc).__name__}: {exc}") from exc
+    return output_format, sample_rate, chunks
+
+
 def stream_audio_response(payload: TTSRequest, route_name: str) -> StreamingResponse:
     output_format, sample_rate, waveform = synthesize_payload(payload)
     try:
@@ -1443,6 +1822,26 @@ def stream_audio_response(payload: TTSRequest, route_name: str) -> StreamingResp
     if payload.voice:
         headers["X-OmniVoiceTTS-Requested-Voice"] = payload.voice
     return StreamingResponse(io.BytesIO(audio_bytes), media_type=media_type, headers=headers)
+
+
+def progressive_audio_response(payload: TTSRequest, route_name: str) -> StreamingResponse:
+    output_format, sample_rate, chunks = synthesize_payload_chunks(payload)
+    extension = OUTPUT_FORMATS[output_format]["extension"]
+    media_type = OUTPUT_FORMATS[output_format]["media_type"]
+
+    def body() -> Iterator[bytes]:
+        yield from encode_audio_stream(chunks, output_format, sample_rate)
+
+    headers = {
+        "Content-Disposition": f"inline; filename=omnivoicetts-stream.{extension}",
+        "X-OmniVoiceTTS-Sample-Rate": str(sample_rate),
+        "X-OmniVoiceTTS-Route": route_name,
+        "X-OmniVoiceTTS-Format": output_format,
+        "X-OmniVoiceTTS-Streaming": "progressive-chunks",
+    }
+    if payload.voice:
+        headers["X-OmniVoiceTTS-Requested-Voice"] = payload.voice
+    return StreamingResponse(body(), media_type=media_type, headers=headers)
 
 
 @api.get("/tts/ping")
@@ -1539,17 +1938,21 @@ def stream_formats() -> dict:
         "default": "mp3",
         "formats": {
             "mp3": {"label": "MP3", "extension": "mp3", "media_type": "audio/mpeg"},
-            "wav": {"label": "WAV", "extension": "wav", "media_type": "audio/wav"},
+            "flac": {"label": "FLAC", "extension": "flac", "media_type": "audio/flac"},
+            "ogg": {"label": "OGG Vorbis", "extension": "ogg", "media_type": "audio/ogg"},
         },
-        "compatibility_note": "OmniVoiceTTS currently returns full generated audio for stream compatibility routes.",
+        "compatibility_note": "Progressive streaming emits encoded audio after each generated text chunk. WAV requests are streamed as MP3 because independent WAV files cannot be concatenated into one valid live stream.",
     }
 
 
 @api.post("/tts/stream")
 def stream_tts(payload: TTSRequest = Body(...)) -> StreamingResponse:
-    if payload.output_format == "wav":
-        payload.output_format = "mp3"
-    return stream_audio_response(payload, "/tts/stream")
+    return progressive_audio_response(payload, "/tts/stream")
+
+
+@api.post("/tts/stream-chunks")
+def stream_chunks_tts(payload: TTSRequest = Body(...)) -> StreamingResponse:
+    return progressive_audio_response(payload, "/tts/stream-chunks")
 
 
 @api.post("/tts/purge")

@@ -121,8 +121,11 @@ Useful endpoints:
 - `POST /tts/generate`
 - `POST /tts/convert`
 - `POST /tts/stream`
+- `POST /tts/stream-chunks`
 - `POST /tts/metrics`
 - `POST /tts/purge`
+
+`/tts/generate` and `/tts/convert` return complete generated audio. `/tts/stream` and `/tts/stream-chunks` progressively return encoded audio after each generated long-text chunk; WAV stream requests are returned as MP3 for live playback compatibility.
 
 Interactive API documentation is available at **[http://localhost:7861/tts/docs](http://localhost:7861/tts/docs)**.
 
@@ -275,7 +278,7 @@ If you encounter bugs, have feature requests, or need help using Hangry Labs Omn
 - Added a unified Gradio browser UI and FastAPI HTTP API on port `7861`.
 - Added auto voice, structured voice design, and reference-audio voice cloning workflows.
 - Added discovery/status endpoints for ping, status, defaults, formats, languages, speakers, voices, voice-design options, metrics, and OpenAPI docs.
-- Added synthesis endpoints for generate, convert, stream, and purge.
+- Added synthesis endpoints for generate, convert, progressive chunk streaming, and purge.
 - Added WAV, MP3, FLAC, and OGG output support, plus `output_format`, `format`, and Kokoro/OpenAI-style `response_format` compatibility.
 - Added Kokoro-shaped compatibility fields/routes where they can be translated cleanly, including `voice`, `use_gpu`, `/tts/voices`, `/tts/speakers`, `/tts/stream-formats`, `/tts/convert`, and `/tts/stream`.
 - Added advanced generation controls for guidance, denoise/preprocess/postprocess, chunking, temperature, layer penalty, pitch, tempo, volume, and loudness normalization.
