@@ -16,40 +16,55 @@ def parse_path_roots(value: str | None, defaults: Iterable[str | Path]) -> list[
 
 
 def is_path_within_root(path: Path, root: Path) -> bool:
+    path_text = os.path.realpath(os.path.expanduser(os.fspath(path)))
+    root_text = os.path.realpath(os.path.expanduser(os.fspath(root)))
     try:
-        resolved_path = path.resolve(strict=True)
-        resolved_root = root.resolve(strict=False)
-    except OSError:
+        return os.path.commonpath([path_text, root_text]) == root_text
+    except ValueError:
         return False
-    return resolved_path == resolved_root or resolved_root in resolved_path.parents
 
 
 def safe_existing_file_path(
-    path_value: str | Path,
+    path_value: str | os.PathLike,
     allowed_roots: Iterable[str | Path],
     *,
     label: str = "File path",
     allowed_extensions: set[str] | None = None,
 ) -> Path:
-    path = Path(path_value).expanduser()
+    raw_path = os.fspath(path_value)
+    if not raw_path or "\x00" in raw_path:
+        raise ValueError(f"{label} is not valid.")
+
+    roots = list(allowed_roots)
+    if not roots:
+        raise ValueError(f"{label} access is disabled because no safe roots are configured.")
+
+    expanded_path = os.path.expanduser(raw_path)
+    resolved_path_text = os.path.realpath(expanded_path)
+    resolved_root_texts = [
+        os.path.realpath(os.path.expanduser(os.fspath(root)))
+        for root in roots
+    ]
     try:
-        resolved_path = path.resolve(strict=True)
-    except OSError as exc:
-        raise ValueError(f"{label} does not exist or is not accessible.") from exc
+        is_allowed = any(
+            os.path.commonpath([resolved_path_text, resolved_root_text]) == resolved_root_text
+            for resolved_root_text in resolved_root_texts
+        )
+    except ValueError:
+        is_allowed = False
+    if not is_allowed:
+        root_list = ", ".join(str(Path(root)) for root in roots)
+        raise ValueError(f"{label} must be inside one of these safe roots: {root_list}.")
+
+    resolved_path = Path(resolved_path_text)
+    if not resolved_path.exists():
+        raise ValueError(f"{label} does not exist or is not accessible.")
     if not resolved_path.is_file():
         raise ValueError(f"{label} must point to an existing file.")
     if allowed_extensions is not None and resolved_path.suffix.lower() not in allowed_extensions:
         supported = ", ".join(sorted(allowed_extensions))
         raise ValueError(f"{label} must use one of these extensions: {supported}.")
-
-    roots = list(allowed_roots)
-    if not roots:
-        raise ValueError(f"{label} access is disabled because no safe roots are configured.")
-    for root in roots:
-        if is_path_within_root(resolved_path, Path(root).expanduser()):
-            return resolved_path
-    root_list = ", ".join(str(Path(root)) for root in roots)
-    raise ValueError(f"{label} must be inside one of these safe roots: {root_list}.")
+    return resolved_path
 
 
 def secure_filename_stem(value: str | os.PathLike, *, default: str = "output") -> str:
