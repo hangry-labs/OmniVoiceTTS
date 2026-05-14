@@ -1496,6 +1496,9 @@ def _resolve_language(language: Optional[str]) -> Union[str, None]:
     return None
 
 
+MAX_INSTRUCT_LENGTH = 1000
+
+
 def _resolve_instruct(
     instruct: Optional[str], use_zh: bool = False
 ) -> Union[str, None]:
@@ -1546,10 +1549,14 @@ def _resolve_instruct(
     instruct_str = instruct.strip()
     if not instruct_str:
         return None
+    if len(instruct_str) > MAX_INSTRUCT_LENGTH:
+        raise ValueError(
+            f"Instruct string is too long. Maximum length is {MAX_INSTRUCT_LENGTH} characters."
+        )
 
     # Split on both half-width and full-width commas
-    raw_items = re.split(r"\s*[,，]\s*", instruct_str)
-    raw_items = [x for x in raw_items if x]
+    raw_items = [item.strip() for item in instruct_str.replace("，", ",").split(",")]
+    raw_items = [item for item in raw_items if item]
 
     # Validate each item
     unknown = []
