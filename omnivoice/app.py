@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import html
+import json
 import os
 import re
 import subprocess
@@ -33,6 +34,8 @@ BUILD_ID = os.getenv("BUILD_ID", "stable")
 SAMPLE_RATE = 24000
 ASSET_DIR = Path(__file__).resolve().parent.parent / "hangrylabs"
 BRAND_ASSET_BASE = "/assets/hangrylabs"
+TRANSLATIONS_FILE = Path(__file__).resolve().parent / "ui_translations.json"
+UI_LOCALE = os.getenv("OMNIVOICE_UI_LOCALE", "en").strip().lower() or "en"
 
 OUTPUT_FORMATS = {
     "wav": {
@@ -152,6 +155,44 @@ def read_version_file() -> str:
     if version_file.exists():
         return version_file.read_text(encoding="utf-8").strip()
     return APP_VERSION
+
+
+def load_ui_translations() -> dict[str, dict[str, str]]:
+    if not TRANSLATIONS_FILE.exists():
+        return {}
+    try:
+        return json.loads(TRANSLATIONS_FILE.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+UI_TRANSLATIONS = load_ui_translations()
+
+
+def normalize_ui_locale(locale: str | None = None) -> str:
+    value = (locale or UI_LOCALE).strip().lower()
+    if value in UI_TRANSLATIONS:
+        return value
+    return "en"
+
+
+def ui_text_for(locale: str | None, key: str) -> str:
+    selected_locale = normalize_ui_locale(locale)
+    english = UI_TRANSLATIONS.get("en", {})
+    selected = UI_TRANSLATIONS.get(selected_locale, {})
+    return selected.get(key) or english.get(key) or key
+
+
+def ui_text(key: str) -> str:
+    return ui_text_for(UI_LOCALE, key)
+
+
+def ui_locale_choices() -> list[tuple[str, str]]:
+    choices = []
+    for locale in sorted(UI_TRANSLATIONS):
+        label = ui_text_for(locale, "locale.name")
+        choices.append((label, locale))
+    return choices or [("English", "en")]
 
 
 def get_build_label() -> str:
@@ -335,15 +376,72 @@ def validate_voice_design_text(text: str | None, instruct: str | None) -> None:
 
 def nonverbal_tags_markdown() -> str:
     tags = ", ".join(f"`{tag}`" for tag in SUPPORTED_NONVERBAL_TAGS)
+    return nonverbal_tags_markdown_for(UI_LOCALE)
+
+
+def nonverbal_tags_markdown_for(locale: str | None) -> str:
+    tags = ", ".join(f"`{tag}`" for tag in SUPPORTED_NONVERBAL_TAGS)
     return (
-        "### Expressive bracket tags\n\n"
-        "OmniVoice can read these bracket tags inside text when using **No Voice Prompt** or **Voice Clone**:\n\n"
+        f"### {ui_text_for(locale, 'nonverbal.title')}\n\n"
+        f"{ui_text_for(locale, 'nonverbal.intro')}\n\n"
         f"{tags}\n\n"
-        "Use them inside a sentence or between clauses, not as the first or last thing in the prompt. "
-        "Example: `That joke almost worked. [laughter] Maybe the timing was the problem.`\n\n"
-        "Do **not** use bracket tags with **Voice Design**. Voice Design is for speaker attributes such as "
-        "gender, age, pitch, accent, dialect, or whisper. Combining voice design with bracket tags can produce "
-        "unstable non-speech audio, so the UI and API block that combination."
+        f"{ui_text_for(locale, 'nonverbal.placement')}\n\n"
+        f"{ui_text_for(locale, 'nonverbal.warning')}"
+    )
+
+
+def mode_choices_for(locale: str | None) -> list[tuple[str, str]]:
+    return [
+        (ui_text_for(locale, "mode.no_voice_prompt"), "No Voice Prompt"),
+        (ui_text_for(locale, "mode.voice_design"), "Voice Design"),
+        (ui_text_for(locale, "mode.voice_clone"), "Voice Clone"),
+    ]
+
+
+def ui_locale_updates(locale: str, current_mode: str):
+    selected_locale = normalize_ui_locale(locale)
+    stable_mode = current_mode if current_mode in {"No Voice Prompt", "Voice Design", "Voice Clone"} else "No Voice Prompt"
+    return (
+        gr.update(label=ui_text_for(selected_locale, "mode.label"), choices=mode_choices_for(selected_locale), value=stable_mode),
+        gr.update(label=ui_text_for(selected_locale, "ui_language.label")),
+        gr.update(label=ui_text_for(selected_locale, "input_text.label")),
+        nonverbal_tags_markdown_for(selected_locale),
+        gr.update(value=ui_text_for(selected_locale, "generate.label")),
+        ui_text_for(selected_locale, "voice_design.note"),
+        gr.update(label=ui_text_for(selected_locale, "language.label")),
+        gr.update(label=ui_text_for(selected_locale, "design.gender")),
+        gr.update(label=ui_text_for(selected_locale, "design.age")),
+        gr.update(label=ui_text_for(selected_locale, "design.pitch")),
+        gr.update(label=ui_text_for(selected_locale, "design.style")),
+        gr.update(label=ui_text_for(selected_locale, "design.english_accent")),
+        gr.update(label=ui_text_for(selected_locale, "design.chinese_dialect")),
+        gr.update(label=ui_text_for(selected_locale, "reference_audio.label")),
+        gr.update(
+            label=ui_text_for(selected_locale, "reference_text.label"),
+            placeholder=ui_text_for(selected_locale, "reference_text.placeholder"),
+            info=ui_text_for(selected_locale, "reference_text.info"),
+        ),
+        gr.update(label=ui_text_for(selected_locale, "output_audio.label")),
+        gr.update(label=ui_text_for(selected_locale, "status.label")),
+        gr.update(label=ui_text_for(selected_locale, "hardware.label")),
+        gr.update(label=ui_text_for(selected_locale, "output_format.label")),
+        gr.update(label=ui_text_for(selected_locale, "speed.label")),
+        gr.update(label=ui_text_for(selected_locale, "duration.label")),
+        gr.update(label=ui_text_for(selected_locale, "num_step.label")),
+        gr.update(label=ui_text_for(selected_locale, "guidance_scale.label")),
+        gr.update(label=ui_text_for(selected_locale, "denoise.label")),
+        gr.update(label=ui_text_for(selected_locale, "preprocess_prompt.label")),
+        gr.update(label=ui_text_for(selected_locale, "postprocess_output.label")),
+        gr.update(label=ui_text_for(selected_locale, "t_shift.label")),
+        gr.update(label=ui_text_for(selected_locale, "layer_penalty.label")),
+        gr.update(label=ui_text_for(selected_locale, "position_temperature.label")),
+        gr.update(label=ui_text_for(selected_locale, "class_temperature.label")),
+        gr.update(label=ui_text_for(selected_locale, "audio_chunk_duration.label")),
+        gr.update(label=ui_text_for(selected_locale, "audio_chunk_threshold.label")),
+        gr.update(label=ui_text_for(selected_locale, "pitch.label")),
+        gr.update(label=ui_text_for(selected_locale, "tempo.label")),
+        gr.update(label=ui_text_for(selected_locale, "volume.label")),
+        gr.update(label=ui_text_for(selected_locale, "normalize_loudness.label")),
     )
 
 
@@ -968,100 +1066,149 @@ with gr.Blocks(title="OmniVoiceTTS") as ui:
     gr.HTML(BRAND_HEADER_HTML)
     with gr.Row(elem_classes="app-grid"):
         with gr.Column(scale=1, elem_classes="control-panel"):
-            mode = gr.Radio(["No Voice Prompt", "Voice Design", "Voice Clone"], value="No Voice Prompt", label="Mode")
-            text = gr.Textbox(
-                label="Input Text",
-                lines=5,
-                value="Hello from OmniVoice. This Docker image includes a browser UI and an HTTP API.",
-            )
-            with gr.Accordion("Hints and safety notes", open=False):
-                gr.Markdown(nonverbal_tags_markdown(), elem_classes="notice-card")
-            generate_btn = gr.Button("Generate", variant="primary", elem_id="generate-btn")
-            with gr.Accordion("Voice Design Builder (Voice Design mode only)", open=False):
-                gr.Markdown(
-                    "Voice Design controls speaker attributes only. For expressive bracket tags, switch to "
-                    "`No Voice Prompt` or `Voice Clone`."
+            with gr.Row():
+                mode = gr.Radio(
+                    mode_choices_for(UI_LOCALE),
+                    value="No Voice Prompt",
+                    label=ui_text("mode.label"),
+                    scale=2,
                 )
-                language = gr.Dropdown(LANGUAGE_CHOICES, value="Auto", label="Language")
+                ui_locale = gr.Dropdown(
+                    ui_locale_choices(),
+                    value=normalize_ui_locale(UI_LOCALE),
+                    label=ui_text("ui_language.label"),
+                    scale=1,
+                )
+            text = gr.Textbox(
+                label=ui_text("input_text.label"),
+                lines=5,
+                value=ui_text("input_text.default"),
+            )
+            with gr.Accordion(ui_text("hints.title"), open=False):
+                hints_markdown = gr.Markdown(nonverbal_tags_markdown(), elem_classes="notice-card")
+            generate_btn = gr.Button(ui_text("generate.label"), variant="primary", elem_id="generate-btn")
+            with gr.Accordion(ui_text("voice_design.title"), open=False):
+                voice_design_note = gr.Markdown(ui_text("voice_design.note"))
+                language = gr.Dropdown(LANGUAGE_CHOICES, value="Auto", label=ui_text("language.label"))
                 with gr.Row():
                     design_gender = gr.Dropdown(
                         choices=["No preference"] + VOICE_DESIGN_CATEGORIES["gender"]["options"],
                         value="No preference",
-                        label="Gender",
+                        label=ui_text("design.gender"),
                     )
                     design_age = gr.Dropdown(
                         choices=["No preference"] + VOICE_DESIGN_CATEGORIES["age"]["options"],
                         value="No preference",
-                        label="Age",
+                        label=ui_text("design.age"),
                     )
                 with gr.Row():
                     design_pitch = gr.Dropdown(
                         choices=["No preference"] + VOICE_DESIGN_CATEGORIES["pitch"]["options"],
                         value="No preference",
-                        label="Pitch",
+                        label=ui_text("design.pitch"),
                     )
                     design_style = gr.Dropdown(
                         choices=["No preference"] + VOICE_DESIGN_CATEGORIES["style"]["options"],
                         value="No preference",
-                        label="Style",
+                        label=ui_text("design.style"),
                     )
                 with gr.Row():
                     design_english_accent = gr.Dropdown(
                         choices=["No preference"] + VOICE_DESIGN_CATEGORIES["english_accent"]["options"],
                         value="No preference",
-                        label="English Accent",
+                        label=ui_text("design.english_accent"),
                     )
                     design_chinese_dialect = gr.Dropdown(
                         choices=["No preference"] + VOICE_DESIGN_CATEGORIES["chinese_dialect"]["options"],
                         value="No preference",
-                        label="Chinese Dialect",
+                        label=ui_text("design.chinese_dialect"),
                     )
-            ref_audio = gr.Audio(label="Reference Audio", sources=["upload"], type="filepath")
+            ref_audio = gr.Audio(label=ui_text("reference_audio.label"), sources=["upload"], type="filepath")
             ref_text = gr.Textbox(
-                label="Reference Text",
+                label=ui_text("reference_text.label"),
                 lines=2,
-                placeholder="Optional transcript of the reference audio. Leave empty to let ASR transcribe it when available.",
-                info=(
-                    "Used only for Voice Clone. It tells the model what is spoken in the reference audio, "
-                    "which helps separate the sampled voice from the new text you want to generate."
-                ),
+                placeholder=ui_text("reference_text.placeholder"),
+                info=ui_text("reference_text.info"),
             )
         with gr.Column(scale=1, elem_classes="output-panel"):
-            output_audio = gr.Audio(label="Output Audio", type="filepath", autoplay=True)
-            status_box = gr.Textbox(label="Status", lines=2)
+            output_audio = gr.Audio(label=ui_text("output_audio.label"), type="filepath", autoplay=True)
+            status_box = gr.Textbox(label=ui_text("status.label"), lines=2)
             with gr.Row():
-                hardware = gr.Dropdown(hardware_choices, value=default_hardware, label="Hardware")
+                hardware = gr.Dropdown(hardware_choices, value=default_hardware, label=ui_text("hardware.label"))
                 output_format = gr.Dropdown(
                     choices=[(config["label"], key) for key, config in OUTPUT_FORMATS.items()],
                     value="mp3",
-                    label="Output Format",
+                    label=ui_text("output_format.label"),
                 )
-            with gr.Accordion("Generation Settings", open=False):
-                speed = gr.Slider(0.5, 1.5, value=1.0, step=0.05, label="Speed")
-                duration = gr.Number(value=None, label="Fixed Duration (seconds)")
-                num_step = gr.Slider(4, 64, value=32, step=1, label="Inference Steps")
-                guidance_scale = gr.Slider(0.0, 4.0, value=2.0, step=0.1, label="Guidance Scale")
-                denoise = gr.Checkbox(value=True, label="Denoise")
-                preprocess_prompt = gr.Checkbox(value=True, label="Preprocess Prompt")
-                postprocess_output = gr.Checkbox(value=True, label="Postprocess Output")
-                with gr.Accordion("Advanced Model Controls", open=False):
-                    t_shift = gr.Slider(0.01, 1.0, value=0.1, step=0.01, label="T Shift")
-                    layer_penalty_factor = gr.Slider(0.0, 10.0, value=5.0, step=0.1, label="Layer Penalty")
+            with gr.Accordion(ui_text("generation_settings.title"), open=False):
+                speed = gr.Slider(0.5, 1.5, value=1.0, step=0.05, label=ui_text("speed.label"))
+                duration = gr.Number(value=None, label=ui_text("duration.label"))
+                num_step = gr.Slider(4, 64, value=32, step=1, label=ui_text("num_step.label"))
+                guidance_scale = gr.Slider(0.0, 4.0, value=2.0, step=0.1, label=ui_text("guidance_scale.label"))
+                denoise = gr.Checkbox(value=True, label=ui_text("denoise.label"))
+                preprocess_prompt = gr.Checkbox(value=True, label=ui_text("preprocess_prompt.label"))
+                postprocess_output = gr.Checkbox(value=True, label=ui_text("postprocess_output.label"))
+                with gr.Accordion(ui_text("advanced_controls.title"), open=False):
+                    t_shift = gr.Slider(0.01, 1.0, value=0.1, step=0.01, label=ui_text("t_shift.label"))
+                    layer_penalty_factor = gr.Slider(0.0, 10.0, value=5.0, step=0.1, label=ui_text("layer_penalty.label"))
                     position_temperature = gr.Slider(
                         0.0,
                         10.0,
                         value=5.0,
                         step=0.1,
-                        label="Position Temperature",
+                        label=ui_text("position_temperature.label"),
                     )
-                    class_temperature = gr.Slider(0.0, 2.0, value=0.0, step=0.05, label="Class Temperature")
-                    audio_chunk_duration = gr.Number(value=15.0, label="Long Text Chunk Duration")
-                    audio_chunk_threshold = gr.Number(value=30.0, label="Long Text Chunk Threshold")
-            with gr.Accordion("Audio Controls", open=False):
-                pitch_semitones = gr.Slider(-12, 12, value=0, step=0.5, label="Pitch")
-                tempo = gr.Slider(0.5, 2, value=1, step=0.05, label="Tempo")
-                volume = gr.Slider(0, 2, value=1, step=0.05, label="Volume")
-                loudness_normalize = gr.Checkbox(value=False, label="Normalize Loudness")
+                    class_temperature = gr.Slider(0.0, 2.0, value=0.0, step=0.05, label=ui_text("class_temperature.label"))
+                    audio_chunk_duration = gr.Number(value=15.0, label=ui_text("audio_chunk_duration.label"))
+                    audio_chunk_threshold = gr.Number(value=30.0, label=ui_text("audio_chunk_threshold.label"))
+            with gr.Accordion(ui_text("audio_controls.title"), open=False):
+                pitch_semitones = gr.Slider(-12, 12, value=0, step=0.5, label=ui_text("pitch.label"))
+                tempo = gr.Slider(0.5, 2, value=1, step=0.05, label=ui_text("tempo.label"))
+                volume = gr.Slider(0, 2, value=1, step=0.05, label=ui_text("volume.label"))
+                loudness_normalize = gr.Checkbox(value=False, label=ui_text("normalize_loudness.label"))
+
+    ui_locale.change(
+        fn=ui_locale_updates,
+        inputs=[ui_locale, mode],
+        outputs=[
+            mode,
+            ui_locale,
+            text,
+            hints_markdown,
+            generate_btn,
+            voice_design_note,
+            language,
+            design_gender,
+            design_age,
+            design_pitch,
+            design_style,
+            design_english_accent,
+            design_chinese_dialect,
+            ref_audio,
+            ref_text,
+            output_audio,
+            status_box,
+            hardware,
+            output_format,
+            speed,
+            duration,
+            num_step,
+            guidance_scale,
+            denoise,
+            preprocess_prompt,
+            postprocess_output,
+            t_shift,
+            layer_penalty_factor,
+            position_temperature,
+            class_temperature,
+            audio_chunk_duration,
+            audio_chunk_threshold,
+            pitch_semitones,
+            tempo,
+            volume,
+            loudness_normalize,
+        ],
+    )
 
     generate_btn.click(
         fn=synthesize_file,
