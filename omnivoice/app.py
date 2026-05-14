@@ -783,6 +783,41 @@ def render_openai_voice_profiles() -> str:
     return "\n".join(lines)
 
 
+def render_openai_voice_profile_table() -> str:
+    profiles = load_openai_voice_profiles()
+    lines = [
+        "### Saved Voices",
+        "",
+        "| Delete | Voice | Language | Seed | Transcript |",
+        "|---|---|---|---|---|",
+    ]
+    if not profiles:
+        lines.append("|  | No saved voices yet |  |  |  |")
+        return "\n".join(lines)
+    for name, profile in sorted(profiles.items()):
+        language = profile.get("language") or "request/default"
+        seed = "random" if profile.get("randomize_seed") else profile.get("seed") or "12345"
+        transcript = "yes" if profile.get("ref_text") else "no"
+        lines.append(
+            "| x | "
+            f"`{html.escape(name)}` | "
+            f"`{html.escape(str(language))}` | "
+            f"`{html.escape(str(seed))}` | "
+            f"{transcript} |"
+        )
+    return "\n".join(lines)
+
+
+def openai_voice_profile_choices() -> list[str]:
+    return sorted(load_openai_voice_profiles())
+
+
+def openai_voice_profile_dropdown_update(selected: str | None = None):
+    choices = openai_voice_profile_choices()
+    value = selected if selected in choices else None
+    return gr.update(choices=choices, value=value)
+
+
 def save_openai_voice_profile_from_ui(
     name: str,
     audio_path: str | None,
@@ -790,12 +825,34 @@ def save_openai_voice_profile_from_ui(
     language: str | None,
     seed: int | float | str | None,
     randomize_seed: bool,
-) -> tuple[str, str]:
+) -> tuple[str, object, str]:
     try:
         profile_name = save_openai_voice_profile(name, audio_path, ref_text, language, seed, randomize_seed)
     except ValueError as exc:
-        return f"OpenAI voice profile error: {exc}", render_openai_voice_profiles()
-    return f"Saved OpenAI voice profile `{profile_name}`.", render_openai_voice_profiles()
+        return f"OpenAI voice profile error: {exc}", openai_voice_profile_dropdown_update(), render_openai_voice_profile_table()
+    return f"Saved OpenAI voice profile `{profile_name}`.", openai_voice_profile_dropdown_update(profile_name), render_openai_voice_profile_table()
+
+
+def delete_openai_voice_profile_from_ui(name: str | None) -> tuple[str, object, str]:
+    try:
+        profile_name = normalize_profile_name(name)
+    except ValueError as exc:
+        return f"OpenAI voice profile delete error: {exc}", openai_voice_profile_dropdown_update(), render_openai_voice_profile_table()
+    profiles = load_openai_voice_profiles()
+    profile = profiles.get(profile_name)
+    if not profile:
+        return f"OpenAI voice profile delete error: `{profile_name}` does not exist.", openai_voice_profile_dropdown_update(), render_openai_voice_profile_table()
+    ref_audio = Path(profile.get("ref_audio") or "")
+    try:
+        root = OPENAI_VOICE_PROFILE_DIR.resolve()
+        target = ref_audio.resolve()
+        if target.is_file() and (target.parent == root or root in target.parents):
+            target.unlink()
+    except OSError:
+        pass
+    profiles.pop(profile_name, None)
+    save_openai_voice_profiles(profiles)
+    return f"Deleted OpenAI voice profile `{profile_name}`.", openai_voice_profile_dropdown_update(), render_openai_voice_profile_table()
 
 
 def append_openai_call_log(payload: OpenAISpeechRequest, tts_payload: TTSRequest, profile_source: str) -> None:
@@ -846,6 +903,26 @@ def render_openai_call_log() -> str:
         escaped = [html.escape(value) for value in values]
         lines.append("| " + " | ".join(escaped) + " |")
     return "\n".join(lines)
+
+
+def show_generation_side_controls():
+    return gr.update(visible=True)
+
+
+def hide_generation_side_controls():
+    return gr.update(visible=False)
+
+
+def show_openai_tab_state():
+    return gr.update(visible=False), render_openai_call_log()
+
+
+def show_add_voice_tab_state():
+    return gr.update(visible=False)
+
+
+def show_manage_tab_state():
+    return gr.update(visible=False), openai_voice_profile_dropdown_update(), render_openai_voice_profile_table()
 
 
 def to_int16_audio(audio: np.ndarray) -> np.ndarray:
@@ -1892,14 +1969,21 @@ with gr.Blocks(title="OmniVoiceTTS") as ui:
             )
         with gr.Column(scale=1, elem_classes="output-panel"):
             with gr.Tabs():
-                with gr.Tab("Generate"):
+                with gr.Tab("Generate") as generate_tab:
                     output_audio = gr.Audio(label=ui_text("output_audio.label"), type="filepath", autoplay=True, streaming=False)
-                with gr.Tab("Stream"):
+                with gr.Tab("Stream") as stream_tab:
                     output_stream = gr.Audio(label="Output Audio Stream", interactive=False, streaming=True, autoplay=True)
                     with gr.Row():
                         stream_btn = gr.Button("Stream", variant="primary")
                         stop_generation_btn = gr.Button(ui_text("stop_generation.label"), variant="stop")
-                with gr.Tab("OpenAI"):
+                with gr.Tab("OpenAI") as openai_tab:
+                    gr.Markdown(
+                        "Use this server as an OpenAI-compatible local TTS endpoint. "
+                        "Create reusable voices in the Add Voice tab, then set OpenWebUI TTS Voice to the saved name."
+                    )
+                    openai_log_refresh = gr.Button("Refresh OpenAI Call Log")
+                    openai_call_log = gr.Markdown(render_openai_call_log())
+                with gr.Tab("Add Voice") as add_voice_tab:
                     gr.Markdown(
                         "Create local clone profiles for OpenAI-compatible tools. "
                         "In OpenWebUI, set the TTS voice to the saved profile name. "
@@ -1939,51 +2023,59 @@ with gr.Blocks(title="OmniVoiceTTS") as ui:
                             value=False,
                             label="Randomize seed by default",
                             info="Leave off for repeatable profile behavior.",
-                        )
+                    )
                     openai_profile_save = gr.Button("Save OpenAI Voice Profile", variant="primary")
                     openai_profile_status = gr.Textbox(label="OpenAI profile status", lines=2)
-                    openai_profile_overview = gr.Markdown(render_openai_voice_profiles())
-                    openai_log_refresh = gr.Button("Refresh OpenAI Call Log")
-                    openai_call_log = gr.Markdown(render_openai_call_log())
-            status_box = gr.Textbox(label=ui_text("status.label"), lines=2)
-            with gr.Row():
-                hardware = gr.Dropdown(current_hardware_choices(), value=default_hardware, label=ui_text("hardware.label"))
-                output_format = gr.Dropdown(
-                    choices=[(config["label"], key) for key, config in OUTPUT_FORMATS.items()],
-                    value="mp3",
-                    label=ui_text("output_format.label"),
-                )
-            gpu_monitor = gr.HTML(gpu_monitor_html())
-            with gr.Accordion(ui_text("generation_settings.title"), open=False):
-                speed = gr.Slider(0.5, 1.5, value=1.0, step=0.05, label=ui_text("speed.label"), info=ui_text("speed.info"))
-                duration = gr.Number(value=None, label=ui_text("duration.label"), info=ui_text("duration.info"))
-                num_step = gr.Slider(4, 64, value=32, step=1, label=ui_text("num_step.label"), info=ui_text("num_step.info"))
-                guidance_scale = gr.Slider(0.0, 4.0, value=2.0, step=0.1, label=ui_text("guidance_scale.label"), info=ui_text("guidance_scale.info"))
-                denoise = gr.Checkbox(value=True, label=ui_text("denoise.label"), info=ui_text("denoise.info"))
-                preprocess_prompt = gr.Checkbox(value=True, label=ui_text("preprocess_prompt.label"), info=ui_text("preprocess_prompt.info"))
-                postprocess_output = gr.Checkbox(value=True, label=ui_text("postprocess_output.label"), info=ui_text("postprocess_output.info"))
-                with gr.Accordion(ui_text("advanced_controls.title"), open=False):
-                    t_shift = gr.Slider(0.01, 1.0, value=0.1, step=0.01, label=ui_text("t_shift.label"), info=ui_text("t_shift.info"))
-                    layer_penalty_factor = gr.Slider(0.0, 10.0, value=5.0, step=0.1, label=ui_text("layer_penalty.label"), info=ui_text("layer_penalty.info"))
-                    position_temperature = gr.Slider(
-                        0.0,
-                        10.0,
-                        value=5.0,
-                        step=0.1,
-                        label=ui_text("position_temperature.label"),
-                        info=ui_text("position_temperature.info"),
-                    )
-                    class_temperature = gr.Slider(0.0, 2.0, value=0.0, step=0.05, label=ui_text("class_temperature.label"), info=ui_text("class_temperature.info"))
+                with gr.Tab("Manage") as manage_tab:
+                    openai_profile_table = gr.Markdown(render_openai_voice_profile_table())
                     with gr.Row():
-                        seed = gr.Number(value=42, minimum=0, maximum=MAX_RANDOM_SEED, precision=0, label=ui_text("seed.label"), info=ui_text("seed.info"))
-                        randomize_seed = gr.Checkbox(value=True, label=ui_text("randomize_seed.label"), info=ui_text("randomize_seed.info"))
-                    audio_chunk_duration = gr.Number(value=15.0, label=ui_text("audio_chunk_duration.label"), info=ui_text("audio_chunk_duration.info"))
-                    audio_chunk_threshold = gr.Number(value=30.0, label=ui_text("audio_chunk_threshold.label"), info=ui_text("audio_chunk_threshold.info"))
-            with gr.Accordion(ui_text("audio_controls.title"), open=False):
-                pitch_semitones = gr.Slider(-12, 12, value=0, step=0.5, label=ui_text("pitch.label"), info=ui_text("pitch.info"))
-                tempo = gr.Slider(0.5, 2, value=1, step=0.05, label=ui_text("tempo.label"), info=ui_text("tempo.info"))
-                volume = gr.Slider(0, 2, value=1, step=0.05, label=ui_text("volume.label"), info=ui_text("volume.info"))
-                loudness_normalize = gr.Checkbox(value=False, label=ui_text("normalize_loudness.label"), info=ui_text("normalize_loudness.info"))
+                        openai_profile_delete_name = gr.Dropdown(
+                            choices=openai_voice_profile_choices(),
+                            value=None,
+                            label="Saved voice profile",
+                        )
+                        openai_profile_delete = gr.Button("Delete Voice Profile", variant="stop")
+                    openai_profile_delete_status = gr.Textbox(label="Voice profile status", lines=2)
+            with gr.Group(visible=True) as generation_side_controls:
+                status_box = gr.Textbox(label=ui_text("status.label"), lines=2)
+                with gr.Row():
+                    hardware = gr.Dropdown(current_hardware_choices(), value=default_hardware, label=ui_text("hardware.label"))
+                    output_format = gr.Dropdown(
+                        choices=[(config["label"], key) for key, config in OUTPUT_FORMATS.items()],
+                        value="mp3",
+                        label=ui_text("output_format.label"),
+                    )
+                gpu_monitor = gr.HTML(gpu_monitor_html())
+                with gr.Accordion(ui_text("generation_settings.title"), open=False):
+                    speed = gr.Slider(0.5, 1.5, value=1.0, step=0.05, label=ui_text("speed.label"), info=ui_text("speed.info"))
+                    duration = gr.Number(value=None, label=ui_text("duration.label"), info=ui_text("duration.info"))
+                    num_step = gr.Slider(4, 64, value=32, step=1, label=ui_text("num_step.label"), info=ui_text("num_step.info"))
+                    guidance_scale = gr.Slider(0.0, 4.0, value=2.0, step=0.1, label=ui_text("guidance_scale.label"), info=ui_text("guidance_scale.info"))
+                    denoise = gr.Checkbox(value=True, label=ui_text("denoise.label"), info=ui_text("denoise.info"))
+                    preprocess_prompt = gr.Checkbox(value=True, label=ui_text("preprocess_prompt.label"), info=ui_text("preprocess_prompt.info"))
+                    postprocess_output = gr.Checkbox(value=True, label=ui_text("postprocess_output.label"), info=ui_text("postprocess_output.info"))
+                    with gr.Accordion(ui_text("advanced_controls.title"), open=False):
+                        t_shift = gr.Slider(0.01, 1.0, value=0.1, step=0.01, label=ui_text("t_shift.label"), info=ui_text("t_shift.info"))
+                        layer_penalty_factor = gr.Slider(0.0, 10.0, value=5.0, step=0.1, label=ui_text("layer_penalty.label"), info=ui_text("layer_penalty.info"))
+                        position_temperature = gr.Slider(
+                            0.0,
+                            10.0,
+                            value=5.0,
+                            step=0.1,
+                            label=ui_text("position_temperature.label"),
+                            info=ui_text("position_temperature.info"),
+                        )
+                        class_temperature = gr.Slider(0.0, 2.0, value=0.0, step=0.05, label=ui_text("class_temperature.label"), info=ui_text("class_temperature.info"))
+                        with gr.Row():
+                            seed = gr.Number(value=42, minimum=0, maximum=MAX_RANDOM_SEED, precision=0, label=ui_text("seed.label"), info=ui_text("seed.info"))
+                            randomize_seed = gr.Checkbox(value=True, label=ui_text("randomize_seed.label"), info=ui_text("randomize_seed.info"))
+                        audio_chunk_duration = gr.Number(value=15.0, label=ui_text("audio_chunk_duration.label"), info=ui_text("audio_chunk_duration.info"))
+                        audio_chunk_threshold = gr.Number(value=30.0, label=ui_text("audio_chunk_threshold.label"), info=ui_text("audio_chunk_threshold.info"))
+                with gr.Accordion(ui_text("audio_controls.title"), open=False):
+                    pitch_semitones = gr.Slider(-12, 12, value=0, step=0.5, label=ui_text("pitch.label"), info=ui_text("pitch.info"))
+                    tempo = gr.Slider(0.5, 2, value=1, step=0.05, label=ui_text("tempo.label"), info=ui_text("tempo.info"))
+                    volume = gr.Slider(0, 2, value=1, step=0.05, label=ui_text("volume.label"), info=ui_text("volume.info"))
+                    loudness_normalize = gr.Checkbox(value=False, label=ui_text("normalize_loudness.label"), info=ui_text("normalize_loudness.info"))
 
     ui_locale.change(
         fn=ui_locale_updates,
@@ -2037,6 +2129,32 @@ with gr.Blocks(title="OmniVoiceTTS") as ui:
         queue=False,
     )
 
+    generate_tab.select(
+        fn=show_generation_side_controls,
+        outputs=generation_side_controls,
+        queue=False,
+    )
+    stream_tab.select(
+        fn=show_generation_side_controls,
+        outputs=generation_side_controls,
+        queue=False,
+    )
+    openai_tab.select(
+        fn=show_openai_tab_state,
+        outputs=[generation_side_controls, openai_call_log],
+        queue=False,
+    )
+    add_voice_tab.select(
+        fn=show_add_voice_tab_state,
+        outputs=generation_side_controls,
+        queue=False,
+    )
+    manage_tab.select(
+        fn=show_manage_tab_state,
+        outputs=[generation_side_controls, openai_profile_delete_name, openai_profile_table],
+        queue=False,
+    )
+
     openai_profile_save.click(
         fn=save_openai_voice_profile_from_ui,
         inputs=[
@@ -2047,7 +2165,12 @@ with gr.Blocks(title="OmniVoiceTTS") as ui:
             openai_profile_seed,
             openai_profile_randomize_seed,
         ],
-        outputs=[openai_profile_status, openai_profile_overview],
+        outputs=[openai_profile_status, openai_profile_delete_name, openai_profile_table],
+    )
+    openai_profile_delete.click(
+        fn=delete_openai_voice_profile_from_ui,
+        inputs=openai_profile_delete_name,
+        outputs=[openai_profile_delete_status, openai_profile_delete_name, openai_profile_table],
     )
     openai_log_refresh.click(
         fn=render_openai_call_log,

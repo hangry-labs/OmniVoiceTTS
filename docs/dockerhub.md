@@ -83,7 +83,7 @@ docker run -p 7861:7861 --gpus "device=0" -e CUDA_VISIBLE_DEVICES=0 -v omnivoice
 - GPU support when Docker/NVIDIA support is available
 - Offline-friendly usage with the standard full image once it is available locally
 - OpenAI-compatible `/v1/audio/speech`, `/v1/models`, and `/v1/models/{model}` routes for tools that can target local OpenAI-style TTS servers
-- Local OpenAI voice profiles: upload a reference sample in the UI, name it, then use that name as the TTS voice in compatible clients
+- Local voice profiles: upload a reference sample in the UI Add Voice tab, manage it in the Manage tab, then use that name as the TTS voice in compatible clients
 - Kokoro-shaped compatibility fields and routes such as `voice`, `use_gpu`, `response_format`, `/tts/voices`, `/tts/speakers`, `/tts/stream-formats`, `/tts/convert`, progressive `/tts/stream`, and progressive `/tts/stream-chunks`
 
 ## API Example
@@ -130,7 +130,7 @@ OpenAI-style model aliases include `omnivoice`, `tts-1`, `tts-1-hd`, and `gpt-4o
 
 For steadier OpenAI-style playback, standard voice aliases use a local built-in clone reference by default. Advanced clients may send `language`, `seed`, `randomize_seed`, `voice_profile`, `ref_audio`, and `ref_text` as extra JSON fields when the client allows additional parameters.
 
-The browser UI has an **OpenAI** tab for creating local clone profiles from uploaded reference audio. A profile stores its default language, seed, and seed-randomization behavior. After saving a profile, use its name as the TTS voice in OpenWebUI or another compatible client.
+The browser UI has a **Voices** tab for creating local clone profiles from uploaded reference audio. A profile stores its default language, seed, and seed-randomization behavior. After saving a profile, use its name as the TTS voice in OpenWebUI or another compatible client.
 
 You can still select or override a profile through additional parameters:
 

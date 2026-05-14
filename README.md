@@ -126,7 +126,7 @@ Supported compatibility model ids are `omnivoice`, `tts-1`, `tts-1-hd`, and `gpt
 
 For OpenAI-compatible TTS, standard voice aliases use a local built-in clone reference by default so sentence-by-sentence playback stays closer to the same speaker identity. Advanced clients may also pass OmniVoice extensions such as `language`, `seed`, `randomize_seed`, `voice_profile`, `ref_audio`, and `ref_text` in the request body.
 
-The browser UI includes an **OpenAI** tab where you can upload a reference sample and save it as a named local voice profile. The profile stores its default language, seed, and seed-randomization behavior. In OpenWebUI, set the TTS voice to the saved profile name, for example `my-voice`.
+The browser UI includes a **Voices** tab where you can upload a reference sample and save it as a named local voice profile. The profile stores its default language, seed, and seed-randomization behavior. In OpenWebUI, set the TTS voice to the saved profile name, for example `my-voice`.
 
 OpenAI-compatible clients can also select or override that profile through additional request parameters:
 
