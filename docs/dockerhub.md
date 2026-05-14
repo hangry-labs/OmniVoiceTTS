@@ -18,6 +18,14 @@ Before pulling the image, hear what OmniVoiceTTS can do:
 
 The examples page includes native-language samples, voice-variety demos, translated intros, and cross-language clone demos across 20 languages.
 
+## Browser UI
+
+The image includes a local browser UI for voice design, voice cloning, progressive streaming tests, reproducible seeds, output-format control, and live GPU visibility.
+
+<p>
+  <img src="https://github.com/Hangry-Labs/OmniVoiceTTS/raw/master/docs/ui.jpg" alt="OmniVoiceTTS browser UI">
+</p>
+
 ## Responsible Use
 
 OmniVoice supports voice cloning. Do not use this image for unauthorized voice cloning, impersonation, fraud, harassment, scams, or any illegal or unethical activity. Only clone voices when you have the rights and consent to do so.

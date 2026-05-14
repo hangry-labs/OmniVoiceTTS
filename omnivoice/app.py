@@ -100,6 +100,7 @@ MODEL_LOCK = threading.Lock()
 UI_CANCEL_EVENT = threading.Event()
 UI_STREAM_LOCK = threading.Lock()
 UI_STREAM_GENERATION = 0
+GPU_HISTORY: dict[int, list[int]] = {}
 
 
 def next_ui_stream_generation() -> int:
@@ -118,6 +119,115 @@ def stop_active_ui_stream():
     UI_CANCEL_EVENT.set()
     next_ui_stream_generation()
     return SAMPLE_RATE, np.zeros(1, dtype=np.int16)
+
+
+def read_gpu_stats() -> list[dict[str, float | int | str]]:
+    try:
+        result = subprocess.run(
+            [
+                "nvidia-smi",
+                "--query-gpu=index,name,utilization.gpu,memory.used,memory.total,temperature.gpu,power.draw",
+                "--format=csv,noheader,nounits",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=2,
+            check=False,
+        )
+    except (FileNotFoundError, subprocess.SubprocessError):
+        return []
+    if result.returncode != 0 or not result.stdout.strip():
+        return []
+
+    rows = []
+    for line in result.stdout.splitlines():
+        parts = [part.strip() for part in line.split(",")]
+        if len(parts) < 7:
+            continue
+        try:
+            rows.append(
+                {
+                    "index": int(float(parts[0])),
+                    "name": parts[1],
+                    "utilization": int(float(parts[2])),
+                    "memory_used": int(float(parts[3])),
+                    "memory_total": int(float(parts[4])),
+                    "temperature": int(float(parts[5])),
+                    "power": float(parts[6]),
+                }
+            )
+        except ValueError:
+            continue
+    return rows
+
+
+def gpu_monitor_html() -> str:
+    stats = read_gpu_stats()
+    if not stats:
+        return """
+<div class="gpu-monitor">
+  <div class="gpu-monitor-title">GPU Monitor</div>
+  <div class="gpu-monitor-muted">nvidia-smi unavailable</div>
+</div>
+"""
+
+    cards = []
+    for item in stats:
+        index = int(item["index"])
+        usage = int(item["utilization"])
+        history = GPU_HISTORY.setdefault(index, [])
+        history.append(usage)
+        del history[:-60]
+        points = gpu_history_points(history)
+        mem_used = float(item["memory_used"]) / 1024
+        mem_total = float(item["memory_total"]) / 1024
+        mem_pct = 0 if mem_total <= 0 else min(100, max(0, mem_used / mem_total * 100))
+        cards.append(
+            f"""
+  <div class="gpu-card">
+    <div class="gpu-card-head">
+      <strong>GPU {index}</strong>
+      <span>{html.escape(str(item["name"]))}</span>
+    </div>
+    <div class="gpu-metric-row">
+      <span>Load</span>
+      <strong>{usage}%</strong>
+    </div>
+    <div class="gpu-bar"><span style="width:{usage}%"></span></div>
+    <svg class="gpu-sparkline" viewBox="0 0 180 44" preserveAspectRatio="none" aria-hidden="true">
+      <polyline points="{points}" fill="none" stroke="#ff8a1f" stroke-width="3" stroke-linejoin="round" stroke-linecap="round" />
+    </svg>
+    <div class="gpu-metric-row">
+      <span>VRAM</span>
+      <strong>{mem_used:.1f}/{mem_total:.1f} GB</strong>
+    </div>
+    <div class="gpu-bar gpu-vram"><span style="width:{mem_pct:.1f}%"></span></div>
+    <div class="gpu-foot">
+      <span>{int(item["temperature"])} C</span>
+      <span>{float(item["power"]):.0f} W</span>
+    </div>
+  </div>
+"""
+        )
+
+    return f"""
+<div class="gpu-monitor">
+  <div class="gpu-monitor-title">GPU Monitor</div>
+  {''.join(cards)}
+</div>
+"""
+
+
+def gpu_history_points(values: list[int], width: int = 180, height: int = 44) -> str:
+    if not values:
+        return f"0,{height} {width},{height}"
+    if len(values) == 1:
+        y = height - (values[0] / 100 * height)
+        return f"0,{y:.1f} {width},{y:.1f}"
+    return " ".join(
+        f"{i * width / (len(values) - 1):.1f},{height - (value / 100 * height):.1f}"
+        for i, value in enumerate(values)
+    )
 
 VOICE_DESIGN_CATEGORIES = {
     "gender": {
@@ -1340,6 +1450,89 @@ APP_CSS = f"""
     transform: translateY(-50%);
 }}
 
+.gpu-monitor {{
+    margin: 10px 0 4px;
+    padding: 12px;
+    border: 1px solid rgba(255, 176, 118, 0.22);
+    border-radius: 10px;
+    background: linear-gradient(135deg, rgba(22, 12, 6, 0.95), rgba(7, 7, 8, 0.96));
+    color: #fff3e7;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 12px 24px rgba(0, 0, 0, 0.20);
+}}
+
+.gpu-monitor-title {{
+    margin-bottom: 9px;
+    font-size: 0.86rem;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+}}
+
+.gpu-monitor-muted {{
+    color: rgba(255, 243, 231, 0.68);
+    font-size: 0.86rem;
+}}
+
+.gpu-card + .gpu-card {{
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(255, 176, 118, 0.15);
+}}
+
+.gpu-card-head {{
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 8px;
+}}
+
+.gpu-card-head strong {{
+    color: #ffb066;
+}}
+
+.gpu-card-head span,
+.gpu-metric-row span,
+.gpu-foot span {{
+    color: rgba(255, 243, 231, 0.68);
+    font-size: 0.78rem;
+}}
+
+.gpu-metric-row,
+.gpu-foot {{
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    font-size: 0.82rem;
+}}
+
+.gpu-bar {{
+    overflow: hidden;
+    height: 7px;
+    margin: 5px 0 8px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.09);
+}}
+
+.gpu-bar span {{
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, #ff6b00, #ffb066);
+}}
+
+.gpu-vram span {{
+    background: linear-gradient(90deg, #ffb066, #ffe0bd);
+}}
+
+.gpu-sparkline {{
+    display: block;
+    width: 100%;
+    height: 44px;
+    margin-bottom: 8px;
+    border-radius: 8px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.02));
+}}
+
 #build-badge {{
     position: absolute;
     right: 120px;
@@ -1517,6 +1710,7 @@ with gr.Blocks(title="OmniVoiceTTS") as ui:
                     value="mp3",
                     label=ui_text("output_format.label"),
                 )
+            gpu_monitor = gr.HTML(gpu_monitor_html())
             with gr.Accordion(ui_text("generation_settings.title"), open=False):
                 speed = gr.Slider(0.5, 1.5, value=1.0, step=0.05, label=ui_text("speed.label"), info=ui_text("speed.info"))
                 duration = gr.Number(value=None, label=ui_text("duration.label"), info=ui_text("duration.info"))
@@ -1591,6 +1785,13 @@ with gr.Blocks(title="OmniVoiceTTS") as ui:
             volume,
             loudness_normalize,
         ],
+    )
+
+    gpu_timer = gr.Timer(value=1.0)
+    gpu_timer.tick(
+        fn=gpu_monitor_html,
+        outputs=gpu_monitor,
+        queue=False,
     )
 
     seed.input(

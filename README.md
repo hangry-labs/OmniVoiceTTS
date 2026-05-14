@@ -25,6 +25,12 @@ Official Docker images are intended for: [hangrylabs/omnivoicetts on Docker Hub]
 
 Hangry Labs home: [nuggies.website](https://nuggies.website/).
 
+## Browser UI
+
+The included browser UI is built for local generation, voice design, voice cloning, progressive streaming tests, seed-based reproducibility, output-format control, and live GPU visibility.
+
+![OmniVoiceTTS browser UI](docs/ui.jpg)
+
 ---
 
 ## Responsible Use
