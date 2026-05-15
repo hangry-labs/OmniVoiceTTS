@@ -340,7 +340,7 @@ def write_markdown_index(path: Path) -> None:
                 "",
                 "## Purpose",
                 "",
-                "These benchmarks track OmniVoiceTTS runtime performance across versions, refactors, dependency changes, Docker image changes, and future performance work such as Flash Attention. The goal is not to produce a universal score; it is to catch local improvements and regressions under a repeatable workload.",
+                "These benchmarks track OmniVoiceTTS runtime performance across versions, refactors, dependency changes, Docker image changes, and future performance work. The goal is not to produce a universal score; it is to catch local improvements and regressions under a repeatable workload.",
                 "",
                 "More categories may be added as the product changes; keeping one append-only file per category makes version-to-version comparisons easy to scan.",
                 "",

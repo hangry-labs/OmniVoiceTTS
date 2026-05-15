@@ -219,6 +219,39 @@ audio.save("openai-speech.mp3")
 
 ---
 
+## FAQ
+
+### Why does OmniVoiceTTS not support FlashAttention?
+
+We tested FlashAttention-2 with the official Dao-AILab wheel for Python 3.13, Torch 2.8, and CUDA 12.8. It installed and ran, but it did not improve the workloads this project is built around. For normal UI/OpenAI-compatible usage, where clients often send one sentence per request, it made generation substantially slower.
+
+Single-request API benchmark on RTX 5060 Ti, 100 calls per category:
+
+| Category | Standard attention avg | FlashAttention avg | Result |
+|---|---:|---:|---:|
+| Random/no reference | 1.104s | 1.537s | 39.2% slower |
+| Predefined cached voice | 1.036s | 1.628s | 57.1% slower |
+| Direct reference audio | 1.498s | 2.010s | 34.2% slower |
+
+We also tested true batched generation. Batch size 4 was still slower with FlashAttention. Batch size 10 showed small gains for clone paths but not for random/no-reference generation:
+
+| Batch category | Standard attention avg | FlashAttention avg | Result |
+|---|---:|---:|---:|
+| Random/no reference, batch 10 | 0.638s/item | 0.657s/item | 3.0% slower |
+| Predefined cached voice, batch 10 | 0.995s/item | 0.955s/item | 4.0% faster |
+| Direct reference audio, batch 10 | 1.419s/item | 1.372s/item | 3.3% faster |
+
+A larger 100-message batch gave only a small random/no-reference improvement, then became impractical for clone benchmarking on the 16 GB RTX 5060 Ti:
+
+| Batch category | Standard attention | FlashAttention | Result |
+|---|---:|---:|---:|
+| Random/no reference, one 100-message batch | 92.18s total | 89.63s total | 2.8% faster |
+| Predefined/clone, one 100-message batch | exceeded 900s timeout | not completed | impractical |
+
+The FlashAttention experiment also increased image complexity and size, added another GPU-specific binary dependency, consumed more VRAM in large-batch tests, and produced worse stability characteristics for the use cases we actually support. Based on those results, OmniVoiceTTS intentionally does not ship FlashAttention support. The same lesson applies to other Hangry Labs speech projects: do not assume FlashAttention helps STT/TTS workloads without project-specific benchmarks.
+
+---
+
 ## Local Development
 
 This repository currently targets Python `>=3.13, <3.14`. The Docker image uses `python:3.13-slim`, and `task deps` regenerates Linux/Python 3.13 requirements.

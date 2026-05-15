@@ -197,7 +197,6 @@ def _resolve_model_path(name_or_path: str) -> str:
 
 class OmniVoice(PreTrainedModel):
     _supports_flex_attn = True
-    _supports_flash_attn_2 = True
     _supports_sdpa = True
     config_class = OmniVoiceConfig
 
