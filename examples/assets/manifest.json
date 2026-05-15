@@ -310,8 +310,8 @@
         },
         {
           "file": "hindi/random/10.mp3",
-          "text": "कंप्यूटर हैंग हुआ तो लगा जैसे वह भी चाय ब्रेक पर चला गया।",
-          "bytes": 80204,
+          "text": "सुबह जल्दी उठकर मैंने खिड़की खोली, तो ठंडी हवा ने पूरे कमरे को शांत कर दिया।",
+          "bytes": 98444,
           "voice_profile": "balanced_female",
           "instruct": "female, young adult, moderate pitch",
           "nonverbal_tag": null
@@ -1845,7 +1845,7 @@
         {
           "file": "korean/random/04.mp3",
           "text": "냉장고를 세 번 열었지만, 김치찌개는 아직 자동 생성되지 않았습니다.",
-          "bytes": 107564,
+          "bytes": 97484,
           "voice_profile": "clear_male",
           "instruct": "male, young adult, moderate pitch",
           "nonverbal_tag": null
