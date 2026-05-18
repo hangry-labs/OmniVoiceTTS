@@ -109,7 +109,7 @@ curl -X POST "http://localhost:7861/tts/generate" \
   -o cloned.mp3
 ```
 
-Kokoro-shaped compatibility fields are accepted where they can be translated cleanly. For example, existing callers may send `voice`, `use_gpu`, or `response_format`; OmniVoiceTTS accepts those fields even though OmniVoice uses no-prompt generation, voice design, or reference-audio cloning rather than fixed Kokoro speaker ids.
+Kokoro-shaped compatibility fields are accepted where they can be translated cleanly. Existing callers may send `voice`, `use_gpu`, or `response_format`. The `voice` field can name a saved local voice profile or an OpenAI-style alias such as `nova`; unknown Kokoro speaker ids are accepted for compatibility but ignored because OmniVoice uses no-prompt generation, voice design, or reference-audio cloning rather than fixed speaker ids.
 
 Output format can be sent as `output_format`, `format`, or Kokoro/OpenAI-style `response_format`.
 
@@ -141,6 +141,8 @@ OpenAI-compatible clients can also select or override that profile through addit
 
 Voice profiles are stored inside the container at `/app/openai_voice_profiles`. Mount that path to a Docker volume if you want profiles to survive container replacement.
 
+The same saved profiles and built-in aliases are available on native `/tts/generate`, `/tts/convert`, `/tts/stream`, and `/tts/stream-chunks` requests through either `voice` or `voice_profile`. Explicit `ref_audio` still takes precedence when provided.
+
 Useful endpoints:
 
 - `GET /v1/models`
@@ -164,7 +166,7 @@ Useful endpoints:
 - `POST /tts/metrics`
 - `POST /tts/purge`
 
-`/tts/generate` and `/tts/convert` return complete generated audio. `/tts/stream` and `/tts/stream-chunks` progressively return encoded audio after each generated long-text chunk; WAV stream requests are returned as MP3 for live playback compatibility.
+`/tts/generate` and `/tts/convert` return complete generated audio. `/tts/stream` and `/tts/stream-chunks` progressively return encoded audio after each generated long-text chunk and support the same `voice`/`voice_profile` profile resolution; WAV stream requests are returned as MP3 for live playback compatibility.
 
 Interactive API documentation is available at **[http://localhost:7861/tts/docs](http://localhost:7861/tts/docs)**.
 

@@ -1062,7 +1062,10 @@ def get_status_payload() -> dict:
         "asr_model": DEFAULT_ASR_MODEL if LOAD_ASR else None,
         "resample_backend": RESAMPLE_BACKEND,
         "languages": len(LANG_IDS),
-        "voice_compatibility": "Kokoro-compatible voice fields are accepted but translated to OmniVoice auto/design/clone generation.",
+        "voice_compatibility": (
+            "The voice field accepts saved profiles and OpenAI-style aliases where they can be translated "
+            "to OmniVoice auto/design/clone generation; unknown Kokoro speaker ids are ignored."
+        ),
         "loaded_model_devices": list(MODEL_CACHE),
         "voice_prompt_cache": {
             "entries": len(VOICE_CLONE_PROMPT_CACHE),
@@ -1633,7 +1636,14 @@ class TTSRequest(BaseModel):
     text: str = Field(..., min_length=1, description="Text to synthesize.")
     voice: Optional[str] = Field(
         None,
-        description="Kokoro-compatible voice field. Accepted for compatibility; OmniVoice uses ref_audio/instruct/auto voice instead.",
+        description=(
+            "Compatibility voice field. Saved voice profile names and OpenAI-style aliases such as nova/shimmer "
+            "resolve to local OmniVoice clone/design behavior; unknown Kokoro speaker ids are ignored."
+        ),
+    )
+    voice_profile: Optional[str] = Field(
+        None,
+        description="Saved local voice profile name. This uses the same profiles exposed through /v1/audio/voices.",
     )
     language: Optional[str] = Field(None, description="Language name or id. Omit for auto/language-agnostic mode.")
     ref_audio: Optional[str] = Field(
@@ -1733,6 +1743,10 @@ def openai_voice_instruction(voice: str | None, instructions: str | None = None)
 
 
 def openai_request_has_field(payload: OpenAISpeechRequest, field_name: str) -> bool:
+    return field_name in getattr(payload, "model_fields_set", set())
+
+
+def tts_request_has_field(payload: TTSRequest, field_name: str) -> bool:
     return field_name in getattr(payload, "model_fields_set", set())
 
 
@@ -1841,6 +1855,7 @@ def openai_speech_to_tts_request(payload: OpenAISpeechRequest) -> TTSRequest:
     return TTSRequest(
         text=payload.input,
         voice=payload.voice,
+        voice_profile=payload.voice_profile,
         language=language,
         ref_audio=ref_audio,
         ref_text=ref_text,
@@ -1852,6 +1867,47 @@ def openai_speech_to_tts_request(payload: OpenAISpeechRequest) -> TTSRequest:
         seed=seed,
         randomize_seed=randomize_seed,
         cache_voice_prompt=profile_source.startswith(("profile:", "voice-profile:", "builtin-clone")),
+    )
+
+
+def tts_request_to_openai_speech_request(payload: TTSRequest) -> OpenAISpeechRequest:
+    data: dict[str, Any] = {
+        "model": "omnivoice",
+        "input": payload.text,
+        "voice": payload.voice or "auto",
+        "response_format": payload.output_format,
+        "speed": payload.speed if payload.speed is not None else 1.0,
+        "device": payload.device,
+        "num_step": payload.num_step,
+        "instructions": payload.instruct,
+        "ref_audio": payload.ref_audio,
+        "ref_text": payload.ref_text,
+        "voice_profile": payload.voice_profile,
+    }
+    for optional_field in ("language", "seed", "randomize_seed"):
+        if tts_request_has_field(payload, optional_field):
+            data[optional_field] = getattr(payload, optional_field)
+    return OpenAISpeechRequest(**data)
+
+
+def resolve_tts_compatible_voice(payload: TTSRequest) -> TTSRequest:
+    voice = (payload.voice or "").strip()
+    voice_profile = (payload.voice_profile or "").strip()
+    if not voice and not voice_profile:
+        return payload
+
+    openai_payload = tts_request_to_openai_speech_request(payload)
+    resolved = openai_speech_to_tts_request(openai_payload)
+    return payload.model_copy(
+        update={
+            "ref_audio": resolved.ref_audio,
+            "ref_text": resolved.ref_text,
+            "instruct": resolved.instruct,
+            "language": resolved.language,
+            "seed": resolved.seed,
+            "randomize_seed": resolved.randomize_seed,
+            "cache_voice_prompt": payload.cache_voice_prompt or resolved.cache_voice_prompt,
+        }
     )
 
 
@@ -1967,6 +2023,10 @@ def synthesize_payload_chunks(payload: TTSRequest) -> tuple[str, int, Iterator[n
 
 
 def stream_audio_response(payload: TTSRequest, route_name: str) -> StreamingResponse:
+    try:
+        payload = resolve_tts_compatible_voice(payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     output_format, sample_rate, waveform, used_seed = synthesize_payload(payload)
     try:
         audio_bytes = encode_audio_bytes(waveform, output_format, sample_rate)
@@ -1985,10 +2045,16 @@ def stream_audio_response(payload: TTSRequest, route_name: str) -> StreamingResp
     }
     if payload.voice:
         headers["X-OmniVoiceTTS-Requested-Voice"] = payload.voice
+    if payload.voice_profile:
+        headers["X-OmniVoiceTTS-Voice-Profile"] = payload.voice_profile
     return StreamingResponse(io.BytesIO(audio_bytes), media_type=media_type, headers=headers)
 
 
 def progressive_audio_response(payload: TTSRequest, route_name: str) -> StreamingResponse:
+    try:
+        payload = resolve_tts_compatible_voice(payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     output_format, sample_rate, chunks, used_seed = synthesize_payload_chunks(payload)
     extension = OUTPUT_FORMATS[output_format]["extension"]
     media_type = OUTPUT_FORMATS[output_format]["media_type"]
@@ -2006,6 +2072,8 @@ def progressive_audio_response(payload: TTSRequest, route_name: str) -> Streamin
     }
     if payload.voice:
         headers["X-OmniVoiceTTS-Requested-Voice"] = payload.voice
+    if payload.voice_profile:
+        headers["X-OmniVoiceTTS-Voice-Profile"] = payload.voice_profile
     return StreamingResponse(body(), media_type=media_type, headers=headers)
 
 
@@ -2110,13 +2178,42 @@ def speakers(language: str = "auto") -> dict:
 
 @api.get("/tts/voices")
 def voices() -> dict:
+    voice_rows = [
+        {"id": "auto", "name": "No Voice Prompt", "language": "auto", "language_name": "Any supported language"},
+        {"id": "voice-design", "name": "Voice Design", "language": "multi", "language_name": "Any supported language"},
+        {"id": "voice-clone", "name": "Voice Clone", "language": "multi", "language_name": "Any supported language"},
+    ]
+    for voice_id in sorted(OPENAI_VOICE_INSTRUCTIONS):
+        if voice_id == "auto":
+            continue
+        profile_type = "clone" if voice_id in OPENAI_CLONE_VOICE_ALIASES and OPENAI_DEFAULT_CLONE_AUDIO.exists() else "design"
+        voice_rows.append(
+            {
+                "id": voice_id,
+                "name": f"OpenAI alias: {voice_id}",
+                "language": "multi",
+                "language_name": "Any supported language",
+                "profile_type": profile_type,
+            }
+        )
+    for name, profile in sorted(load_openai_voice_profiles().items()):
+        language = profile.get("language") or "request/default"
+        voice_rows.append(
+            {
+                "id": name,
+                "name": f"Saved voice: {name}",
+                "language": language,
+                "language_name": language,
+                "profile_type": "clone",
+            }
+        )
     return {
-        "voices": [
-            {"id": "auto", "name": "No Voice Prompt", "language": "auto", "language_name": "Any supported language"},
-            {"id": "voice-design", "name": "Voice Design", "language": "multi", "language_name": "Any supported language"},
-            {"id": "voice-clone", "name": "Voice Clone", "language": "multi", "language_name": "Any supported language"},
-        ],
-        "compatibility_note": "Kokoro voice ids in requests are accepted but ignored unless translated by a future compatibility profile.",
+        "voices": voice_rows,
+        "compatibility_note": (
+            "The voice field accepts saved profile names and OpenAI-style aliases on /tts/generate, "
+            "/tts/convert, /tts/stream, and /tts/stream-chunks. Unknown Kokoro speaker ids are accepted "
+            "for compatibility but ignored."
+        ),
     }
 
 

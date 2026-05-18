@@ -153,6 +153,8 @@ Profiles are saved under `/app/openai_voice_profiles`. Mount that path to a Dock
 docker run -p 7861:7861 --gpus "device=0" -e CUDA_VISIBLE_DEVICES=0 -v omnivoicetts_openai_voice_profiles:/app/openai_voice_profiles hangrylabs/omnivoicetts:latest
 ```
 
+Native `/tts/generate`, `/tts/convert`, `/tts/stream`, and `/tts/stream-chunks` requests use the same saved-profile and built-in-alias resolver through either `voice` or `voice_profile`. Explicit `ref_audio` remains the highest-priority voice source.
+
 Voice design:
 
 ```bash
@@ -192,12 +194,12 @@ API docs are available at:
 
 http://localhost:7861/tts/docs
 
-Long text can also be requested through `/tts/stream` or `/tts/stream-chunks`. Those routes start returning encoded audio after each generated text chunk, so playback can begin before the full request completes. For live streaming, WAV requests are returned as MP3 because independent WAV chunks do not form a valid continuous stream.
+Long text can also be requested through `/tts/stream` or `/tts/stream-chunks`. Those routes start returning encoded audio after each generated text chunk, so playback can begin before the full request completes. They support the same `voice` and `voice_profile` fields as complete generation. For live streaming, WAV requests are returned as MP3 because independent WAV chunks do not form a valid continuous stream.
 
 ```bash
 curl -X POST "http://localhost:7861/tts/stream-chunks" \
   -H "Content-Type: application/json" \
-  -d '{"text":"This longer request can begin playing before the full audio is finished.","language":"English","output_format":"mp3"}' \
+  -d '{"text":"This longer request can begin playing before the full audio is finished.","voice":"nova","language":"English","output_format":"mp3"}' \
   -o streamed.mp3
 ```
 

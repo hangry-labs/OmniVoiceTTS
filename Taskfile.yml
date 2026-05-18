@@ -4,7 +4,7 @@ vars:
   IMAGE: omnivoicetts:test
   TINY_IMAGE: omnivoicetts:tiny
   PORT: '7861'
-  GPU_DEVICE: '1'
+  GPU_DEVICE: '0'
   APP_DEVICE: 'auto'
   HF_TOKEN: ''
   HF_CACHE_VOLUME: omnivoicetts_hf_cache
@@ -30,6 +30,12 @@ vars:
   BENCHMARK_SAMPLES_PER_LANGUAGE: '2'
   BENCHMARK_RANDOM_WARMUP: '10'
   BENCHMARK_REFERENCE_WARMUP: '10'
+  CODEQL: 'C:\sandbox\tools\codeql\codeql.exe'
+  CODEQL_WORK_DIR: 'C:\sandbox\tools\codeql-work\OmniVoiceTTS'
+  CODEQL_PYTHON_DB: '{{.CODEQL_WORK_DIR}}\codeql-db'
+  CODEQL_PYTHON_SARIF: '{{.CODEQL_WORK_DIR}}\codeql-results.sarif'
+  CODEQL_ACTIONS_DB: '{{.CODEQL_WORK_DIR}}\actions-db'
+  CODEQL_ACTIONS_SARIF: '{{.CODEQL_WORK_DIR}}\actions-results.sarif'
   DRY_RUN: '0'
   NEXT_VERSION: ''
   SKIP_VALIDATION: '0'
@@ -73,6 +79,34 @@ tasks:
     desc: Regenerate Linux/Python 3.13 requirements.txt from requirements.in
     cmds:
       - uv pip compile requirements.in --python-version 3.13 --python-platform x86_64-manylinux_2_36 --index-strategy unsafe-best-match --upgrade --no-header --no-annotate --output-file requirements.txt
+
+  codeql-version:
+    desc: Show local CodeQL CLI version
+    cmds:
+      - powershell -NoProfile -ExecutionPolicy Bypass -Command "& '{{.CODEQL}}' version"
+
+  codeql-python:
+    desc: Run local CodeQL Python scan and write SARIF outside the repo
+    cmds:
+      - powershell -NoProfile -ExecutionPolicy Bypass -Command "New-Item -ItemType Directory -Force -Path '{{.CODEQL_WORK_DIR}}' | Out-Null"
+      - powershell -NoProfile -ExecutionPolicy Bypass -Command "if (Test-Path '{{.CODEQL_PYTHON_DB}}') { Remove-Item -Recurse -Force '{{.CODEQL_PYTHON_DB}}' }"
+      - powershell -NoProfile -ExecutionPolicy Bypass -Command "& '{{.CODEQL}}' database create '{{.CODEQL_PYTHON_DB}}' --language=python --source-root '{{.TASKFILE_DIR}}'"
+      - powershell -NoProfile -ExecutionPolicy Bypass -Command "& '{{.CODEQL}}' database analyze '{{.CODEQL_PYTHON_DB}}' codeql/python-queries --format=sarif-latest --output='{{.CODEQL_PYTHON_SARIF}}'"
+
+  codeql-actions:
+    desc: Run local CodeQL GitHub Actions workflow scan and write SARIF outside the repo
+    cmds:
+      - powershell -NoProfile -ExecutionPolicy Bypass -Command "New-Item -ItemType Directory -Force -Path '{{.CODEQL_WORK_DIR}}' | Out-Null"
+      - powershell -NoProfile -ExecutionPolicy Bypass -Command "Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force"
+      - powershell -NoProfile -ExecutionPolicy Bypass -Command "if (Test-Path '{{.CODEQL_ACTIONS_DB}}') { Remove-Item -Recurse -Force '{{.CODEQL_ACTIONS_DB}}' }"
+      - powershell -NoProfile -ExecutionPolicy Bypass -Command "& '{{.CODEQL}}' database create '{{.CODEQL_ACTIONS_DB}}' --language=actions --source-root '{{.TASKFILE_DIR}}'"
+      - powershell -NoProfile -ExecutionPolicy Bypass -Command "& '{{.CODEQL}}' database analyze '{{.CODEQL_ACTIONS_DB}}' codeql/actions-queries --format=sarif-latest --output='{{.CODEQL_ACTIONS_SARIF}}'"
+
+  codeql:
+    desc: Run local CodeQL Python and GitHub Actions scans
+    cmds:
+      - task: codeql-python
+      - task: codeql-actions
 
   imagerun:
     desc: Run baked image with UI and API on PORT
