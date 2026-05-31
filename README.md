@@ -163,10 +163,13 @@ Useful endpoints:
 - `POST /tts/convert`
 - `POST /tts/stream`
 - `POST /tts/stream-chunks`
+- `POST /tts/cache/clear`
 - `POST /tts/metrics`
 - `POST /tts/purge`
 
 `/tts/generate` and `/tts/convert` return complete generated audio. `/tts/stream` and `/tts/stream-chunks` progressively return encoded audio after each generated long-text chunk and support the same `voice`/`voice_profile` profile resolution; WAV stream requests are returned as MP3 for live playback compatibility.
+
+Docker images default to `OMNIVOICE_MAX_CONCURRENT_GENERATIONS=1`, so concurrent API callers queue on each resolved device instead of overlapping GPU-heavy generation. `/tts/status` reports CUDA `allocated`, `reserved`, and peak allocator counters. `POST /tts/cache/clear` releases unused PyTorch CUDA allocator blocks without unloading model weights or saved voice-prompt cache entries; `POST /tts/purge` unloads cached models and then performs the stronger CUDA allocator cleanup. `OMNIVOICE_EMPTY_CUDA_CACHE_AFTER_REQUEST=1` can force allocator cleanup after every request, but it is off by default because it may reduce throughput.
 
 Interactive API documentation is available at **[http://localhost:7861/tts/docs](http://localhost:7861/tts/docs)**.
 
@@ -212,6 +215,8 @@ audio.save("openai-speech.mp3")
 - Optional tiny image target for cache-volume workflows
 - GPU acceleration when available
 - Stored OpenAI voice profiles reuse cached clone prompts after the first request
+- Serialized GPU generation by default to avoid concurrent VRAM spikes
+- CUDA allocator diagnostics and cache clearing without unloading model weights
 - Optional `OMNIVOICE_RESAMPLE_BACKEND=librosa` fallback if a platform has `torchaudio` issues
 - HTTP API + web UI in one container
 - Offline-friendly runtime flags by default

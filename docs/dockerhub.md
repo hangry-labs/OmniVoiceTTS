@@ -203,6 +203,14 @@ curl -X POST "http://localhost:7861/tts/stream-chunks" \
   -o streamed.mp3
 ```
 
+GPU memory controls:
+
+- Docker images default to `OMNIVOICE_MAX_CONCURRENT_GENERATIONS=1`, so concurrent requests queue per resolved device instead of overlapping large generation allocations.
+- `GET /tts/status` reports CUDA `allocated`, `reserved`, `max_allocated`, and `max_reserved` values so live tensors can be distinguished from PyTorch allocator reservation.
+- `POST /tts/cache/clear` runs Python garbage collection and `torch.cuda.empty_cache()` without unloading model weights or clearing saved voice-prompt cache entries.
+- `POST /tts/purge` unloads cached models, clears saved voice-prompt cache entries, and then clears unused CUDA allocator blocks.
+- `OMNIVOICE_EMPTY_CUDA_CACHE_AFTER_REQUEST=1` enables post-request allocator cleanup, but it is off by default because clearing after every request can reduce throughput.
+
 ## Image Tags
 
 - Recommended tag for most users: `latest`

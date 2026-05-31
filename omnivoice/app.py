@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import gc
 import io
 import html
 import logging
@@ -67,10 +68,29 @@ from omnivoice.web.translations import (
     ui_text_for,
 )
 
+
+def env_bool(name: str, default: bool) -> bool:
+    value = os.getenv(name, "").strip().lower()
+    if not value:
+        return default
+    return value in {"1", "true", "yes", "y", "on"}
+
+
+def env_int(name: str, default: int, minimum: int = 1) -> int:
+    value = os.getenv(name, "").strip()
+    if not value:
+        return default
+    parsed = int(value)
+    return max(minimum, parsed)
+
+
 DEFAULT_MODEL = os.getenv("OMNIVOICE_MODEL", "k2-fsa/OmniVoice")
 DEFAULT_DEVICE = os.getenv("OMNIVOICE_DEVICE", "auto")
 DEFAULT_ASR_MODEL = os.getenv("OMNIVOICE_ASR_MODEL", "openai/whisper-large-v3-turbo")
-LOAD_ASR = os.getenv("OMNIVOICE_LOAD_ASR", "1").lower() in {"1", "true", "yes", "y"}
+LOAD_ASR = env_bool("OMNIVOICE_LOAD_ASR", False)
+MAX_CONCURRENT_GENERATIONS = env_int("OMNIVOICE_MAX_CONCURRENT_GENERATIONS", 1)
+EMPTY_CUDA_CACHE_AFTER_REQUEST = env_bool("OMNIVOICE_EMPTY_CUDA_CACHE_AFTER_REQUEST", False)
+RESET_CUDA_PEAK_AFTER_CACHE_CLEAR = env_bool("OMNIVOICE_RESET_CUDA_PEAK_AFTER_CACHE_CLEAR", False)
 APP_VERSION = os.getenv("APP_VERSION", __version__)
 BUILD_ID = os.getenv("BUILD_ID", "stable")
 ASSET_DIR = Path(__file__).resolve().parent.parent / "hangrylabs"
@@ -125,6 +145,8 @@ VOICE_DESIGN_BRACKET_TOKEN_MESSAGE = (
 
 MODEL_CACHE: dict[str, OmniVoice] = {}
 MODEL_LOCK = threading.Lock()
+GENERATION_SEMAPHORES: dict[str, threading.BoundedSemaphore] = {}
+GENERATION_SEMAPHORE_LOCK = threading.Lock()
 VOICE_CLONE_PROMPT_CACHE: OrderedDict[tuple[Any, ...], Any] = OrderedDict()
 VOICE_CLONE_PROMPT_CACHE_LOCK = threading.Lock()
 VOICE_CLONE_PROMPT_CACHE_LIMIT = int(os.getenv("OMNIVOICE_VOICE_PROMPT_CACHE_LIMIT", "32"))
@@ -357,6 +379,43 @@ def get_model(device: str) -> OmniVoice:
                 asr_model_name=DEFAULT_ASR_MODEL,
             )
         return MODEL_CACHE[resolved_device]
+
+
+def get_generation_semaphore(device: str) -> threading.BoundedSemaphore:
+    with GENERATION_SEMAPHORE_LOCK:
+        if device not in GENERATION_SEMAPHORES:
+            GENERATION_SEMAPHORES[device] = threading.BoundedSemaphore(MAX_CONCURRENT_GENERATIONS)
+        return GENERATION_SEMAPHORES[device]
+
+
+def cuda_memory_stats() -> list[dict[str, Any]]:
+    if not torch.cuda.is_available():
+        return []
+    stats = []
+    for index in range(torch.cuda.device_count()):
+        stats.append(
+            {
+                "device": f"cuda:{index}",
+                "name": torch.cuda.get_device_name(index),
+                "allocated": torch.cuda.memory_allocated(index),
+                "reserved": torch.cuda.memory_reserved(index),
+                "max_allocated": torch.cuda.max_memory_allocated(index),
+                "max_reserved": torch.cuda.max_memory_reserved(index),
+            }
+        )
+    return stats
+
+
+def clear_cuda_allocator_cache(reset_peak_stats: bool = False) -> dict[str, Any]:
+    before = cuda_memory_stats()
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+        if reset_peak_stats:
+            for index in range(torch.cuda.device_count()):
+                torch.cuda.reset_peak_memory_stats(index)
+    after = cuda_memory_stats()
+    return {"before": before, "after": after}
 
 
 def should_cache_voice_clone_prompt(ref_audio: str | None) -> bool:
@@ -744,37 +803,39 @@ def synthesize_array(
     validate_voice_design_text(text, instruct)
     safe_ref_audio = validate_ref_audio_path(ref_audio)
     resolved_device = normalize_device(device)
-    model = get_model(resolved_device)
-    preprocess_prompt = True if generation_config is None else bool(generation_config.preprocess_prompt)
-    voice_clone_prompt = get_cached_voice_clone_prompt(
-        model,
-        resolved_device,
-        safe_ref_audio,
-        ref_text,
-        preprocess_prompt,
-        cache_voice_prompt,
-    )
-    audios = model.generate(
-        text=text.strip(),
-        language=normalize_language(language),
-        ref_audio=None if voice_clone_prompt is not None else safe_ref_audio,
-        ref_text=None if voice_clone_prompt is not None else ref_text or None,
-        voice_clone_prompt=voice_clone_prompt,
-        instruct=instruct or None,
-        duration=duration if duration and duration > 0 else None,
-        speed=speed,
-        generation_config=generation_config,
-    )
-    sample_rate = int(model.sampling_rate or SAMPLE_RATE)
-    waveform = apply_audio_effects(
-        audios[0],
-        sample_rate,
-        pitch_semitones,
-        tempo,
-        volume,
-        normalize,
-    )
-    return sample_rate, waveform
+    semaphore = get_generation_semaphore(resolved_device)
+    with semaphore:
+        model = get_model(resolved_device)
+        preprocess_prompt = True if generation_config is None else bool(generation_config.preprocess_prompt)
+        voice_clone_prompt = get_cached_voice_clone_prompt(
+            model,
+            resolved_device,
+            safe_ref_audio,
+            ref_text,
+            preprocess_prompt,
+            cache_voice_prompt,
+        )
+        audios = model.generate(
+            text=text.strip(),
+            language=normalize_language(language),
+            ref_audio=None if voice_clone_prompt is not None else safe_ref_audio,
+            ref_text=None if voice_clone_prompt is not None else ref_text or None,
+            voice_clone_prompt=voice_clone_prompt,
+            instruct=instruct or None,
+            duration=duration if duration and duration > 0 else None,
+            speed=speed,
+            generation_config=generation_config,
+        )
+        sample_rate = int(model.sampling_rate or SAMPLE_RATE)
+        waveform = apply_audio_effects(
+            audios[0],
+            sample_rate,
+            pitch_semitones,
+            tempo,
+            volume,
+            normalize,
+        )
+        return sample_rate, waveform
 
 
 def synthesize_chunks(
@@ -798,38 +859,41 @@ def synthesize_chunks(
     validate_voice_design_text(text, instruct)
     safe_ref_audio = validate_ref_audio_path(ref_audio)
     resolved_device = normalize_device(device)
-    model = get_model(resolved_device)
-    preprocess_prompt = True if generation_config is None else bool(generation_config.preprocess_prompt)
-    voice_clone_prompt = get_cached_voice_clone_prompt(
-        model,
-        resolved_device,
-        safe_ref_audio,
-        ref_text,
-        preprocess_prompt,
-        cache_voice_prompt,
-    )
-    sample_rate = int(model.sampling_rate or SAMPLE_RATE)
+    semaphore = get_generation_semaphore(resolved_device)
+    with semaphore:
+        model = get_model(resolved_device)
+        preprocess_prompt = True if generation_config is None else bool(generation_config.preprocess_prompt)
+        voice_clone_prompt = get_cached_voice_clone_prompt(
+            model,
+            resolved_device,
+            safe_ref_audio,
+            ref_text,
+            preprocess_prompt,
+            cache_voice_prompt,
+        )
+        sample_rate = int(model.sampling_rate or SAMPLE_RATE)
 
     def chunk_iterator() -> Iterator[np.ndarray]:
-        for chunk in model.generate_stream(
-            text=text.strip(),
-            language=normalize_language(language),
-            ref_audio=None if voice_clone_prompt is not None else safe_ref_audio,
-            ref_text=None if voice_clone_prompt is not None else ref_text or None,
-            voice_clone_prompt=voice_clone_prompt,
-            instruct=instruct or None,
-            duration=duration if duration and duration > 0 else None,
-            speed=speed,
-            generation_config=generation_config,
-        ):
-            yield apply_audio_effects(
-                chunk,
-                sample_rate,
-                pitch_semitones,
-                tempo,
-                volume,
-                normalize,
-            )
+        with semaphore:
+            for chunk in model.generate_stream(
+                text=text.strip(),
+                language=normalize_language(language),
+                ref_audio=None if voice_clone_prompt is not None else safe_ref_audio,
+                ref_text=None if voice_clone_prompt is not None else ref_text or None,
+                voice_clone_prompt=voice_clone_prompt,
+                instruct=instruct or None,
+                duration=duration if duration and duration > 0 else None,
+                speed=speed,
+                generation_config=generation_config,
+            ):
+                yield apply_audio_effects(
+                    chunk,
+                    sample_rate,
+                    pitch_semitones,
+                    tempo,
+                    volume,
+                    normalize,
+                )
 
     return sample_rate, chunk_iterator()
 
@@ -1062,6 +1126,10 @@ def get_status_payload() -> dict:
         "asr_model": DEFAULT_ASR_MODEL if LOAD_ASR else None,
         "resample_backend": RESAMPLE_BACKEND,
         "languages": len(LANG_IDS),
+        "cuda_memory": cuda_memory_stats(),
+        "max_concurrent_generations": MAX_CONCURRENT_GENERATIONS,
+        "empty_cuda_cache_after_request": EMPTY_CUDA_CACHE_AFTER_REQUEST,
+        "reset_cuda_peak_after_cache_clear": RESET_CUDA_PEAK_AFTER_CACHE_CLEAR,
         "voice_compatibility": (
             "The voice field accepts saved profiles and OpenAI-style aliases where they can be translated "
             "to OmniVoice auto/design/clone generation; unknown Kokoro speaker ids are ignored."
@@ -1699,6 +1767,13 @@ class PurgeRequest(BaseModel):
     device: Optional[str] = Field(None, description="Optional cached model device to clear. Omit to clear all.")
 
 
+class CacheClearRequest(BaseModel):
+    reset_peak_stats: bool = Field(
+        False,
+        description="Reset CUDA peak memory counters after clearing unused cached blocks.",
+    )
+
+
 class OpenAISpeechRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
@@ -2027,11 +2102,15 @@ def stream_audio_response(payload: TTSRequest, route_name: str) -> StreamingResp
         payload = resolve_tts_compatible_voice(payload)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    output_format, sample_rate, waveform, used_seed = synthesize_payload(payload)
     try:
-        audio_bytes = encode_audio_bytes(waveform, output_format, sample_rate)
-    except RuntimeError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        output_format, sample_rate, waveform, used_seed = synthesize_payload(payload)
+        try:
+            audio_bytes = encode_audio_bytes(waveform, output_format, sample_rate)
+        except RuntimeError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+    finally:
+        if EMPTY_CUDA_CACHE_AFTER_REQUEST:
+            clear_cuda_allocator_cache(RESET_CUDA_PEAK_AFTER_CACHE_CLEAR)
     extension = OUTPUT_FORMATS[output_format]["extension"]
     media_type = OUTPUT_FORMATS[output_format]["media_type"]
     duration = len(waveform) / sample_rate if sample_rate else 0
@@ -2060,7 +2139,11 @@ def progressive_audio_response(payload: TTSRequest, route_name: str) -> Streamin
     media_type = OUTPUT_FORMATS[output_format]["media_type"]
 
     def body() -> Iterator[bytes]:
-        yield from encode_audio_stream(chunks, output_format, sample_rate)
+        try:
+            yield from encode_audio_stream(chunks, output_format, sample_rate)
+        finally:
+            if EMPTY_CUDA_CACHE_AFTER_REQUEST:
+                clear_cuda_allocator_cache(RESET_CUDA_PEAK_AFTER_CACHE_CLEAR)
 
     headers = {
         "Content-Disposition": f"inline; filename=omnivoicetts-stream.{extension}",
@@ -2268,6 +2351,18 @@ def stream_chunks_tts(payload: TTSRequest = Body(...)) -> StreamingResponse:
     return progressive_audio_response(payload, "/tts/stream-chunks")
 
 
+@api.post("/tts/cache/clear")
+def clear_cache(payload: CacheClearRequest | None = Body(None)) -> dict:
+    reset_peak_stats = payload.reset_peak_stats if payload else RESET_CUDA_PEAK_AFTER_CACHE_CLEAR
+    result = clear_cuda_allocator_cache(reset_peak_stats)
+    return {
+        "msg": "cuda allocator cache cleared",
+        "unloaded_models": False,
+        "cleared_voice_prompt_cache": False,
+        **result,
+    }
+
+
 @api.post("/tts/purge")
 def purge_models(payload: PurgeRequest | None = Body(None)) -> dict:
     requested_device = payload.device if payload else None
@@ -2276,19 +2371,28 @@ def purge_models(payload: PurgeRequest | None = Body(None)) -> dict:
             device = normalize_device(requested_device)
         except RuntimeError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
-        if device not in MODEL_CACHE:
-            return {"purged": [], "remaining_model_devices": list(MODEL_CACHE)}
-        del MODEL_CACHE[device]
+        purged = []
+        if device in MODEL_CACHE:
+            del MODEL_CACHE[device]
+            purged = [device]
         purged_voice_prompts = clear_voice_clone_prompt_cache(device)
+        cache_clear = clear_cuda_allocator_cache(RESET_CUDA_PEAK_AFTER_CACHE_CLEAR)
         return {
-            "purged": [device],
+            "purged": purged,
             "purged_voice_prompts": purged_voice_prompts,
             "remaining_model_devices": list(MODEL_CACHE),
+            "cuda_cache_clear": cache_clear,
         }
     purged = list(MODEL_CACHE)
     MODEL_CACHE.clear()
     purged_voice_prompts = clear_voice_clone_prompt_cache()
-    return {"purged": purged, "purged_voice_prompts": purged_voice_prompts, "remaining_model_devices": []}
+    cache_clear = clear_cuda_allocator_cache(RESET_CUDA_PEAK_AFTER_CACHE_CLEAR)
+    return {
+        "purged": purged,
+        "purged_voice_prompts": purged_voice_prompts,
+        "remaining_model_devices": [],
+        "cuda_cache_clear": cache_clear,
+    }
 
 
 app = gr.mount_gradio_app(api, ui, path="/")
