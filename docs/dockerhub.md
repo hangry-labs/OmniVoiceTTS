@@ -45,31 +45,33 @@ OmniVoice supports voice cloning. Do not use this image for unauthorized voice c
 Run with NVIDIA GPU support:
 
 ```bash
-docker run -p 7861:7861 --gpus "device=0" -e CUDA_VISIBLE_DEVICES=0 hangrylabs/omnivoicetts:latest
+docker run -p 7861:7861 --gpus "device=0" -e CUDA_VISIBLE_DEVICES=0 -v omnivoicetts_openai_voice_profiles:/app/openai_voice_profiles hangrylabs/omnivoicetts:latest
 ```
 
 Run on CPU:
 
 ```bash
-docker run -p 7861:7861 -e OMNIVOICE_DEVICE=cpu hangrylabs/omnivoicetts:latest
+docker run -p 7861:7861 -e OMNIVOICE_DEVICE=cpu -v omnivoicetts_openai_voice_profiles:/app/openai_voice_profiles hangrylabs/omnivoicetts:latest
 ```
 
 Run on a different GPU by changing both GPU numbers. For example, GPU `1`:
 
 ```bash
-docker run -p 7861:7861 --gpus "device=1" -e CUDA_VISIBLE_DEVICES=1 hangrylabs/omnivoicetts:latest
+docker run -p 7861:7861 --gpus "device=1" -e CUDA_VISIBLE_DEVICES=1 -v omnivoicetts_openai_voice_profiles:/app/openai_voice_profiles hangrylabs/omnivoicetts:latest
 ```
 
 Then open:
 
 http://localhost:7861
 
+The named `omnivoicetts_openai_voice_profiles` volume stores voices created in the UI so they survive container replacement and image updates. Docker creates the volume automatically the first time you run one of these commands.
+
 The `latest` image is the full baked image with OmniVoice model assets, the Higgs audio tokenizer, and Whisper ASR assets included for offline-friendly use after the image is pulled. The release image is based on Python 3.13 and is intended to run without live Hugging Face downloads after pull. Version tags such as `v0.2.0` are also available for reproducible deployments.
 
 Tiny tags use the `vX.Y.Z_tiny` pattern. They keep runtime dependencies but skip baked Hugging Face model assets, and are intended for persistent-volume workflows where the cache is warmed on first online use:
 
 ```bash
-docker run -p 7861:7861 --gpus "device=0" -e CUDA_VISIBLE_DEVICES=0 -v omnivoicetts_hf_cache:/app/.cache/huggingface hangrylabs/omnivoicetts:latest_tiny
+docker run -p 7861:7861 --gpus "device=0" -e CUDA_VISIBLE_DEVICES=0 -v omnivoicetts_hf_cache:/app/.cache/huggingface -v omnivoicetts_openai_voice_profiles:/app/openai_voice_profiles hangrylabs/omnivoicetts:latest_tiny
 ```
 
 ## What You Get
@@ -147,7 +149,7 @@ You can still select or override a profile through additional parameters:
 }
 ```
 
-Profiles are saved under `/app/openai_voice_profiles`. Mount that path to a Docker volume if you want them to persist across container replacement:
+Profiles are saved under `/app/openai_voice_profiles`. The Quick Start commands mount the named Docker volume `omnivoicetts_openai_voice_profiles` there so profiles persist across container replacement:
 
 ```bash
 docker run -p 7861:7861 --gpus "device=0" -e CUDA_VISIBLE_DEVICES=0 -v omnivoicetts_openai_voice_profiles:/app/openai_voice_profiles hangrylabs/omnivoicetts:latest

@@ -44,22 +44,24 @@ OmniVoice supports voice cloning. Do not use this project for unauthorized voice
 Run with NVIDIA GPU support:
 
 ```bash
-docker run -p 7861:7861 --gpus "device=0" -e CUDA_VISIBLE_DEVICES=0 hangrylabs/omnivoicetts:latest
+docker run -p 7861:7861 --gpus "device=0" -e CUDA_VISIBLE_DEVICES=0 -v omnivoicetts_openai_voice_profiles:/app/openai_voice_profiles hangrylabs/omnivoicetts:latest
 ```
 
 Run on CPU:
 
 ```bash
-docker run -p 7861:7861 -e OMNIVOICE_DEVICE=cpu hangrylabs/omnivoicetts:latest
+docker run -p 7861:7861 -e OMNIVOICE_DEVICE=cpu -v omnivoicetts_openai_voice_profiles:/app/openai_voice_profiles hangrylabs/omnivoicetts:latest
 ```
 
 Run on a specific GPU (example: GPU index `1`):
 
 ```bash
-docker run -p 7861:7861 --gpus "device=1" -e CUDA_VISIBLE_DEVICES=1 hangrylabs/omnivoicetts:latest
+docker run -p 7861:7861 --gpus "device=1" -e CUDA_VISIBLE_DEVICES=1 -v omnivoicetts_openai_voice_profiles:/app/openai_voice_profiles hangrylabs/omnivoicetts:latest
 ```
 
 Then open: **[http://localhost:7861](http://localhost:7861)**
+
+The named `omnivoicetts_openai_voice_profiles` volume stores voices created in the UI so they survive container replacement and image updates. Docker creates the volume automatically the first time you run one of these commands.
 
 The full image is baked with the OmniVoice model, the Higgs audio tokenizer, and Whisper ASR assets. After the image is pulled, normal runtime is configured for offline use with `HF_HUB_OFFLINE=1` and `TRANSFORMERS_OFFLINE=1`. The Python 3.13 baked image was validated with no host model-cache volume mounted.
 
@@ -99,7 +101,7 @@ Voice design is for speaker attributes only. Do not combine `instruct` with brac
 Voice cloning with a reference audio path mounted into the container:
 
 ```bash
-docker run -p 7861:7861 --gpus "device=0" -e CUDA_VISIBLE_DEVICES=0 -v "%cd%/samples:/data" hangrylabs/omnivoicetts:latest
+docker run -p 7861:7861 --gpus "device=0" -e CUDA_VISIBLE_DEVICES=0 -v omnivoicetts_openai_voice_profiles:/app/openai_voice_profiles -v "%cd%/samples:/data" hangrylabs/omnivoicetts:latest
 ```
 
 ```bash
@@ -139,7 +141,7 @@ OpenAI-compatible clients can also select or override that profile through addit
 }
 ```
 
-Voice profiles are stored inside the container at `/app/openai_voice_profiles`. Mount that path to a Docker volume if you want profiles to survive container replacement.
+Voice profiles are stored inside the container at `/app/openai_voice_profiles`. The Quick Start commands mount the named Docker volume `omnivoicetts_openai_voice_profiles` there so profiles survive container replacement.
 
 The same saved profiles and built-in aliases are available on native `/tts/generate`, `/tts/convert`, `/tts/stream`, and `/tts/stream-chunks` requests through either `voice` or `voice_profile`. Explicit `ref_audio` still takes precedence when provided.
 
