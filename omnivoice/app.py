@@ -108,7 +108,12 @@ OPENAI_MODEL_ALIASES = {
     "tts-1-hd": "omnivoice",
     "gpt-4o-mini-tts": "omnivoice",
 }
-OPENAI_MODEL_IDS = ["omnivoice", "tts-1", "tts-1-hd", "gpt-4o-mini-tts"]
+OPENAI_MODEL_ID = "omnivoice"
+OPENAI_ADVERTISED_MODEL_IDS = [OPENAI_MODEL_ID]
+OPENAI_ACCEPTED_MODEL_IDS = list(OPENAI_MODEL_ALIASES)
+OPENAI_COMPATIBILITY_MODEL_IDS = [
+    model_id for model_id in OPENAI_ACCEPTED_MODEL_IDS if model_id != OPENAI_MODEL_ID
+]
 OPENAI_VOICE_INSTRUCTIONS = {
     "default": None,
     "auto": None,
@@ -1777,7 +1782,13 @@ class CacheClearRequest(BaseModel):
 class OpenAISpeechRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
-    model: str = Field("omnivoice", description="OpenAI-style model id. Accepted aliases include omnivoice, tts-1, and tts-1-hd.")
+    model: str = Field(
+        "omnivoice",
+        description=(
+            "OpenAI-style model id. Accepted request aliases include omnivoice, omnivoicetts, "
+            "tts-1, tts-1-hd, and gpt-4o-mini-tts; aliases map to the local OmniVoice model."
+        ),
+    )
     input: str = Field(..., min_length=1, description="Text to synthesize.")
     voice: str = Field("default", description="OpenAI-style voice id. Compatibility aliases map to local OmniVoice clone/design behavior.")
     response_format: str = Field("mp3", description="mp3, wav, flac, or ogg. opus is accepted as an ogg alias.")
@@ -1800,10 +1811,10 @@ class OpenAISpeechRequest(BaseModel):
 
 
 def normalize_openai_model(model: str | None) -> str:
-    model_id = (model or "omnivoice").strip().lower()
+    model_id = (model or OPENAI_MODEL_ID).strip().lower()
     if model_id not in OPENAI_MODEL_ALIASES:
-        supported = ", ".join(OPENAI_MODEL_IDS)
-        raise ValueError(f"Unsupported model '{model}'. Supported OpenAI-compatible models: {supported}")
+        supported = ", ".join(OPENAI_ACCEPTED_MODEL_IDS)
+        raise ValueError(f"Unsupported model '{model}'. Supported OpenAI-compatible model ids: {supported}")
     return OPENAI_MODEL_ALIASES[model_id]
 
 
@@ -1874,13 +1885,24 @@ def resolve_openai_voice(
     return None, None, openai_voice_instruction(payload.voice), "voice-design"
 
 
-def openai_model_payload(model_id: str) -> dict:
-    return {
-        "id": model_id,
+def openai_model_payload(requested_id: str | None = None) -> dict:
+    payload = {
+        "id": OPENAI_MODEL_ID,
         "object": "model",
         "created": 0,
-        "owned_by": "hangrylabs",
+        "owned_by": "local",
+        "root": DEFAULT_MODEL,
+        "parent": None,
+        "compatibility_aliases": OPENAI_COMPATIBILITY_MODEL_IDS,
+        "compatibility_note": (
+            "Local OmniVoiceTTS model served through OpenAI-compatible speech routes. "
+            "OpenAI-style model names are accepted as request aliases only."
+        ),
     }
+    if requested_id and requested_id != OPENAI_MODEL_ID:
+        payload["requested_id"] = requested_id
+        payload["alias_for"] = OPENAI_MODEL_ID
+    return payload
 
 
 def openai_voice_payload(voice_id: str) -> dict:
@@ -2180,17 +2202,18 @@ def openai_index() -> dict:
 def openai_models() -> dict:
     return {
         "object": "list",
-        "data": [openai_model_payload(model_id) for model_id in OPENAI_MODEL_IDS],
+        "data": [openai_model_payload(model_id) for model_id in OPENAI_ADVERTISED_MODEL_IDS],
     }
 
 
 @api.get("/v1/models/{model_id}")
 def openai_model(model_id: str) -> dict:
     try:
-        normalize_openai_model(model_id)
+        normalized_model_id = normalize_openai_model(model_id)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    return openai_model_payload(model_id)
+    requested_model_id = (model_id or OPENAI_MODEL_ID).strip().lower()
+    return openai_model_payload(requested_model_id if requested_model_id != normalized_model_id else None)
 
 
 @api.get("/v1/audio/models")

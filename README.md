@@ -124,7 +124,7 @@ curl -X POST "http://localhost:7861/v1/audio/speech" \
   -o openai-speech.mp3
 ```
 
-Supported compatibility model ids are `omnivoice`, `tts-1`, `tts-1-hd`, and `gpt-4o-mini-tts`. OpenAI-style voice names such as `alloy`, `echo`, `fable`, `onyx`, `nova`, and `shimmer` are accepted as local compatibility aliases.
+Model discovery through `/v1/models` reports the local `omnivoice` model. For client compatibility, speech requests also accept `omnivoicetts`, `tts-1`, `tts-1-hd`, and `gpt-4o-mini-tts` as aliases; all of them map to the same local OmniVoice model. OpenAI-style voice names such as `alloy`, `echo`, `fable`, `onyx`, `nova`, and `shimmer` are accepted as local compatibility aliases.
 
 For OpenAI-compatible TTS, standard voice aliases use a local built-in clone reference by default so sentence-by-sentence playback stays closer to the same speaker identity. Advanced clients may also pass OmniVoice extensions such as `language`, `seed`, `randomize_seed`, `voice_profile`, `ref_audio`, and `ref_text` in the request body.
 
