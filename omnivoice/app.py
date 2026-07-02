@@ -3,12 +3,16 @@ from __future__ import annotations
 import gc
 import io
 import html
+import json
 import logging
 import os
+import platform
 import random
 import re
+import sys
 import threading
 from collections import OrderedDict
+from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Iterator, Optional
@@ -88,7 +92,9 @@ DEFAULT_MODEL = os.getenv("OMNIVOICE_MODEL", "k2-fsa/OmniVoice")
 DEFAULT_DEVICE = os.getenv("OMNIVOICE_DEVICE", "auto")
 DEFAULT_ASR_MODEL = os.getenv("OMNIVOICE_ASR_MODEL", "openai/whisper-large-v3-turbo")
 LOAD_ASR = env_bool("OMNIVOICE_LOAD_ASR", False)
+ALLOW_CPU_EAGER_ASR = env_bool("OMNIVOICE_ALLOW_CPU_EAGER_ASR", False)
 MAX_CONCURRENT_GENERATIONS = env_int("OMNIVOICE_MAX_CONCURRENT_GENERATIONS", 1)
+CPU_MEMORY_WARNING_INTERVAL_SECONDS = env_int("OMNIVOICE_CPU_MEMORY_WARNING_INTERVAL_SECONDS", 300)
 EMPTY_CUDA_CACHE_AFTER_REQUEST = env_bool("OMNIVOICE_EMPTY_CUDA_CACHE_AFTER_REQUEST", False)
 RESET_CUDA_PEAK_AFTER_CACHE_CLEAR = env_bool("OMNIVOICE_RESET_CUDA_PEAK_AFTER_CACHE_CLEAR", False)
 APP_VERSION = os.getenv("APP_VERSION", __version__)
@@ -126,6 +132,71 @@ OPENAI_VOICE_INSTRUCTIONS = {
     "benchmark_original_clone": None,
 }
 OPENAI_CLONE_VOICE_ALIASES = {"default", "alloy", "echo", "fable", "onyx", "nova", "shimmer", "benchmark_original_clone"}
+
+CPU_MEMORY_SCENARIO_RECOMMENDATIONS_MIB = {
+    "RV": 2048,
+    "DV": 2048,
+    "CR-NT": 6144,
+    "CR-TX": 2048,
+    "SV-NT": 7168,
+    "SV-TX": 3072,
+}
+CPU_MEMORY_SCENARIO_DESCRIPTIONS = {
+    "RV": "random/no-prompt voice",
+    "DV": "voice design",
+    "CR-NT": "direct clone without transcript",
+    "CR-TX": "direct clone with transcript",
+    "SV-NT": "stored voice without transcript",
+    "SV-TX": "stored voice with transcript",
+}
+CPU_MEMORY_WARNING_LOCK = threading.Lock()
+CPU_MEMORY_WARNING_LAST: dict[str, float] = {}
+
+STARTUP_PARAMETER_DEFAULTS = OrderedDict(
+    [
+        ("APP_VERSION", __version__),
+        ("BUILD_ID", "stable"),
+        ("BUILD_DATE", ""),
+        ("HOST", "0.0.0.0"),
+        ("PORT", "7861"),
+        ("UVICORN_RELOAD", "0"),
+        ("CUDA_VISIBLE_DEVICES", ""),
+        ("NVIDIA_VISIBLE_DEVICES", ""),
+        ("NVIDIA_DRIVER_CAPABILITIES", ""),
+        ("PYTORCH_CUDA_ALLOC_CONF", ""),
+        ("HF_HOME", ""),
+        ("HF_HUB_OFFLINE", ""),
+        ("TRANSFORMERS_OFFLINE", ""),
+        ("HF_TOKEN", ""),
+        ("GRADIO_TEMP_DIR", ""),
+        ("TMPDIR", ""),
+        ("OMNIVOICE_MODEL", "k2-fsa/OmniVoice"),
+        ("OMNIVOICE_DEVICE", "auto"),
+        ("OMNIVOICE_ASR_MODEL", "openai/whisper-large-v3-turbo"),
+        ("OMNIVOICE_LOAD_ASR", "0"),
+        ("OMNIVOICE_ALLOW_CPU_EAGER_ASR", "0"),
+        ("OMNIVOICE_MAX_CONCURRENT_GENERATIONS", "1"),
+        ("OMNIVOICE_EMPTY_CUDA_CACHE_AFTER_REQUEST", "0"),
+        ("OMNIVOICE_RESET_CUDA_PEAK_AFTER_CACHE_CLEAR", "0"),
+        ("OMNIVOICE_CPU_MEMORY_WARNING_INTERVAL_SECONDS", "300"),
+        ("OMNIVOICE_OPENAI_VOICE_PROFILE_DIR", "/app/openai_voice_profiles"),
+        ("OMNIVOICE_ALLOWED_REF_AUDIO_ROOTS", ""),
+        ("OMNIVOICE_VOICE_PROMPT_CACHE_LIMIT", "32"),
+        ("OMNIVOICE_RESAMPLE_BACKEND", "torchaudio"),
+        ("OMNIVOICE_UI_LOCALE", "en"),
+    ]
+)
+SENSITIVE_ENV_NAME_PARTS = ("TOKEN", "SECRET", "PASSWORD", "PASS", "KEY", "CREDENTIAL", "AUTH")
+
+HANGRYLABS_LOGO = r"""
+ _   _                              _           _
+| | | | __ _ _ __   __ _ _ __ _   _| |    __ _ | |__  ___
+| |_| |/ _` | '_ \ / _` | '__| | | | |   / _` || '_ \/ __|
+|  _  | (_| | | | | (_| | |  | |_| | |__| (_| || |_) \__ \
+|_| |_|\__,_|_| |_|\__, |_|   \__, |_____\__,_||_.__/|___/
+                   |___/      |___/
+        OmniVoiceTTS
+"""
 
 BRACKET_TOKEN_PATTERN = re.compile(r"\[[^\]\r\n]{1,80}\]")
 SUPPORTED_NONVERBAL_TAGS = [
@@ -268,6 +339,24 @@ def get_cuda_devices() -> list[str]:
     return [torch.cuda.get_device_name(idx) for idx in range(torch.cuda.device_count())]
 
 
+def get_cuda_device_diagnostics() -> list[dict[str, Any]]:
+    if not torch.cuda.is_available():
+        return []
+    devices = []
+    for index in range(torch.cuda.device_count()):
+        props = torch.cuda.get_device_properties(index)
+        devices.append(
+            {
+                "index": index,
+                "name": torch.cuda.get_device_name(index),
+                "total_memory_bytes": props.total_memory,
+                "compute_capability": f"{props.major}.{props.minor}",
+                "multiprocessor_count": props.multi_processor_count,
+            }
+        )
+    return devices
+
+
 def get_runtime_label() -> str:
     cuda_devices = get_cuda_devices()
     if cuda_devices:
@@ -376,14 +465,29 @@ def get_model(device: str) -> OmniVoice:
     with MODEL_LOCK:
         if resolved_device not in MODEL_CACHE:
             dtype = torch.float16 if resolved_device.startswith("cuda") else torch.float32
+            load_asr = should_eager_load_asr(resolved_device)
             MODEL_CACHE[resolved_device] = OmniVoice.from_pretrained(
                 DEFAULT_MODEL,
                 device_map=resolved_device,
                 dtype=dtype,
-                load_asr=LOAD_ASR,
+                load_asr=load_asr,
                 asr_model_name=DEFAULT_ASR_MODEL,
             )
         return MODEL_CACHE[resolved_device]
+
+
+def should_eager_load_asr(device: str, warn: bool = True) -> bool:
+    if not LOAD_ASR:
+        return False
+    if device == "cpu" and not ALLOW_CPU_EAGER_ASR:
+        if warn:
+            logging.warning(
+                "OMNIVOICE_LOAD_ASR=1 ignored for CPU model preload. "
+                "Saved voice profiles with ref_text do not need ASR, and eager Whisper loading can exhaust CPU RAM. "
+                "Set OMNIVOICE_ALLOW_CPU_EAGER_ASR=1 to force eager CPU ASR loading."
+            )
+        return False
+    return True
 
 
 def get_generation_semaphore(device: str) -> threading.BoundedSemaphore:
@@ -423,6 +527,103 @@ def clear_cuda_allocator_cache(reset_peak_stats: bool = False) -> dict[str, Any]
     return {"before": before, "after": after}
 
 
+def read_int_file(path: Path) -> int | None:
+    try:
+        value = path.read_text(encoding="utf-8").strip()
+    except OSError:
+        return None
+    if not value or value == "max":
+        return None
+    try:
+        return int(value)
+    except ValueError:
+        return None
+
+
+def system_memory_total_bytes() -> int | None:
+    try:
+        return os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES")
+    except (AttributeError, OSError, ValueError):
+        return None
+
+
+def system_memory_available_bytes() -> int | None:
+    try:
+        for line in Path("/proc/meminfo").read_text(encoding="utf-8").splitlines():
+            if line.startswith("MemAvailable:"):
+                return int(line.split()[1]) * 1024
+    except (OSError, IndexError, ValueError):
+        return None
+    return None
+
+
+def cgroup_memory_limit_bytes() -> int | None:
+    limit = read_int_file(Path("/sys/fs/cgroup/memory.max"))
+    if limit is None:
+        limit = read_int_file(Path("/sys/fs/cgroup/memory/memory.limit_in_bytes"))
+    total = system_memory_total_bytes()
+    if limit is not None and total is not None and limit > total * 10:
+        return None
+    return limit
+
+
+def cgroup_memory_current_bytes() -> int | None:
+    current = read_int_file(Path("/sys/fs/cgroup/memory.current"))
+    if current is None:
+        current = read_int_file(Path("/sys/fs/cgroup/memory/memory.usage_in_bytes"))
+    return current
+
+
+def bytes_to_mib(value: int | None) -> float | None:
+    if value is None:
+        return None
+    return round(value / (1024 * 1024), 1)
+
+
+def cpu_memory_stats() -> dict[str, Any]:
+    limit = cgroup_memory_limit_bytes()
+    current = cgroup_memory_current_bytes()
+    if limit is not None and current is not None:
+        available = max(0, limit - current)
+        source = "cgroup"
+    else:
+        available = system_memory_available_bytes()
+        source = "system"
+    return {
+        "source": source,
+        "limit_bytes": limit,
+        "current_bytes": current,
+        "available_bytes": available,
+        "limit_mib": bytes_to_mib(limit),
+        "current_mib": bytes_to_mib(current),
+        "available_mib": bytes_to_mib(available),
+    }
+
+
+def redact_startup_parameter(name: str, value: str) -> str:
+    if value and any(part in name.upper() for part in SENSITIVE_ENV_NAME_PARTS):
+        return "<redacted>"
+    return value
+
+
+def startup_parameter_diagnostics() -> dict[str, dict[str, Any]]:
+    names = set(STARTUP_PARAMETER_DEFAULTS)
+    for name in os.environ:
+        if name.startswith("OMNIVOICE_"):
+            names.add(name)
+    parameters = OrderedDict()
+    for name in sorted(names):
+        env_value = os.getenv(name)
+        default = STARTUP_PARAMETER_DEFAULTS.get(name, "")
+        raw_value = env_value if env_value is not None else default
+        parameters[name] = {
+            "value": redact_startup_parameter(name, raw_value),
+            "source": "env" if env_value is not None else "default",
+            "set": env_value is not None,
+        }
+    return parameters
+
+
 def should_cache_voice_clone_prompt(ref_audio: str | None) -> bool:
     if not ref_audio:
         return False
@@ -439,6 +640,75 @@ def should_cache_voice_clone_prompt(ref_audio: str | None) -> bool:
         return OPENAI_VOICE_PROFILE_DIR.resolve(strict=False) in ref_path.parents
     except OSError:
         return False
+
+
+def cpu_memory_scenario(payload) -> str:
+    has_ref_audio = bool((getattr(payload, "ref_audio", None) or "").strip())
+    has_ref_text = bool((getattr(payload, "ref_text", None) or "").strip())
+    has_stored_voice = bool(getattr(payload, "cache_voice_prompt", False) or (getattr(payload, "voice_profile", None) or "").strip())
+    if has_ref_audio:
+        if has_stored_voice:
+            return "SV-TX" if has_ref_text else "SV-NT"
+        return "CR-TX" if has_ref_text else "CR-NT"
+    if (getattr(payload, "instruct", None) or "").strip():
+        return "DV"
+    return "RV"
+
+
+def cpu_memory_recommendation_payload() -> dict[str, dict[str, Any]]:
+    return {
+        code: {
+            "description": CPU_MEMORY_SCENARIO_DESCRIPTIONS[code],
+            "recommended_mib": mib,
+            "recommended_gb": int(mib / 1024),
+        }
+        for code, mib in CPU_MEMORY_SCENARIO_RECOMMENDATIONS_MIB.items()
+    }
+
+
+def should_emit_cpu_memory_warning(key: str) -> bool:
+    now = datetime.now().timestamp()
+    with CPU_MEMORY_WARNING_LOCK:
+        previous = CPU_MEMORY_WARNING_LAST.get(key, 0)
+        if now - previous < CPU_MEMORY_WARNING_INTERVAL_SECONDS:
+            return False
+        CPU_MEMORY_WARNING_LAST[key] = now
+    return True
+
+
+def warn_if_cpu_memory_tight(payload, route_name: str) -> None:
+    try:
+        resolved_device = normalize_device(resolve_requested_device(payload.device, payload.use_gpu))
+    except RuntimeError:
+        return
+    if resolved_device != "cpu":
+        return
+    scenario = cpu_memory_scenario(payload)
+    recommended_mib = CPU_MEMORY_SCENARIO_RECOMMENDATIONS_MIB[scenario]
+    memory = cpu_memory_stats()
+    limit_mib = memory.get("limit_mib")
+    available_mib = memory.get("available_mib")
+    reasons = []
+    if limit_mib is not None and limit_mib < recommended_mib:
+        reasons.append(f"container limit {limit_mib:.0f} MiB is below recommended {recommended_mib} MiB")
+    if limit_mib is None and available_mib is not None and available_mib < recommended_mib:
+        reasons.append(f"available system memory {available_mib:.0f} MiB is below recommended {recommended_mib} MiB")
+    if limit_mib is not None and available_mib is not None and available_mib < 512:
+        reasons.append(f"container memory headroom is only {available_mib:.0f} MiB")
+    if not reasons:
+        return
+    key = f"{route_name}:{scenario}:{';'.join(reasons)}"
+    if not should_emit_cpu_memory_warning(key):
+        return
+    logging.warning(
+        "[cpu-memory] RAM is tight for %s on %s (%s). %s. "
+        "OmniVoiceTTS will try to continue, but CPU generation may be killed by Docker/the OS under load. "
+        "Provide more RAM, add ref_text for clone/profile requests, or use GPU mode when possible.",
+        route_name,
+        scenario,
+        CPU_MEMORY_SCENARIO_DESCRIPTIONS[scenario],
+        "; ".join(reasons),
+    )
 
 
 def voice_clone_prompt_cache_key(
@@ -1117,6 +1387,8 @@ def get_supported_output_formats() -> dict[str, dict[str, str]]:
 
 
 def get_status_payload() -> dict:
+    default_device = normalize_device(DEFAULT_DEVICE)
+    effective_load_asr = should_eager_load_asr(default_device, warn=False)
     return {
         "msg": "pong",
         "type": "OmniVoiceTTS",
@@ -1125,13 +1397,18 @@ def get_status_payload() -> dict:
         "build_id": BUILD_ID,
         "runtime": get_runtime_label(),
         "device": DEFAULT_DEVICE,
+        "resolved_device": default_device,
         "model": DEFAULT_MODEL,
         "sample_rate": SAMPLE_RATE,
-        "load_asr": LOAD_ASR,
-        "asr_model": DEFAULT_ASR_MODEL if LOAD_ASR else None,
+        "load_asr": effective_load_asr,
+        "requested_load_asr": LOAD_ASR,
+        "allow_cpu_eager_asr": ALLOW_CPU_EAGER_ASR,
+        "asr_model": DEFAULT_ASR_MODEL if effective_load_asr else None,
         "resample_backend": RESAMPLE_BACKEND,
         "languages": len(LANG_IDS),
         "cuda_memory": cuda_memory_stats(),
+        "cpu_memory": cpu_memory_stats() if default_device == "cpu" else None,
+        "cpu_memory_recommendations": cpu_memory_recommendation_payload() if default_device == "cpu" else None,
         "max_concurrent_generations": MAX_CONCURRENT_GENERATIONS,
         "empty_cuda_cache_after_request": EMPTY_CUDA_CACHE_AFTER_REQUEST,
         "reset_cuda_peak_after_cache_clear": RESET_CUDA_PEAK_AFTER_CACHE_CLEAR,
@@ -1146,6 +1423,91 @@ def get_status_payload() -> dict:
         },
         "output_formats": get_supported_output_formats(),
     }
+
+
+def get_startup_diagnostics_payload() -> dict[str, Any]:
+    try:
+        resolved_device = normalize_device(DEFAULT_DEVICE)
+        device_error = None
+    except RuntimeError as exc:
+        resolved_device = None
+        device_error = str(exc)
+    effective_load_asr = should_eager_load_asr(resolved_device, warn=False) if resolved_device else False
+    return {
+        "app": {
+            "name": "OmniVoiceTTS",
+            "version": read_version_file(),
+            "package_version": APP_VERSION,
+            "build_id": BUILD_ID,
+            "build_label": get_build_label(),
+        },
+        "runtime": {
+            "label": get_runtime_label(),
+            "python": sys.version.split()[0],
+            "platform": platform.platform(),
+            "torch": torch.__version__,
+            "torch_cuda": torch.version.cuda,
+            "cudnn": torch.backends.cudnn.version(),
+            "resample_backend": RESAMPLE_BACKEND,
+        },
+        "hardware": {
+            "cuda_available": torch.cuda.is_available(),
+            "cuda_visible_devices": os.getenv("CUDA_VISIBLE_DEVICES", ""),
+            "cuda_device_count": torch.cuda.device_count() if torch.cuda.is_available() else 0,
+            "cuda_devices": get_cuda_device_diagnostics(),
+            "mps_available": bool(hasattr(torch.backends, "mps") and torch.backends.mps.is_available()),
+        },
+        "memory": {
+            "cpu": cpu_memory_stats(),
+            "cuda": cuda_memory_stats(),
+        },
+        "config": {
+            "model": DEFAULT_MODEL,
+            "device": DEFAULT_DEVICE,
+            "resolved_device": resolved_device,
+            "device_error": device_error,
+            "load_asr": effective_load_asr,
+            "requested_load_asr": LOAD_ASR,
+            "allow_cpu_eager_asr": ALLOW_CPU_EAGER_ASR,
+            "asr_model": DEFAULT_ASR_MODEL if effective_load_asr else None,
+            "max_concurrent_generations": MAX_CONCURRENT_GENERATIONS,
+            "empty_cuda_cache_after_request": EMPTY_CUDA_CACHE_AFTER_REQUEST,
+            "reset_cuda_peak_after_cache_clear": RESET_CUDA_PEAK_AFTER_CACHE_CLEAR,
+            "cpu_memory_warning_interval_seconds": CPU_MEMORY_WARNING_INTERVAL_SECONDS,
+            "voice_prompt_cache_limit": VOICE_CLONE_PROMPT_CACHE_LIMIT,
+            "languages": len(LANG_IDS),
+            "output_formats": sorted(OUTPUT_FORMATS),
+        },
+        "startup_parameters": startup_parameter_diagnostics(),
+        "paths": {
+            "openai_voice_profile_dir": str(OPENAI_VOICE_PROFILE_DIR),
+            "openai_voice_profile_index_exists": OPENAI_VOICE_PROFILE_INDEX.exists(),
+            "brand_asset_dir_exists": ASSET_DIR.exists(),
+            "default_clone_audio_exists": OPENAI_DEFAULT_CLONE_AUDIO.exists(),
+        },
+        "offline": {
+            "hf_hub_offline": os.getenv("HF_HUB_OFFLINE", ""),
+            "transformers_offline": os.getenv("TRANSFORMERS_OFFLINE", ""),
+        },
+    }
+
+
+def log_startup_diagnostics() -> None:
+    for line in HANGRYLABS_LOGO.strip("\n").splitlines():
+        print(line, flush=True)
+    diagnostics = get_startup_diagnostics_payload()
+    print(f"[startup] diagnostics={json.dumps(diagnostics, sort_keys=True)}", flush=True)
+    if diagnostics["config"]["resolved_device"] == "cpu":
+        print(
+            f"[startup] cpu_memory_recommendations={json.dumps(cpu_memory_recommendation_payload(), sort_keys=True)}",
+            flush=True,
+        )
+
+
+@asynccontextmanager
+async def api_lifespan(app: FastAPI):
+    log_startup_diagnostics()
+    yield
 
 
 LANGUAGE_CHOICES = [("Auto", "Auto")] + sorted((lang_display_name(name), name) for name in LANG_NAMES)
@@ -1678,6 +2040,7 @@ api = FastAPI(
     openapi_url="/tts/openapi.json",
     docs_url="/tts/docs",
     redoc_url="/tts/redoc",
+    lifespan=api_lifespan,
 )
 
 ACCESS_LOGGER = logging.getLogger("omnivoice.access")
@@ -1736,7 +2099,7 @@ class TTSRequest(BaseModel):
     )
     speed: Optional[float] = Field(1.0, ge=0.5, le=1.5, description="Speech speed multiplier.")
     duration: Optional[float] = Field(None, gt=0.0, description="Fixed output duration in seconds. Overrides speed.")
-    device: str = Field("auto", description="auto, cpu, mps, or cuda:N.")
+    device: str = Field(DEFAULT_DEVICE, description="auto, cpu, mps, or cuda:N.")
     use_gpu: Optional[bool] = Field(None, description="Kokoro-compatible legacy switch. Prefer device.")
     num_step: int = Field(32, ge=4, le=64, description="Diffusion decoding steps.")
     guidance_scale: float = Field(2.0, ge=0.0, le=4.0, description="Classifier-free guidance scale.")
@@ -1796,7 +2159,7 @@ class OpenAISpeechRequest(BaseModel):
     language: Optional[str] = Field(None, description="Optional OmniVoice extension: language name or id.")
     seed: Optional[int] = Field(None, ge=0, le=MAX_RANDOM_SEED, description="Optional OmniVoice extension: fixed generation seed.")
     randomize_seed: bool = Field(False, description="Optional OmniVoice extension: generate a random seed.")
-    device: str = Field("auto", description="Optional OmniVoice extension: auto, cpu, mps, or cuda:N.")
+    device: str = Field(DEFAULT_DEVICE, description="Optional OmniVoice extension: auto, cpu, mps, or cuda:N.")
     num_step: int = Field(32, ge=4, le=64, description="Optional OmniVoice extension: diffusion decoding steps.")
     instructions: Optional[str] = Field(None, description="Optional OmniVoice extension: explicit voice-design instruction.")
     ref_audio: Optional[str] = Field(
@@ -2124,6 +2487,7 @@ def stream_audio_response(payload: TTSRequest, route_name: str) -> StreamingResp
         payload = resolve_tts_compatible_voice(payload)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    warn_if_cpu_memory_tight(payload, route_name)
     try:
         output_format, sample_rate, waveform, used_seed = synthesize_payload(payload)
         try:
@@ -2156,6 +2520,7 @@ def progressive_audio_response(payload: TTSRequest, route_name: str) -> Streamin
         payload = resolve_tts_compatible_voice(payload)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    warn_if_cpu_memory_tight(payload, route_name)
     output_format, sample_rate, chunks, used_seed = synthesize_payload_chunks(payload)
     extension = OUTPUT_FORMATS[output_format]["extension"]
     media_type = OUTPUT_FORMATS[output_format]["media_type"]

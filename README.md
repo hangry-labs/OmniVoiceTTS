@@ -50,8 +50,14 @@ docker run -p 7861:7861 --gpus "device=0" -e CUDA_VISIBLE_DEVICES=0 -v omnivoice
 Run on CPU:
 
 ```bash
-docker run -p 7861:7861 -e OMNIVOICE_DEVICE=cpu -v omnivoicetts_openai_voice_profiles:/app/openai_voice_profiles hangrylabs/omnivoicetts:latest
+docker run -p 7861:7861 -e OMNIVOICE_DEVICE=cpu -e OMNIVOICE_LOAD_ASR=0 -v omnivoicetts_openai_voice_profiles:/app/openai_voice_profiles hangrylabs/omnivoicetts:latest
 ```
+
+CPU mode is supported as a fallback, but it still needs enough system memory. For a 140-character CPU benchmark request, conservative rounded Docker RAM recommendations were: 2 GB for random/no-prompt voice, voice design, and direct clone with transcript; 3 GB for a stored voice profile with transcript; 6 GB for direct clone without transcript; and 7 GB for a stored voice profile without transcript. The no-transcript paths may lazy-load ASR, which is why they need much more RAM. Use more for longer text, concurrent requests, larger outputs, or host environments with tighter memory behavior.
+
+When running on CPU, `/tts/status` reports container/system memory diagnostics and per-scenario RAM recommendations. If a CPU request appears close to the available memory limit, the container logs a warning and still tries to continue; Docker or the OS may still kill the process if RAM is exhausted.
+
+If a CPU container exits after `Loading weights` during a cloned-voice `/v1/audio/speech` request, it is usually an out-of-memory kill rather than a Python exception. The TTS model already needs significant RAM on CPU, and clone/profile requests without a transcript can lazy-load Whisper ASR to transcribe the reference audio. Recent snapshots reduce the default footprint by keeping eager ASR off on CPU, but no-transcript clone paths still need more memory. To lower RAM use: run the latest snapshot (`0.2.1-snapshot` or newer), keep `OMNIVOICE_LOAD_ASR=0`, do not set `OMNIVOICE_ALLOW_CPU_EAGER_ASR=1`, save voice profiles with a reference transcript, include `ref_text` when sending direct `ref_audio`, keep concurrency at the default `OMNIVOICE_MAX_CONCURRENT_GENERATIONS=1`, and prefer GPU mode when available. See `benchmarks/CPU_MEMORY.md` for measured scenario recommendations and run `task benchmark-cpu-memory` on your host if you need local numbers.
 
 Run on a specific GPU (example: GPU index `1`):
 
@@ -63,7 +69,7 @@ Then open: **[http://localhost:7861](http://localhost:7861)**
 
 The named `omnivoicetts_openai_voice_profiles` volume stores voices created in the UI so they survive container replacement and image updates. Docker creates the volume automatically the first time you run one of these commands.
 
-The full image is baked with the OmniVoice model, the Higgs audio tokenizer, and Whisper ASR assets. After the image is pulled, normal runtime is configured for offline use with `HF_HUB_OFFLINE=1` and `TRANSFORMERS_OFFLINE=1`. The Python 3.13 baked image was validated with no host model-cache volume mounted.
+The full image is baked with the OmniVoice model, the Higgs audio tokenizer, and Whisper ASR assets. After the image is pulled, normal runtime is configured for offline use with `HF_HUB_OFFLINE=1` and `TRANSFORMERS_OFFLINE=1`. CPU runs should keep eager ASR disabled; saved voice profiles with transcripts do not need Whisper at request startup, and ASR can still lazy-load only when a reference audio request omits `ref_text`. To force eager Whisper preload on CPU anyway, set `OMNIVOICE_ALLOW_CPU_EAGER_ASR=1`. The Python 3.13 baked image was validated with no host model-cache volume mounted.
 
 ---
 
@@ -290,6 +296,14 @@ task benchmark-examples
 The benchmark reuses the public example workload, prewarms the model and benchmark reference voice, then runs no-prompt, predefined cached-reference, and direct reference-audio rounds. Results are appended to per-category Markdown tables under `benchmarks/` for human tracking and `benchmarks/example-generation.json` for detailed machine-readable history. Use `BENCHMARK_ITEMS=1` or `BENCHMARK_LIMIT_LANGUAGES=1` for quick smoke checks.
 
 By default each measured stage prewarms immediately before it runs: 10 no-prompt warmup calls before `random_voice`, 10 predefined-reference warmup calls before `predefined_voice`, and 10 direct-reference warmup calls before `direct_reference_audio`. It then runs 100 no-prompt measured calls, 100 predefined cached-reference measured calls, and 100 direct `ref_audio` measured calls. The measured set is deterministic: the first two random samples from each language in `examples/assets/manifest.json`, repeated in the same order as needed to reach 100 calls per round.
+
+CPU memory can be checked with:
+
+```bash
+task benchmark-cpu-memory
+```
+
+This starts short-lived CPU containers with increasing Docker memory limits and sends OpenAI speech requests for random voice, design voice, direct clone with/without transcript, and stored voice with/without transcript. The default ladder starts at 1536 MiB and skips obviously unusable sub-GB limits. Results are appended to `benchmarks/CPU_MEMORY.md` as scenario recommendation columns and to `benchmarks/cpu-memory.json` with detailed attempt data.
 
 Hot-swap local service code into the container without rebuilding:
 

@@ -11,6 +11,8 @@ vars:
   OPENAI_PROFILE_VOLUME: omnivoicetts_openai_voice_profiles
   HF_HUB_OFFLINE: '1'
   TRANSFORMERS_OFFLINE: '1'
+  LOAD_ASR: '0'
+  ALLOW_CPU_EAGER_ASR: '0'
   CONTAINER: omnivoicetts
   CONTAINER_LOCAL: omnivoicetts_local
   TEMP_AUDIO: '%TEMP%\\omnivoicetts_task_audio'
@@ -30,6 +32,10 @@ vars:
   BENCHMARK_SAMPLES_PER_LANGUAGE: '2'
   BENCHMARK_RANDOM_WARMUP: '10'
   BENCHMARK_REFERENCE_WARMUP: '10'
+  BENCHMARK_CPU_MEMORY_LIMITS: '1536m,2048m,2560m,3072m,4096m,5120m,6144m,7168m,8192m,10240m,12288m'
+  BENCHMARK_CPU_MEMORY_RESULTS: 'benchmarks\cpu-memory.json'
+  BENCHMARK_CPU_MEMORY_MARKDOWN: 'benchmarks\CPU_MEMORY.md'
+  BENCHMARK_CPU_MEMORY_START_PORT: '7870'
   CODEQL: 'C:\sandbox\tools\codeql\codeql.exe'
   CODEQL_WORK_DIR: 'C:\sandbox\tools\codeql-work\OmniVoiceTTS'
   CODEQL_PYTHON_DB: '{{.CODEQL_WORK_DIR}}\codeql-db'
@@ -69,6 +75,20 @@ tasks:
     cmds:
       - cmd /c docker volume create {{.HF_CACHE_VOLUME}} >nul
       - cmd /c docker run --rm -v {{.HF_CACHE_VOLUME}}:/cache {{.IMAGE}} sh -c "mkdir -p /cache && cp -an /app/.cache/huggingface/. /cache/ || true"
+
+  init-clean:
+    desc: Remove known local OmniVoiceTTS deployment containers without touching volumes or images
+    cmds:
+      - cmd /c docker rm -f {{.CONTAINER}} {{.CONTAINER_LOCAL}} omnivoicetts_openai_test omnivoicetts_memory_test omnivoicetts_cpu_bug omnivoicetts_cpu_warn >nul 2>&1 || exit /b 0
+
+  init:
+    desc: Clean local OmniVoiceTTS deployments and start one hot-reload instance from the existing image
+    cmds:
+      - task: init-clean
+      - task: cache-init
+      - cmd /c docker volume create {{.OPENAI_PROFILE_VOLUME}} >nul
+      - cmd /c docker run -d --name {{.CONTAINER_LOCAL}} -p {{.PORT}}:7861 --gpus all -e CUDA_VISIBLE_DEVICES={{.GPU_DEVICE}} -e OMNIVOICE_DEVICE={{.APP_DEVICE}} -e OMNIVOICE_LOAD_ASR={{.LOAD_ASR}} -e OMNIVOICE_ALLOW_CPU_EAGER_ASR={{.ALLOW_CPU_EAGER_ASR}} -e PORT=7861 -e UVICORN_RELOAD=1 -e HF_TOKEN={{.HF_TOKEN}} -e HF_HUB_OFFLINE={{.HF_HUB_OFFLINE}} -e TRANSFORMERS_OFFLINE={{.TRANSFORMERS_OFFLINE}} -v {{.HF_CACHE_VOLUME}}:/app/.cache/huggingface -v {{.OPENAI_PROFILE_VOLUME}}:/app/openai_voice_profiles -v "{{.TASKFILE_DIR}}\omnivoice:/app/omnivoice" -v "{{.TASKFILE_DIR}}\hangrylabs:/app/hangrylabs" {{.IMAGE}}
+      - cmd /c docker ps --filter "name={{.CONTAINER_LOCAL}}"
 
   release:
     desc: Release current VERSION snapshot, tag it, and prepare next snapshot
@@ -115,7 +135,7 @@ tasks:
       - cmd /c docker rm -f {{.CONTAINER_LOCAL}} >nul 2>&1
       - task: cache-init
       - cmd /c docker volume create {{.OPENAI_PROFILE_VOLUME}} >nul
-      - cmd /c docker run -d --name {{.CONTAINER}} -p {{.PORT}}:7861 --gpus all -e CUDA_VISIBLE_DEVICES={{.GPU_DEVICE}} -e OMNIVOICE_DEVICE={{.APP_DEVICE}} -e PORT=7861 -e HF_TOKEN={{.HF_TOKEN}} -e HF_HUB_OFFLINE={{.HF_HUB_OFFLINE}} -e TRANSFORMERS_OFFLINE={{.TRANSFORMERS_OFFLINE}} -v {{.HF_CACHE_VOLUME}}:/app/.cache/huggingface -v {{.OPENAI_PROFILE_VOLUME}}:/app/openai_voice_profiles {{.IMAGE}}
+      - cmd /c docker run -d --name {{.CONTAINER}} -p {{.PORT}}:7861 --gpus all -e CUDA_VISIBLE_DEVICES={{.GPU_DEVICE}} -e OMNIVOICE_DEVICE={{.APP_DEVICE}} -e OMNIVOICE_LOAD_ASR={{.LOAD_ASR}} -e OMNIVOICE_ALLOW_CPU_EAGER_ASR={{.ALLOW_CPU_EAGER_ASR}} -e PORT=7861 -e HF_TOKEN={{.HF_TOKEN}} -e HF_HUB_OFFLINE={{.HF_HUB_OFFLINE}} -e TRANSFORMERS_OFFLINE={{.TRANSFORMERS_OFFLINE}} -v {{.HF_CACHE_VOLUME}}:/app/.cache/huggingface -v {{.OPENAI_PROFILE_VOLUME}}:/app/openai_voice_profiles {{.IMAGE}}
       - cmd /c docker ps --filter "name={{.CONTAINER}}"
 
   imagerun-tiny:
@@ -125,7 +145,7 @@ tasks:
       - cmd /c docker rm -f {{.CONTAINER_LOCAL}} >nul 2>&1
       - cmd /c docker volume create {{.HF_CACHE_VOLUME}} >nul
       - cmd /c docker volume create {{.OPENAI_PROFILE_VOLUME}} >nul
-      - cmd /c docker run -d --name {{.CONTAINER}} -p {{.PORT}}:7861 --gpus all -e CUDA_VISIBLE_DEVICES={{.GPU_DEVICE}} -e OMNIVOICE_DEVICE={{.APP_DEVICE}} -e PORT=7861 -e HF_TOKEN={{.HF_TOKEN}} -e HF_HUB_OFFLINE=0 -e TRANSFORMERS_OFFLINE=0 -v {{.HF_CACHE_VOLUME}}:/app/.cache/huggingface -v {{.OPENAI_PROFILE_VOLUME}}:/app/openai_voice_profiles {{.TINY_IMAGE}}
+      - cmd /c docker run -d --name {{.CONTAINER}} -p {{.PORT}}:7861 --gpus all -e CUDA_VISIBLE_DEVICES={{.GPU_DEVICE}} -e OMNIVOICE_DEVICE={{.APP_DEVICE}} -e OMNIVOICE_LOAD_ASR={{.LOAD_ASR}} -e OMNIVOICE_ALLOW_CPU_EAGER_ASR={{.ALLOW_CPU_EAGER_ASR}} -e PORT=7861 -e HF_TOKEN={{.HF_TOKEN}} -e HF_HUB_OFFLINE=0 -e TRANSFORMERS_OFFLINE=0 -v {{.HF_CACHE_VOLUME}}:/app/.cache/huggingface -v {{.OPENAI_PROFILE_VOLUME}}:/app/openai_voice_profiles {{.TINY_IMAGE}}
       - cmd /c docker ps --filter "name={{.CONTAINER}}"
 
   localrun:
@@ -135,7 +155,7 @@ tasks:
       - cmd /c docker rm -f {{.CONTAINER_LOCAL}} >nul 2>&1
       - task: cache-init
       - cmd /c docker volume create {{.OPENAI_PROFILE_VOLUME}} >nul
-      - cmd /c docker run -d --name {{.CONTAINER_LOCAL}} -p {{.PORT}}:7861 --gpus all -e CUDA_VISIBLE_DEVICES={{.GPU_DEVICE}} -e OMNIVOICE_DEVICE={{.APP_DEVICE}} -e PORT=7861 -e UVICORN_RELOAD=1 -e HF_TOKEN={{.HF_TOKEN}} -e HF_HUB_OFFLINE={{.HF_HUB_OFFLINE}} -e TRANSFORMERS_OFFLINE={{.TRANSFORMERS_OFFLINE}} -v {{.HF_CACHE_VOLUME}}:/app/.cache/huggingface -v {{.OPENAI_PROFILE_VOLUME}}:/app/openai_voice_profiles -v "{{.TASKFILE_DIR}}\omnivoice:/app/omnivoice" -v "{{.TASKFILE_DIR}}\hangrylabs:/app/hangrylabs" {{.IMAGE}}
+      - cmd /c docker run -d --name {{.CONTAINER_LOCAL}} -p {{.PORT}}:7861 --gpus all -e CUDA_VISIBLE_DEVICES={{.GPU_DEVICE}} -e OMNIVOICE_DEVICE={{.APP_DEVICE}} -e OMNIVOICE_LOAD_ASR={{.LOAD_ASR}} -e OMNIVOICE_ALLOW_CPU_EAGER_ASR={{.ALLOW_CPU_EAGER_ASR}} -e PORT=7861 -e UVICORN_RELOAD=1 -e HF_TOKEN={{.HF_TOKEN}} -e HF_HUB_OFFLINE={{.HF_HUB_OFFLINE}} -e TRANSFORMERS_OFFLINE={{.TRANSFORMERS_OFFLINE}} -v {{.HF_CACHE_VOLUME}}:/app/.cache/huggingface -v {{.OPENAI_PROFILE_VOLUME}}:/app/openai_voice_profiles -v "{{.TASKFILE_DIR}}\omnivoice:/app/omnivoice" -v "{{.TASKFILE_DIR}}\hangrylabs:/app/hangrylabs" {{.IMAGE}}
       - cmd /c docker ps --filter "name={{.CONTAINER_LOCAL}}"
 
   localrun-tiny:
@@ -145,7 +165,7 @@ tasks:
       - cmd /c docker rm -f {{.CONTAINER_LOCAL}} >nul 2>&1
       - cmd /c docker volume create {{.HF_CACHE_VOLUME}} >nul
       - cmd /c docker volume create {{.OPENAI_PROFILE_VOLUME}} >nul
-      - cmd /c docker run -d --name {{.CONTAINER_LOCAL}} -p {{.PORT}}:7861 --gpus all -e CUDA_VISIBLE_DEVICES={{.GPU_DEVICE}} -e OMNIVOICE_DEVICE={{.APP_DEVICE}} -e PORT=7861 -e UVICORN_RELOAD=1 -e HF_TOKEN={{.HF_TOKEN}} -e HF_HUB_OFFLINE=0 -e TRANSFORMERS_OFFLINE=0 -v {{.HF_CACHE_VOLUME}}:/app/.cache/huggingface -v {{.OPENAI_PROFILE_VOLUME}}:/app/openai_voice_profiles -v "{{.TASKFILE_DIR}}\omnivoice:/app/omnivoice" -v "{{.TASKFILE_DIR}}\hangrylabs:/app/hangrylabs" {{.TINY_IMAGE}}
+      - cmd /c docker run -d --name {{.CONTAINER_LOCAL}} -p {{.PORT}}:7861 --gpus all -e CUDA_VISIBLE_DEVICES={{.GPU_DEVICE}} -e OMNIVOICE_DEVICE={{.APP_DEVICE}} -e OMNIVOICE_LOAD_ASR={{.LOAD_ASR}} -e OMNIVOICE_ALLOW_CPU_EAGER_ASR={{.ALLOW_CPU_EAGER_ASR}} -e PORT=7861 -e UVICORN_RELOAD=1 -e HF_TOKEN={{.HF_TOKEN}} -e HF_HUB_OFFLINE=0 -e TRANSFORMERS_OFFLINE=0 -v {{.HF_CACHE_VOLUME}}:/app/.cache/huggingface -v {{.OPENAI_PROFILE_VOLUME}}:/app/openai_voice_profiles -v "{{.TASKFILE_DIR}}\omnivoice:/app/omnivoice" -v "{{.TASKFILE_DIR}}\hangrylabs:/app/hangrylabs" {{.TINY_IMAGE}}
       - cmd /c docker ps --filter "name={{.CONTAINER_LOCAL}}"
 
   imageweb:
@@ -198,6 +218,11 @@ tasks:
     desc: Benchmark the example-generation workload and append results
     cmds:
       - powershell -NoProfile -ExecutionPolicy Bypass -Command ".\.venv\Scripts\python.exe scripts\benchmark-example-generation.py --base-url '{{.BENCHMARK_BASE_URL}}' --manifest examples\assets\manifest.json --results '{{.BENCHMARK_RESULTS}}' --markdown-dir '{{.BENCHMARK_MARKDOWN_DIR}}' --voice '{{.BENCHMARK_VOICE}}' --reference-audio '{{.BENCHMARK_REF_AUDIO}}' --num-step '{{.BENCHMARK_NUM_STEP}}' --format '{{.BENCHMARK_FORMAT}}' --limit-languages '{{.BENCHMARK_LIMIT_LANGUAGES}}' --items-per-round '{{.BENCHMARK_ITEMS}}' --samples-per-language '{{.BENCHMARK_SAMPLES_PER_LANGUAGE}}' --random-warmup '{{.BENCHMARK_RANDOM_WARMUP}}' --reference-warmup '{{.BENCHMARK_REFERENCE_WARMUP}}'"
+
+  benchmark-cpu-memory:
+    desc: Benchmark CPU Docker memory limits for common OpenAI speech scenarios
+    cmds:
+      - powershell -NoProfile -ExecutionPolicy Bypass -Command ".\.venv\Scripts\python.exe scripts\benchmark-cpu-memory.py --image '{{.IMAGE}}' --limits '{{.BENCHMARK_CPU_MEMORY_LIMITS}}' --start-port '{{.BENCHMARK_CPU_MEMORY_START_PORT}}' --results '{{.BENCHMARK_CPU_MEMORY_RESULTS}}' --markdown '{{.BENCHMARK_CPU_MEMORY_MARKDOWN}}'"
 
   imagestop:
     desc: Stop running OmniVoiceTTS containers
