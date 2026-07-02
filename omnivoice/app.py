@@ -88,6 +88,7 @@ DEFAULT_MODEL = os.getenv("OMNIVOICE_MODEL", "k2-fsa/OmniVoice")
 DEFAULT_DEVICE = os.getenv("OMNIVOICE_DEVICE", "auto")
 DEFAULT_ASR_MODEL = os.getenv("OMNIVOICE_ASR_MODEL", "openai/whisper-large-v3-turbo")
 LOAD_ASR = env_bool("OMNIVOICE_LOAD_ASR", False)
+ALLOW_CPU_EAGER_ASR = env_bool("OMNIVOICE_ALLOW_CPU_EAGER_ASR", False)
 MAX_CONCURRENT_GENERATIONS = env_int("OMNIVOICE_MAX_CONCURRENT_GENERATIONS", 1)
 EMPTY_CUDA_CACHE_AFTER_REQUEST = env_bool("OMNIVOICE_EMPTY_CUDA_CACHE_AFTER_REQUEST", False)
 RESET_CUDA_PEAK_AFTER_CACHE_CLEAR = env_bool("OMNIVOICE_RESET_CUDA_PEAK_AFTER_CACHE_CLEAR", False)
@@ -376,14 +377,29 @@ def get_model(device: str) -> OmniVoice:
     with MODEL_LOCK:
         if resolved_device not in MODEL_CACHE:
             dtype = torch.float16 if resolved_device.startswith("cuda") else torch.float32
+            load_asr = should_eager_load_asr(resolved_device)
             MODEL_CACHE[resolved_device] = OmniVoice.from_pretrained(
                 DEFAULT_MODEL,
                 device_map=resolved_device,
                 dtype=dtype,
-                load_asr=LOAD_ASR,
+                load_asr=load_asr,
                 asr_model_name=DEFAULT_ASR_MODEL,
             )
         return MODEL_CACHE[resolved_device]
+
+
+def should_eager_load_asr(device: str, warn: bool = True) -> bool:
+    if not LOAD_ASR:
+        return False
+    if device == "cpu" and not ALLOW_CPU_EAGER_ASR:
+        if warn:
+            logging.warning(
+                "OMNIVOICE_LOAD_ASR=1 ignored for CPU model preload. "
+                "Saved voice profiles with ref_text do not need ASR, and eager Whisper loading can exhaust CPU RAM. "
+                "Set OMNIVOICE_ALLOW_CPU_EAGER_ASR=1 to force eager CPU ASR loading."
+            )
+        return False
+    return True
 
 
 def get_generation_semaphore(device: str) -> threading.BoundedSemaphore:
@@ -1117,6 +1133,8 @@ def get_supported_output_formats() -> dict[str, dict[str, str]]:
 
 
 def get_status_payload() -> dict:
+    default_device = normalize_device(DEFAULT_DEVICE)
+    effective_load_asr = should_eager_load_asr(default_device, warn=False)
     return {
         "msg": "pong",
         "type": "OmniVoiceTTS",
@@ -1125,10 +1143,13 @@ def get_status_payload() -> dict:
         "build_id": BUILD_ID,
         "runtime": get_runtime_label(),
         "device": DEFAULT_DEVICE,
+        "resolved_device": default_device,
         "model": DEFAULT_MODEL,
         "sample_rate": SAMPLE_RATE,
-        "load_asr": LOAD_ASR,
-        "asr_model": DEFAULT_ASR_MODEL if LOAD_ASR else None,
+        "load_asr": effective_load_asr,
+        "requested_load_asr": LOAD_ASR,
+        "allow_cpu_eager_asr": ALLOW_CPU_EAGER_ASR,
+        "asr_model": DEFAULT_ASR_MODEL if effective_load_asr else None,
         "resample_backend": RESAMPLE_BACKEND,
         "languages": len(LANG_IDS),
         "cuda_memory": cuda_memory_stats(),
@@ -1736,7 +1757,7 @@ class TTSRequest(BaseModel):
     )
     speed: Optional[float] = Field(1.0, ge=0.5, le=1.5, description="Speech speed multiplier.")
     duration: Optional[float] = Field(None, gt=0.0, description="Fixed output duration in seconds. Overrides speed.")
-    device: str = Field("auto", description="auto, cpu, mps, or cuda:N.")
+    device: str = Field(DEFAULT_DEVICE, description="auto, cpu, mps, or cuda:N.")
     use_gpu: Optional[bool] = Field(None, description="Kokoro-compatible legacy switch. Prefer device.")
     num_step: int = Field(32, ge=4, le=64, description="Diffusion decoding steps.")
     guidance_scale: float = Field(2.0, ge=0.0, le=4.0, description="Classifier-free guidance scale.")
@@ -1796,7 +1817,7 @@ class OpenAISpeechRequest(BaseModel):
     language: Optional[str] = Field(None, description="Optional OmniVoice extension: language name or id.")
     seed: Optional[int] = Field(None, ge=0, le=MAX_RANDOM_SEED, description="Optional OmniVoice extension: fixed generation seed.")
     randomize_seed: bool = Field(False, description="Optional OmniVoice extension: generate a random seed.")
-    device: str = Field("auto", description="Optional OmniVoice extension: auto, cpu, mps, or cuda:N.")
+    device: str = Field(DEFAULT_DEVICE, description="Optional OmniVoice extension: auto, cpu, mps, or cuda:N.")
     num_step: int = Field(32, ge=4, le=64, description="Optional OmniVoice extension: diffusion decoding steps.")
     instructions: Optional[str] = Field(None, description="Optional OmniVoice extension: explicit voice-design instruction.")
     ref_audio: Optional[str] = Field(
