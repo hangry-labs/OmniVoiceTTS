@@ -57,7 +57,7 @@ CPU mode is supported as a fallback, but it still needs enough system memory. Fo
 
 When running on CPU, `/tts/status` reports container/system memory diagnostics and per-scenario RAM recommendations. If a CPU request appears close to the available memory limit, the container logs a warning and still tries to continue; Docker or the OS may still kill the process if RAM is exhausted.
 
-If a CPU container exits after `Loading weights` during a cloned-voice `/v1/audio/speech` request, it is usually an out-of-memory kill rather than a Python exception. The TTS model already needs significant RAM on CPU, and clone/profile requests without a transcript can lazy-load Whisper ASR to transcribe the reference audio. Recent snapshots reduce the default footprint by keeping eager ASR off on CPU, but no-transcript clone paths still need more memory. To lower RAM use: run the latest snapshot (`0.2.1-snapshot` or newer), keep `OMNIVOICE_LOAD_ASR=0`, do not set `OMNIVOICE_ALLOW_CPU_EAGER_ASR=1`, save voice profiles with a reference transcript, include `ref_text` when sending direct `ref_audio`, keep concurrency at the default `OMNIVOICE_MAX_CONCURRENT_GENERATIONS=1`, and prefer GPU mode when available. See `benchmarks/CPU_MEMORY.md` for measured scenario recommendations and run `task benchmark-cpu-memory` on your host if you need local numbers.
+If a CPU container exits after `Loading weights` during a cloned-voice `/v1/audio/speech` request, it is usually an out-of-memory kill rather than a Python exception. The TTS model already needs significant RAM on CPU, and clone/profile requests without a transcript can lazy-load Whisper ASR to transcribe the reference audio. Recent snapshots reduce the default footprint by keeping eager ASR off on CPU, but no-transcript clone paths still need more memory. To lower RAM use: run the latest snapshot (`0.3.0-snapshot` or newer), keep `OMNIVOICE_LOAD_ASR=0`, do not set `OMNIVOICE_ALLOW_CPU_EAGER_ASR=1`, save voice profiles with a reference transcript, include `ref_text` when sending direct `ref_audio`, keep concurrency at the default `OMNIVOICE_MAX_CONCURRENT_GENERATIONS=1`, and prefer GPU mode when available. See `benchmarks/CPU_MEMORY.md` for measured scenario recommendations and run `task benchmark-cpu-memory` on your host if you need local numbers.
 
 Run on a specific GPU (example: GPU index `1`):
 
@@ -390,6 +390,22 @@ If you encounter bugs, have feature requests, or need help using Hangry Labs Omn
 ---
 
 ## Version History
+
+### v0.3.0
+
+- Added the OpenAI-compatible `/v1/audio/speech` API path, model discovery routes, OpenAI-style voice aliases, and client helpers for OpenAI-shaped speech requests.
+- Added saved OpenAI voice profiles with UI workflows for adding, managing, deleting, and reusing reference voices across container restarts.
+- Updated Docker examples to mount the named `omnivoicetts_openai_voice_profiles` volume by default so saved voices survive image pulls and container recreation.
+- Improved OpenAI model handling: OmniVoiceTTS now advertises its own `omnivoice` model id while still accepting common compatibility aliases such as `tts-1`, `tts-1-hd`, and `gpt-4o-mini-tts`.
+- Added cached voice-clone prompt reuse for stored voices and built-in clone aliases so repeated profile calls avoid reprocessing the same reference prompt.
+- Added CUDA memory/backpressure controls: generation concurrency is serialized by default, `/tts/status` reports CUDA allocator statistics, `/tts/cache/clear` releases unused CUDA allocator memory without unloading models, and `/tts/purge` now performs stronger cleanup.
+- Improved CPU-mode behavior after the cloned-voice CPU crash report: eager ASR is disabled by default on CPU, accidental CPU Whisper preload is guarded, CPU RAM pressure warnings are logged, and `/tts/status` exposes CPU memory diagnostics and scenario recommendations.
+- Added startup support diagnostics in Docker logs, including version/build, Python/Torch/CUDA/cuDNN, detected hardware, memory, offline flags, model/device/ASR/cache config, profile paths, sanitized startup parameters, and a Hangry Labs ASCII banner.
+- Added CPU memory benchmarking with `task benchmark-cpu-memory`, `benchmarks/CPU_MEMORY.md`, and detailed JSON results covering random voice, design voice, direct clone with/without transcript, and stored profile with/without transcript.
+- Added the example-generation benchmark suite and per-category benchmark history files for random, predefined cached voice, and direct reference-audio performance tracking.
+- Documented the FlashAttention investigation and exclusion after benchmarks showed slower single-request performance and only marginal batch gains for the current API workload.
+- Hardened file/path handling for reference audio, uploads, generated files, subprocess commands, voice instruction parsing, and GitHub Actions token permissions.
+- Continued modularizing the service by extracting audio helpers, safe path helpers, branding, GPU monitor, translations, and OpenAI voice-profile utilities out of the main app entrypoint.
 
 ### v0.2.0
 

@@ -58,7 +58,7 @@ CPU mode is a fallback path and still needs enough system memory. For a 140-char
 
 When running on CPU, `/tts/status` reports container/system memory diagnostics and per-scenario RAM recommendations. If a CPU request appears close to the available memory limit, the container logs a warning and still tries to continue; Docker or the OS may still kill the process if RAM is exhausted.
 
-If a CPU container exits after `Loading weights` during a cloned-voice `/v1/audio/speech` request, it is usually an out-of-memory kill rather than a Python exception. The TTS model already needs significant RAM on CPU, and clone/profile requests without a transcript can lazy-load Whisper ASR to transcribe the reference audio. Recent snapshots reduce the default footprint by keeping eager ASR off on CPU, but no-transcript clone paths still need more memory. To lower RAM use: run the latest snapshot (`0.2.1-snapshot` or newer), keep `OMNIVOICE_LOAD_ASR=0`, do not set `OMNIVOICE_ALLOW_CPU_EAGER_ASR=1`, save voice profiles with a reference transcript, include `ref_text` when sending direct `ref_audio`, keep concurrency at the default `OMNIVOICE_MAX_CONCURRENT_GENERATIONS=1`, and prefer GPU mode when available. See `benchmarks/CPU_MEMORY.md` in the GitHub repository for measured scenario recommendations.
+If a CPU container exits after `Loading weights` during a cloned-voice `/v1/audio/speech` request, it is usually an out-of-memory kill rather than a Python exception. The TTS model already needs significant RAM on CPU, and clone/profile requests without a transcript can lazy-load Whisper ASR to transcribe the reference audio. Recent snapshots reduce the default footprint by keeping eager ASR off on CPU, but no-transcript clone paths still need more memory. To lower RAM use: run the latest snapshot (`0.3.0-snapshot` or newer), keep `OMNIVOICE_LOAD_ASR=0`, do not set `OMNIVOICE_ALLOW_CPU_EAGER_ASR=1`, save voice profiles with a reference transcript, include `ref_text` when sending direct `ref_audio`, keep concurrency at the default `OMNIVOICE_MAX_CONCURRENT_GENERATIONS=1`, and prefer GPU mode when available. See `benchmarks/CPU_MEMORY.md` in the GitHub repository for measured scenario recommendations.
 
 Run on a different GPU by changing both GPU numbers. For example, GPU `1`:
 
@@ -72,7 +72,7 @@ http://localhost:7861
 
 The named `omnivoicetts_openai_voice_profiles` volume stores voices created in the UI so they survive container replacement and image updates. Docker creates the volume automatically the first time you run one of these commands.
 
-The `latest` image is the full baked image with OmniVoice model assets, the Higgs audio tokenizer, and Whisper ASR assets included for offline-friendly use after the image is pulled. CPU runs should keep eager ASR disabled because saved voice profiles with transcripts do not need Whisper at request startup; ASR can still lazy-load only when a reference audio request omits `ref_text`. To force eager Whisper preload on CPU anyway, set `OMNIVOICE_ALLOW_CPU_EAGER_ASR=1`. The release image is based on Python 3.13 and is intended to run without live Hugging Face downloads after pull. Version tags such as `v0.2.0` are also available for reproducible deployments.
+The `latest` image is the full baked image with OmniVoice model assets, the Higgs audio tokenizer, and Whisper ASR assets included for offline-friendly use after the image is pulled. CPU runs should keep eager ASR disabled because saved voice profiles with transcripts do not need Whisper at request startup; ASR can still lazy-load only when a reference audio request omits `ref_text`. To force eager Whisper preload on CPU anyway, set `OMNIVOICE_ALLOW_CPU_EAGER_ASR=1`. The release image is based on Python 3.13 and is intended to run without live Hugging Face downloads after pull. Version tags such as `v0.3.0` are also available for reproducible deployments.
 
 Tiny tags use the `vX.Y.Z_tiny` pattern. They keep runtime dependencies but skip baked Hugging Face model assets, and are intended for persistent-volume workflows where the cache is warmed on first online use:
 
@@ -222,14 +222,35 @@ GPU memory controls:
 ## Image Tags
 
 - Recommended tag for most users: `latest`
-- Versioned release tags use the pattern `vX.Y.Z`, for example `v0.2.0`
-- Tiny tags use `latest_tiny` or versioned tags such as `v0.2.0_tiny`
+- Versioned release tags use the pattern `vX.Y.Z`, for example `v0.3.0`
+- Tiny tags use `latest_tiny` or versioned tags such as `v0.3.0_tiny`
+
+## Version Highlights
+
+### v0.3.0
+
+- Adds OpenAI-compatible speech APIs, model discovery, voice aliases, and saved voice-profile workflows for reusable cloned voices.
+- Mounts the `omnivoicetts_openai_voice_profiles` named volume in recommended Docker commands so saved voices survive container replacement.
+- Adds cached clone-prompt reuse for stored voices and built-in clone aliases.
+- Adds CUDA memory/backpressure controls, including serialized generation by default, allocator diagnostics in `/tts/status`, `/tts/cache/clear`, and stronger `/tts/purge` cleanup.
+- Improves CPU fallback behavior after a cloned-voice CPU crash report: eager ASR is off by default on CPU, no-transcript clone/profile paths are documented, CPU RAM pressure warnings are logged, and CPU memory recommendations are exposed.
+- Adds startup diagnostics to Docker logs with version/build, Python/Torch/CUDA/cuDNN, detected hardware, memory, offline flags, runtime config, profile paths, and sanitized startup parameters.
+- Adds CPU memory and example-generation benchmark histories so performance and RAM requirements can be tracked across releases.
+- Documents why FlashAttention is not enabled for this image after local benchmarks showed slower single-request performance and only marginal batch gains.
+- Hardens path handling for reference audio, uploads, generated files, subprocess calls, voice instruction parsing, and GitHub Actions permissions.
+
+### v0.2.0
+
+- Reworked the browser UI into the current Hangry Labs branded experience.
+- Added multilingual UI support, progressive `/tts/stream` and `/tts/stream-chunks`, seed reuse, stream stop controls, and the live GPU monitor.
 
 ## Release Validation
 
 Before the initial release, the Python 3.13 baked image was built and tested without a host model-cache volume mounted. API validation covered `/tts/ping`, `/tts/status`, discovery routes, OpenAPI docs, metrics, real generation in WAV/MP3/FLAC/OGG, voice design, `/tts/stream`, `/tts/convert`, `/tts/purge`, and generation after purge/reload from baked cache.
 
 The v0.2.0 release adds UI-focused validation targets: multilingual interface selection, separate Generate and Stream playback paths, seed reuse, stop-generation behavior for streaming, and the live GPU monitor.
+
+The v0.3.0 release adds OpenAI-compatible voice-profile validation, CPU memory diagnostics, startup diagnostics, CUDA allocator cleanup endpoints, persistent voice-profile volume guidance, and benchmark coverage for CPU memory and standard GPU generation.
 
 ## Attribution
 
