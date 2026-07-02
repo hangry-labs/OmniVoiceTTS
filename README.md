@@ -389,6 +389,18 @@ If you encounter bugs, have feature requests, or need help using Hangry Labs Omn
 
 ---
 
+## Planned Next
+
+Planned items for the next development cycle:
+
+- Add MCP support so local agents can discover OmniVoiceTTS capabilities, generate speech, inspect voices/profiles, and query runtime status through a local tool interface.
+- Add a readiness endpoint and Docker healthcheck for cleaner container orchestration.
+- Add request IDs and structured error payloads to make issue reports easier to diagnose.
+- Add upload-based API support for reference audio plus optional transcript, so API users do not need to pass container-local file paths.
+- Add generation timing and queue diagnostics to `/tts/status` for better performance and overload visibility.
+
+---
+
 ## Version History
 
 ### v0.3.0

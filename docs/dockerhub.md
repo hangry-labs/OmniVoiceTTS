@@ -225,6 +225,13 @@ GPU memory controls:
 - Versioned release tags use the pattern `vX.Y.Z`, for example `v0.3.0`
 - Tiny tags use `latest_tiny` or versioned tags such as `v0.3.0_tiny`
 
+## Planned Next
+
+- MCP support for local agents to discover OmniVoiceTTS tools, generate speech, inspect voices/profiles, and query runtime status.
+- Readiness endpoint and Docker healthcheck.
+- Request IDs, structured errors, and richer timing/queue diagnostics.
+- Upload-based API support for reference audio plus optional transcript.
+
 ## Version Highlights
 
 ### v0.3.0
