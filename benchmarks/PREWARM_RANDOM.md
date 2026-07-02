@@ -7,3 +7,4 @@ Baseline hardware: NVIDIA GeForce RTX 5060 Ti.
 | Run | Calls | Total seconds | Avg seconds | Min | Max | Bytes |
 |---|---:|---:|---:|---:|---:|---:|
 | 14.05.2026 23:24:54 - 0.2.1-snapshot | 10 | 16.526 | 1.653 | 0.985 | 7.092 | 986360 |
+| 02.07.2026 22:06:25 - 0.2.1-snapshot | 10 | 23.535 | 2.353 | 1.029 | 6.006 | 986840 |

@@ -90,6 +90,7 @@ DEFAULT_ASR_MODEL = os.getenv("OMNIVOICE_ASR_MODEL", "openai/whisper-large-v3-tu
 LOAD_ASR = env_bool("OMNIVOICE_LOAD_ASR", False)
 ALLOW_CPU_EAGER_ASR = env_bool("OMNIVOICE_ALLOW_CPU_EAGER_ASR", False)
 MAX_CONCURRENT_GENERATIONS = env_int("OMNIVOICE_MAX_CONCURRENT_GENERATIONS", 1)
+CPU_MEMORY_WARNING_INTERVAL_SECONDS = env_int("OMNIVOICE_CPU_MEMORY_WARNING_INTERVAL_SECONDS", 300)
 EMPTY_CUDA_CACHE_AFTER_REQUEST = env_bool("OMNIVOICE_EMPTY_CUDA_CACHE_AFTER_REQUEST", False)
 RESET_CUDA_PEAK_AFTER_CACHE_CLEAR = env_bool("OMNIVOICE_RESET_CUDA_PEAK_AFTER_CACHE_CLEAR", False)
 APP_VERSION = os.getenv("APP_VERSION", __version__)
@@ -127,6 +128,25 @@ OPENAI_VOICE_INSTRUCTIONS = {
     "benchmark_original_clone": None,
 }
 OPENAI_CLONE_VOICE_ALIASES = {"default", "alloy", "echo", "fable", "onyx", "nova", "shimmer", "benchmark_original_clone"}
+
+CPU_MEMORY_SCENARIO_RECOMMENDATIONS_MIB = {
+    "RV": 2048,
+    "DV": 2048,
+    "CR-NT": 6144,
+    "CR-TX": 2048,
+    "SV-NT": 7168,
+    "SV-TX": 3072,
+}
+CPU_MEMORY_SCENARIO_DESCRIPTIONS = {
+    "RV": "random/no-prompt voice",
+    "DV": "voice design",
+    "CR-NT": "direct clone without transcript",
+    "CR-TX": "direct clone with transcript",
+    "SV-NT": "stored voice without transcript",
+    "SV-TX": "stored voice with transcript",
+}
+CPU_MEMORY_WARNING_LOCK = threading.Lock()
+CPU_MEMORY_WARNING_LAST: dict[str, float] = {}
 
 BRACKET_TOKEN_PATTERN = re.compile(r"\[[^\]\r\n]{1,80}\]")
 SUPPORTED_NONVERBAL_TAGS = [
@@ -439,6 +459,79 @@ def clear_cuda_allocator_cache(reset_peak_stats: bool = False) -> dict[str, Any]
     return {"before": before, "after": after}
 
 
+def read_int_file(path: Path) -> int | None:
+    try:
+        value = path.read_text(encoding="utf-8").strip()
+    except OSError:
+        return None
+    if not value or value == "max":
+        return None
+    try:
+        return int(value)
+    except ValueError:
+        return None
+
+
+def system_memory_total_bytes() -> int | None:
+    try:
+        return os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES")
+    except (AttributeError, OSError, ValueError):
+        return None
+
+
+def system_memory_available_bytes() -> int | None:
+    try:
+        for line in Path("/proc/meminfo").read_text(encoding="utf-8").splitlines():
+            if line.startswith("MemAvailable:"):
+                return int(line.split()[1]) * 1024
+    except (OSError, IndexError, ValueError):
+        return None
+    return None
+
+
+def cgroup_memory_limit_bytes() -> int | None:
+    limit = read_int_file(Path("/sys/fs/cgroup/memory.max"))
+    if limit is None:
+        limit = read_int_file(Path("/sys/fs/cgroup/memory/memory.limit_in_bytes"))
+    total = system_memory_total_bytes()
+    if limit is not None and total is not None and limit > total * 10:
+        return None
+    return limit
+
+
+def cgroup_memory_current_bytes() -> int | None:
+    current = read_int_file(Path("/sys/fs/cgroup/memory.current"))
+    if current is None:
+        current = read_int_file(Path("/sys/fs/cgroup/memory/memory.usage_in_bytes"))
+    return current
+
+
+def bytes_to_mib(value: int | None) -> float | None:
+    if value is None:
+        return None
+    return round(value / (1024 * 1024), 1)
+
+
+def cpu_memory_stats() -> dict[str, Any]:
+    limit = cgroup_memory_limit_bytes()
+    current = cgroup_memory_current_bytes()
+    if limit is not None and current is not None:
+        available = max(0, limit - current)
+        source = "cgroup"
+    else:
+        available = system_memory_available_bytes()
+        source = "system"
+    return {
+        "source": source,
+        "limit_bytes": limit,
+        "current_bytes": current,
+        "available_bytes": available,
+        "limit_mib": bytes_to_mib(limit),
+        "current_mib": bytes_to_mib(current),
+        "available_mib": bytes_to_mib(available),
+    }
+
+
 def should_cache_voice_clone_prompt(ref_audio: str | None) -> bool:
     if not ref_audio:
         return False
@@ -455,6 +548,75 @@ def should_cache_voice_clone_prompt(ref_audio: str | None) -> bool:
         return OPENAI_VOICE_PROFILE_DIR.resolve(strict=False) in ref_path.parents
     except OSError:
         return False
+
+
+def cpu_memory_scenario(payload) -> str:
+    has_ref_audio = bool((getattr(payload, "ref_audio", None) or "").strip())
+    has_ref_text = bool((getattr(payload, "ref_text", None) or "").strip())
+    has_stored_voice = bool(getattr(payload, "cache_voice_prompt", False) or (getattr(payload, "voice_profile", None) or "").strip())
+    if has_ref_audio:
+        if has_stored_voice:
+            return "SV-TX" if has_ref_text else "SV-NT"
+        return "CR-TX" if has_ref_text else "CR-NT"
+    if (getattr(payload, "instruct", None) or "").strip():
+        return "DV"
+    return "RV"
+
+
+def cpu_memory_recommendation_payload() -> dict[str, dict[str, Any]]:
+    return {
+        code: {
+            "description": CPU_MEMORY_SCENARIO_DESCRIPTIONS[code],
+            "recommended_mib": mib,
+            "recommended_gb": int(mib / 1024),
+        }
+        for code, mib in CPU_MEMORY_SCENARIO_RECOMMENDATIONS_MIB.items()
+    }
+
+
+def should_emit_cpu_memory_warning(key: str) -> bool:
+    now = datetime.now().timestamp()
+    with CPU_MEMORY_WARNING_LOCK:
+        previous = CPU_MEMORY_WARNING_LAST.get(key, 0)
+        if now - previous < CPU_MEMORY_WARNING_INTERVAL_SECONDS:
+            return False
+        CPU_MEMORY_WARNING_LAST[key] = now
+    return True
+
+
+def warn_if_cpu_memory_tight(payload, route_name: str) -> None:
+    try:
+        resolved_device = normalize_device(resolve_requested_device(payload.device, payload.use_gpu))
+    except RuntimeError:
+        return
+    if resolved_device != "cpu":
+        return
+    scenario = cpu_memory_scenario(payload)
+    recommended_mib = CPU_MEMORY_SCENARIO_RECOMMENDATIONS_MIB[scenario]
+    memory = cpu_memory_stats()
+    limit_mib = memory.get("limit_mib")
+    available_mib = memory.get("available_mib")
+    reasons = []
+    if limit_mib is not None and limit_mib < recommended_mib:
+        reasons.append(f"container limit {limit_mib:.0f} MiB is below recommended {recommended_mib} MiB")
+    if limit_mib is None and available_mib is not None and available_mib < recommended_mib:
+        reasons.append(f"available system memory {available_mib:.0f} MiB is below recommended {recommended_mib} MiB")
+    if limit_mib is not None and available_mib is not None and available_mib < 512:
+        reasons.append(f"container memory headroom is only {available_mib:.0f} MiB")
+    if not reasons:
+        return
+    key = f"{route_name}:{scenario}:{';'.join(reasons)}"
+    if not should_emit_cpu_memory_warning(key):
+        return
+    logging.warning(
+        "[cpu-memory] RAM is tight for %s on %s (%s). %s. "
+        "OmniVoiceTTS will try to continue, but CPU generation may be killed by Docker/the OS under load. "
+        "Provide more RAM, add ref_text for clone/profile requests, or use GPU mode when possible.",
+        route_name,
+        scenario,
+        CPU_MEMORY_SCENARIO_DESCRIPTIONS[scenario],
+        "; ".join(reasons),
+    )
 
 
 def voice_clone_prompt_cache_key(
@@ -1153,6 +1315,8 @@ def get_status_payload() -> dict:
         "resample_backend": RESAMPLE_BACKEND,
         "languages": len(LANG_IDS),
         "cuda_memory": cuda_memory_stats(),
+        "cpu_memory": cpu_memory_stats() if default_device == "cpu" else None,
+        "cpu_memory_recommendations": cpu_memory_recommendation_payload() if default_device == "cpu" else None,
         "max_concurrent_generations": MAX_CONCURRENT_GENERATIONS,
         "empty_cuda_cache_after_request": EMPTY_CUDA_CACHE_AFTER_REQUEST,
         "reset_cuda_peak_after_cache_clear": RESET_CUDA_PEAK_AFTER_CACHE_CLEAR,
@@ -2145,6 +2309,7 @@ def stream_audio_response(payload: TTSRequest, route_name: str) -> StreamingResp
         payload = resolve_tts_compatible_voice(payload)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    warn_if_cpu_memory_tight(payload, route_name)
     try:
         output_format, sample_rate, waveform, used_seed = synthesize_payload(payload)
         try:
@@ -2177,6 +2342,7 @@ def progressive_audio_response(payload: TTSRequest, route_name: str) -> Streamin
         payload = resolve_tts_compatible_voice(payload)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    warn_if_cpu_memory_tight(payload, route_name)
     output_format, sample_rate, chunks, used_seed = synthesize_payload_chunks(payload)
     extension = OUTPUT_FORMATS[output_format]["extension"]
     media_type = OUTPUT_FORMATS[output_format]["media_type"]

@@ -16,8 +16,7 @@ Current baseline hardware: NVIDIA GeForce RTX 5060 Ti. AMD ROCm support is not v
 - Selection: first two random samples from each manifest language, repeated deterministically to the configured call count.
 - Default measured calls: 100 per category.
 - Each category is prewarmed immediately before that category is measured, so one stage's cold start or timeout does not distort later stages.
-- Detailed example-generation JSON results are stored in `example-generation.json`.
-- CPU memory-limit results are stored in `cpu-memory.json`.
+- Detailed JSON results are stored in `example-generation.json`.
 
 ## Categories
 
@@ -27,7 +26,6 @@ Current baseline hardware: NVIDIA GeForce RTX 5060 Ti. AMD ROCm support is not v
 - `prewarm_random`: warmup calls for the no-reference path.
 - `prewarm_predefined`: warmup calls for the cached predefined voice path.
 - `prewarm_direct_reference`: warmup calls for the direct `ref_audio` path.
-- `cpu_memory`: CPU-only Docker memory-limit benchmark for common OpenAI-compatible speech scenarios. Matrix cells are conservative whole-GB RAM recommendations derived by adding 512 MiB headroom to the lowest passing Docker memory limit before rounding up.
 
 - [warm_random](WARM_RANDOM.md)
 - [warm_predefined](WARM_PREDEFINED.md)
@@ -35,6 +33,5 @@ Current baseline hardware: NVIDIA GeForce RTX 5060 Ti. AMD ROCm support is not v
 - [prewarm_random](PREWARM_RANDOM.md)
 - [prewarm_predefined](PREWARM_PREDEFINED.md)
 - [prewarm_direct_reference](PREWARM_DIRECT_REFERENCE.md)
-- [cpu_memory](CPU_MEMORY.md)
 
-Detailed machine-readable run data is stored in `example-generation.json` and `cpu-memory.json`.
+Detailed machine-readable run data is stored in `example-generation.json`.

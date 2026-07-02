@@ -56,6 +56,8 @@ docker run -p 7861:7861 -e OMNIVOICE_DEVICE=cpu -e OMNIVOICE_LOAD_ASR=0 -v omniv
 
 CPU mode is a fallback path and still needs enough system memory. For a 140-character CPU benchmark request, conservative rounded Docker RAM recommendations were: 2 GB for random/no-prompt voice, voice design, and direct clone with transcript; 3 GB for a stored voice profile with transcript; 6 GB for direct clone without transcript; and 7 GB for a stored voice profile without transcript. The no-transcript paths may lazy-load ASR, which is why they need much more RAM. Use more for longer text, concurrent requests, larger outputs, or host environments with tighter memory behavior.
 
+When running on CPU, `/tts/status` reports container/system memory diagnostics and per-scenario RAM recommendations. If a CPU request appears close to the available memory limit, the container logs a warning and still tries to continue; Docker or the OS may still kill the process if RAM is exhausted.
+
 Run on a different GPU by changing both GPU numbers. For example, GPU `1`:
 
 ```bash
