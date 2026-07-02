@@ -57,6 +57,8 @@ CPU mode is supported as a fallback, but it still needs enough system memory. Fo
 
 When running on CPU, `/tts/status` reports container/system memory diagnostics and per-scenario RAM recommendations. If a CPU request appears close to the available memory limit, the container logs a warning and still tries to continue; Docker or the OS may still kill the process if RAM is exhausted.
 
+If a CPU container exits after `Loading weights` during a cloned-voice `/v1/audio/speech` request, it is usually an out-of-memory kill rather than a Python exception. The TTS model already needs significant RAM on CPU, and clone/profile requests without a transcript can lazy-load Whisper ASR to transcribe the reference audio. Recent snapshots reduce the default footprint by keeping eager ASR off on CPU, but no-transcript clone paths still need more memory. To lower RAM use: run the latest snapshot (`0.2.1-snapshot` or newer), keep `OMNIVOICE_LOAD_ASR=0`, do not set `OMNIVOICE_ALLOW_CPU_EAGER_ASR=1`, save voice profiles with a reference transcript, include `ref_text` when sending direct `ref_audio`, keep concurrency at the default `OMNIVOICE_MAX_CONCURRENT_GENERATIONS=1`, and prefer GPU mode when available. See `benchmarks/CPU_MEMORY.md` for measured scenario recommendations and run `task benchmark-cpu-memory` on your host if you need local numbers.
+
 Run on a specific GPU (example: GPU index `1`):
 
 ```bash
@@ -301,7 +303,7 @@ CPU memory can be checked with:
 task benchmark-cpu-memory
 ```
 
-This starts short-lived CPU containers with increasing Docker memory limits and sends OpenAI speech requests for random voice, design voice, direct clone with/without transcript, and stored voice with/without transcript. Results are appended to `benchmarks/CPU_MEMORY.md` as scenario recommendation columns and to `benchmarks/cpu-memory.json` with detailed attempt data.
+This starts short-lived CPU containers with increasing Docker memory limits and sends OpenAI speech requests for random voice, design voice, direct clone with/without transcript, and stored voice with/without transcript. The default ladder starts at 1536 MiB and skips obviously unusable sub-GB limits. Results are appended to `benchmarks/CPU_MEMORY.md` as scenario recommendation columns and to `benchmarks/cpu-memory.json` with detailed attempt data.
 
 Hot-swap local service code into the container without rebuilding:
 

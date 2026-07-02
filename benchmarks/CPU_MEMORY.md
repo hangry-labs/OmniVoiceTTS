@@ -4,6 +4,8 @@ CPU-only Docker memory-limit benchmark for OpenAI-compatible speech requests.
 
 Each run starts one CPU container per scenario and Docker memory limit, then records the lowest passing limit as a conservative whole-GB RAM recommendation. The recommendation adds 512 MiB headroom to the lowest passing limit before rounding up to whole GB. The detailed pass/fail attempts are stored in `cpu-memory.json`.
 
+The default task starts at 1536 MiB and uses practical steps up to 12 GiB; it intentionally skips obviously unusable sub-GB limits so the benchmark finishes faster.
+
 The benchmark text is intentionally one realistic short request, around 100-200 characters. Results are not a guarantee for long text, concurrent requests, larger outputs, or different host memory behavior.
 
 Scenario shortcuts:

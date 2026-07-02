@@ -15,7 +15,7 @@ from typing import Any
 
 
 ROOT = Path.cwd()
-DEFAULT_LIMITS = "1024m,1536m,2048m,2304m,2560m,2816m,3072m,3584m,4096m,5120m,6144m,8192m"
+DEFAULT_LIMITS = "1536m,2048m,2560m,3072m,4096m,5120m,6144m,7168m,8192m,10240m,12288m"
 DEFAULT_TEXT = (
     "This CPU memory benchmark uses a realistic two-sentence request to estimate "
     "the RAM needed for local text to speech with common voice modes."

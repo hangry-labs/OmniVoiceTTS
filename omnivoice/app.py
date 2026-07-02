@@ -3,12 +3,16 @@ from __future__ import annotations
 import gc
 import io
 import html
+import json
 import logging
 import os
+import platform
 import random
 import re
+import sys
 import threading
 from collections import OrderedDict
+from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Iterator, Optional
@@ -147,6 +151,52 @@ CPU_MEMORY_SCENARIO_DESCRIPTIONS = {
 }
 CPU_MEMORY_WARNING_LOCK = threading.Lock()
 CPU_MEMORY_WARNING_LAST: dict[str, float] = {}
+
+STARTUP_PARAMETER_DEFAULTS = OrderedDict(
+    [
+        ("APP_VERSION", __version__),
+        ("BUILD_ID", "stable"),
+        ("BUILD_DATE", ""),
+        ("HOST", "0.0.0.0"),
+        ("PORT", "7861"),
+        ("UVICORN_RELOAD", "0"),
+        ("CUDA_VISIBLE_DEVICES", ""),
+        ("NVIDIA_VISIBLE_DEVICES", ""),
+        ("NVIDIA_DRIVER_CAPABILITIES", ""),
+        ("PYTORCH_CUDA_ALLOC_CONF", ""),
+        ("HF_HOME", ""),
+        ("HF_HUB_OFFLINE", ""),
+        ("TRANSFORMERS_OFFLINE", ""),
+        ("HF_TOKEN", ""),
+        ("GRADIO_TEMP_DIR", ""),
+        ("TMPDIR", ""),
+        ("OMNIVOICE_MODEL", "k2-fsa/OmniVoice"),
+        ("OMNIVOICE_DEVICE", "auto"),
+        ("OMNIVOICE_ASR_MODEL", "openai/whisper-large-v3-turbo"),
+        ("OMNIVOICE_LOAD_ASR", "0"),
+        ("OMNIVOICE_ALLOW_CPU_EAGER_ASR", "0"),
+        ("OMNIVOICE_MAX_CONCURRENT_GENERATIONS", "1"),
+        ("OMNIVOICE_EMPTY_CUDA_CACHE_AFTER_REQUEST", "0"),
+        ("OMNIVOICE_RESET_CUDA_PEAK_AFTER_CACHE_CLEAR", "0"),
+        ("OMNIVOICE_CPU_MEMORY_WARNING_INTERVAL_SECONDS", "300"),
+        ("OMNIVOICE_OPENAI_VOICE_PROFILE_DIR", "/app/openai_voice_profiles"),
+        ("OMNIVOICE_ALLOWED_REF_AUDIO_ROOTS", ""),
+        ("OMNIVOICE_VOICE_PROMPT_CACHE_LIMIT", "32"),
+        ("OMNIVOICE_RESAMPLE_BACKEND", "torchaudio"),
+        ("OMNIVOICE_UI_LOCALE", "en"),
+    ]
+)
+SENSITIVE_ENV_NAME_PARTS = ("TOKEN", "SECRET", "PASSWORD", "PASS", "KEY", "CREDENTIAL", "AUTH")
+
+HANGRYLABS_LOGO = r"""
+ _   _                              _           _
+| | | | __ _ _ __   __ _ _ __ _   _| |    __ _ | |__  ___
+| |_| |/ _` | '_ \ / _` | '__| | | | |   / _` || '_ \/ __|
+|  _  | (_| | | | | (_| | |  | |_| | |__| (_| || |_) \__ \
+|_| |_|\__,_|_| |_|\__, |_|   \__, |_____\__,_||_.__/|___/
+                   |___/      |___/
+        OmniVoiceTTS
+"""
 
 BRACKET_TOKEN_PATTERN = re.compile(r"\[[^\]\r\n]{1,80}\]")
 SUPPORTED_NONVERBAL_TAGS = [
@@ -287,6 +337,24 @@ def get_cuda_devices() -> list[str]:
     if not torch.cuda.is_available():
         return []
     return [torch.cuda.get_device_name(idx) for idx in range(torch.cuda.device_count())]
+
+
+def get_cuda_device_diagnostics() -> list[dict[str, Any]]:
+    if not torch.cuda.is_available():
+        return []
+    devices = []
+    for index in range(torch.cuda.device_count()):
+        props = torch.cuda.get_device_properties(index)
+        devices.append(
+            {
+                "index": index,
+                "name": torch.cuda.get_device_name(index),
+                "total_memory_bytes": props.total_memory,
+                "compute_capability": f"{props.major}.{props.minor}",
+                "multiprocessor_count": props.multi_processor_count,
+            }
+        )
+    return devices
 
 
 def get_runtime_label() -> str:
@@ -530,6 +598,30 @@ def cpu_memory_stats() -> dict[str, Any]:
         "current_mib": bytes_to_mib(current),
         "available_mib": bytes_to_mib(available),
     }
+
+
+def redact_startup_parameter(name: str, value: str) -> str:
+    if value and any(part in name.upper() for part in SENSITIVE_ENV_NAME_PARTS):
+        return "<redacted>"
+    return value
+
+
+def startup_parameter_diagnostics() -> dict[str, dict[str, Any]]:
+    names = set(STARTUP_PARAMETER_DEFAULTS)
+    for name in os.environ:
+        if name.startswith("OMNIVOICE_"):
+            names.add(name)
+    parameters = OrderedDict()
+    for name in sorted(names):
+        env_value = os.getenv(name)
+        default = STARTUP_PARAMETER_DEFAULTS.get(name, "")
+        raw_value = env_value if env_value is not None else default
+        parameters[name] = {
+            "value": redact_startup_parameter(name, raw_value),
+            "source": "env" if env_value is not None else "default",
+            "set": env_value is not None,
+        }
+    return parameters
 
 
 def should_cache_voice_clone_prompt(ref_audio: str | None) -> bool:
@@ -1333,6 +1425,91 @@ def get_status_payload() -> dict:
     }
 
 
+def get_startup_diagnostics_payload() -> dict[str, Any]:
+    try:
+        resolved_device = normalize_device(DEFAULT_DEVICE)
+        device_error = None
+    except RuntimeError as exc:
+        resolved_device = None
+        device_error = str(exc)
+    effective_load_asr = should_eager_load_asr(resolved_device, warn=False) if resolved_device else False
+    return {
+        "app": {
+            "name": "OmniVoiceTTS",
+            "version": read_version_file(),
+            "package_version": APP_VERSION,
+            "build_id": BUILD_ID,
+            "build_label": get_build_label(),
+        },
+        "runtime": {
+            "label": get_runtime_label(),
+            "python": sys.version.split()[0],
+            "platform": platform.platform(),
+            "torch": torch.__version__,
+            "torch_cuda": torch.version.cuda,
+            "cudnn": torch.backends.cudnn.version(),
+            "resample_backend": RESAMPLE_BACKEND,
+        },
+        "hardware": {
+            "cuda_available": torch.cuda.is_available(),
+            "cuda_visible_devices": os.getenv("CUDA_VISIBLE_DEVICES", ""),
+            "cuda_device_count": torch.cuda.device_count() if torch.cuda.is_available() else 0,
+            "cuda_devices": get_cuda_device_diagnostics(),
+            "mps_available": bool(hasattr(torch.backends, "mps") and torch.backends.mps.is_available()),
+        },
+        "memory": {
+            "cpu": cpu_memory_stats(),
+            "cuda": cuda_memory_stats(),
+        },
+        "config": {
+            "model": DEFAULT_MODEL,
+            "device": DEFAULT_DEVICE,
+            "resolved_device": resolved_device,
+            "device_error": device_error,
+            "load_asr": effective_load_asr,
+            "requested_load_asr": LOAD_ASR,
+            "allow_cpu_eager_asr": ALLOW_CPU_EAGER_ASR,
+            "asr_model": DEFAULT_ASR_MODEL if effective_load_asr else None,
+            "max_concurrent_generations": MAX_CONCURRENT_GENERATIONS,
+            "empty_cuda_cache_after_request": EMPTY_CUDA_CACHE_AFTER_REQUEST,
+            "reset_cuda_peak_after_cache_clear": RESET_CUDA_PEAK_AFTER_CACHE_CLEAR,
+            "cpu_memory_warning_interval_seconds": CPU_MEMORY_WARNING_INTERVAL_SECONDS,
+            "voice_prompt_cache_limit": VOICE_CLONE_PROMPT_CACHE_LIMIT,
+            "languages": len(LANG_IDS),
+            "output_formats": sorted(OUTPUT_FORMATS),
+        },
+        "startup_parameters": startup_parameter_diagnostics(),
+        "paths": {
+            "openai_voice_profile_dir": str(OPENAI_VOICE_PROFILE_DIR),
+            "openai_voice_profile_index_exists": OPENAI_VOICE_PROFILE_INDEX.exists(),
+            "brand_asset_dir_exists": ASSET_DIR.exists(),
+            "default_clone_audio_exists": OPENAI_DEFAULT_CLONE_AUDIO.exists(),
+        },
+        "offline": {
+            "hf_hub_offline": os.getenv("HF_HUB_OFFLINE", ""),
+            "transformers_offline": os.getenv("TRANSFORMERS_OFFLINE", ""),
+        },
+    }
+
+
+def log_startup_diagnostics() -> None:
+    for line in HANGRYLABS_LOGO.strip("\n").splitlines():
+        print(line, flush=True)
+    diagnostics = get_startup_diagnostics_payload()
+    print(f"[startup] diagnostics={json.dumps(diagnostics, sort_keys=True)}", flush=True)
+    if diagnostics["config"]["resolved_device"] == "cpu":
+        print(
+            f"[startup] cpu_memory_recommendations={json.dumps(cpu_memory_recommendation_payload(), sort_keys=True)}",
+            flush=True,
+        )
+
+
+@asynccontextmanager
+async def api_lifespan(app: FastAPI):
+    log_startup_diagnostics()
+    yield
+
+
 LANGUAGE_CHOICES = [("Auto", "Auto")] + sorted((lang_display_name(name), name) for name in LANG_NAMES)
 hardware_choices = get_hardware_choices()
 hardware_values = {value for _, value in hardware_choices}
@@ -1863,6 +2040,7 @@ api = FastAPI(
     openapi_url="/tts/openapi.json",
     docs_url="/tts/docs",
     redoc_url="/tts/redoc",
+    lifespan=api_lifespan,
 )
 
 ACCESS_LOGGER = logging.getLogger("omnivoice.access")
