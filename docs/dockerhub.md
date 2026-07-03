@@ -231,6 +231,7 @@ GPU memory controls:
 - Readiness endpoint and Docker healthcheck.
 - Request IDs, structured errors, and richer timing/queue diagnostics.
 - Upload-based API support for reference audio plus optional transcript.
+- Text preflight/token estimate endpoint for character counts, tokenizer counts, chunking, and rough duration before generation.
 
 ## Version Highlights
 

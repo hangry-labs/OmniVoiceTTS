@@ -397,6 +397,7 @@ Planned items for the next development cycle:
 - Add a readiness endpoint and Docker healthcheck for cleaner container orchestration.
 - Add request IDs and structured error payloads to make issue reports easier to diagnose.
 - Add upload-based API support for reference audio plus optional transcript, so API users do not need to pass container-local file paths.
+- Add a text preflight/token estimate endpoint so clients can inspect character counts, tokenizer counts, chunking, and rough duration before sending generation requests.
 - Add generation timing and queue diagnostics to `/tts/status` for better performance and overload visibility.
 
 ---
