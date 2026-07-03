@@ -204,6 +204,8 @@ http://localhost:7861/tts/docs
 
 Long text can also be requested through `/tts/stream` or `/tts/stream-chunks`. Those routes start returning encoded audio after each generated text chunk, so playback can begin before the full request completes. They support the same `voice` and `voice_profile` fields as complete generation. For live streaming, WAV requests are returned as MP3 because independent WAV chunks do not form a valid continuous stream.
 
+Generated audio edge handling can be tuned with `pad_duration` and `fade_duration` on native and OpenAI-compatible speech requests. `pad_duration` adds silence before and after the clip; `fade_duration` fades the clip in and out to reduce clicks. Both default to `0.1` seconds and can be set to `0` to disable.
+
 ```bash
 curl -X POST "http://localhost:7861/tts/stream-chunks" \
   -H "Content-Type: application/json" \
@@ -234,6 +236,16 @@ GPU memory controls:
 - Text preflight/token estimate endpoint for character counts, tokenizer counts, chunking, and rough duration before generation.
 
 ## Version Highlights
+
+### Snapshot (`latest`)
+
+The snapshot channel is the current Docker `latest` build after the latest tagged release. It is installable with `hangrylabs/omnivoicetts:latest` and is useful for testing fixes and new features before the next immutable `vX.Y.Z` release, but it can change as `master` moves. Use versioned tags such as `v0.3.0` when you need reproducible deployments.
+
+Current snapshot changes after `v0.3.0`:
+
+- Adds edge audio controls: `pad_duration` for configurable silence before and after generated audio, and `fade_duration` for fading clip edges to reduce clicks.
+- Exposes the new controls in the browser UI under Generation Settings.
+- Exposes the same controls through the native API, OpenAI-compatible `/v1/audio/speech` extension fields, CLI commands, and the Python client.
 
 ### v0.3.0
 

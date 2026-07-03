@@ -172,6 +172,18 @@ def get_parser():
         help="Whether to post-process generated audio (remove silence).",
     )
     parser.add_argument(
+        "--pad_duration",
+        type=float,
+        default=0.1,
+        help="Silence padding duration per side in seconds. Set to 0 to disable.",
+    )
+    parser.add_argument(
+        "--fade_duration",
+        type=float,
+        default=0.1,
+        help="Fade-in/out curve duration in seconds. Set to 0 to disable.",
+    )
+    parser.add_argument(
         "--layer_penalty_factor",
         type=float,
         default=5.0,

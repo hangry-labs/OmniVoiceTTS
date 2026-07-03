@@ -107,6 +107,18 @@ def get_parser() -> argparse.ArgumentParser:
         type=str2bool,
         default=True,
     )
+    parser.add_argument(
+        "--pad_duration",
+        type=float,
+        default=0.1,
+        help="Silence padding duration per side in seconds. Set to 0 to disable.",
+    )
+    parser.add_argument(
+        "--fade_duration",
+        type=float,
+        default=0.1,
+        help="Fade-in/out curve duration in seconds. Set to 0 to disable.",
+    )
     parser.add_argument("--layer_penalty_factor", type=float, default=5.0)
     parser.add_argument("--position_temperature", type=float, default=5.0)
     parser.add_argument("--class_temperature", type=float, default=0.0)
@@ -145,6 +157,8 @@ def main():
         t_shift=args.t_shift,
         denoise=args.denoise,
         postprocess_output=args.postprocess_output,
+        pad_duration=args.pad_duration,
+        fade_duration=args.fade_duration,
         layer_penalty_factor=args.layer_penalty_factor,
         position_temperature=args.position_temperature,
         class_temperature=args.class_temperature,

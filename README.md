@@ -177,6 +177,8 @@ Useful endpoints:
 
 `/tts/generate` and `/tts/convert` return complete generated audio. `/tts/stream` and `/tts/stream-chunks` progressively return encoded audio after each generated long-text chunk and support the same `voice`/`voice_profile` profile resolution; WAV stream requests are returned as MP3 for live playback compatibility.
 
+Generated audio edge handling can be tuned with `pad_duration` and `fade_duration` on `/tts/generate`, `/tts/convert`, `/tts/stream`, `/tts/stream-chunks`, and `/v1/audio/speech`. `pad_duration` adds silence before and after the clip; `fade_duration` fades the clip in and out to reduce clicks. Both default to `0.1` seconds and can be set to `0` to disable.
+
 Docker images default to `OMNIVOICE_MAX_CONCURRENT_GENERATIONS=1`, so concurrent API callers queue on each resolved device instead of overlapping GPU-heavy generation. `/tts/status` reports CUDA `allocated`, `reserved`, and peak allocator counters. `POST /tts/cache/clear` releases unused PyTorch CUDA allocator blocks without unloading model weights or saved voice-prompt cache entries; `POST /tts/purge` unloads cached models and then performs the stronger CUDA allocator cleanup. `OMNIVOICE_EMPTY_CUDA_CACHE_AFTER_REQUEST=1` can force allocator cleanup after every request, but it is off by default because it may reduce throughput.
 
 Interactive API documentation is available at **[http://localhost:7861/tts/docs](http://localhost:7861/tts/docs)**.
@@ -223,6 +225,7 @@ audio.save("openai-speech.mp3")
 - Optional tiny image target for cache-volume workflows
 - GPU acceleration when available
 - Stored OpenAI voice profiles reuse cached clone prompts after the first request
+- Tune generated clip edge silence and fade with `pad_duration` and `fade_duration`
 - Serialized GPU generation by default to avoid concurrent VRAM spikes
 - CUDA allocator diagnostics and cache clearing without unloading model weights
 - Optional `OMNIVOICE_RESAMPLE_BACKEND=librosa` fallback if a platform has `torchaudio` issues
@@ -403,6 +406,16 @@ Planned items for the next development cycle:
 ---
 
 ## Version History
+
+### Snapshot (`latest`)
+
+The snapshot channel is the current Docker `latest` build after the latest tagged release. It is installable with `hangrylabs/omnivoicetts:latest` and is useful for testing fixes and new features before the next immutable `vX.Y.Z` release, but it can change as `master` moves. Use versioned tags such as `v0.3.0` when you need reproducible deployments.
+
+Current snapshot changes after `v0.3.0`:
+
+- Added edge audio controls for generated clips: `pad_duration` adds configurable silence before and after output audio, and `fade_duration` fades the clip edges to reduce clicks.
+- Exposed the new edge controls in the browser UI under Generation Settings.
+- Exposed the same controls through the native API, OpenAI-compatible `/v1/audio/speech` extension fields, CLI commands, and the Python client.
 
 ### v0.3.0
 

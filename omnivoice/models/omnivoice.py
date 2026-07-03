@@ -105,6 +105,8 @@ class OmniVoiceGenerationConfig:
     postprocess_output: bool = True
     audio_chunk_duration: float = 15.0
     audio_chunk_threshold: float = 30.0
+    pad_duration: float = 0.1
+    fade_duration: float = 0.1
     cancel_event: Optional[Any] = None
 
     @classmethod
@@ -537,6 +539,10 @@ class OmniVoice(PreTrainedModel):
                     this duration (seconds) and generate chunk by chunk.
                 audio_chunk_threshold: Only apply chunking if estimated audio
                     duration exceeds this threshold (seconds).
+                pad_duration: Silence padding duration per side in seconds
+                    (0 to disable).
+                fade_duration: Fade-in/out curve duration in seconds
+                    (0 to disable).
         Returns:
             ``audios`` a list of 1-D ``np.ndarray`` with shape ``(T,)`` and
             sampling rate consistent with the model's audio tokenizer
@@ -801,27 +807,27 @@ class OmniVoice(PreTrainedModel):
 
         audio_waveform = self._post_process_audio(
             audio_waveform,
-            postprocess_output=gen_config.postprocess_output,
             ref_rms=rms,
+            gen_config=gen_config,
         )
         return audio_waveform.squeeze(0)
 
     def _post_process_audio(
         self,
         generated_audio: np.ndarray,
-        postprocess_output: bool,
         ref_rms: Union[float, None],
+        gen_config: OmniVoiceGenerationConfig,
     ) -> np.ndarray:
         """Optionally remove long silences, adjust volume, and add edge padding.
 
         Args:
             generated_audio: Numpy array of shape (1, T).
-            postprocess_output: If True, remove long silences and apply fade/pad.
             ref_rms: RMS of the reference audio for volume normalisation.
+            gen_config: Generation config controlling post-processing behavior.
         Returns:
             Processed numpy array of shape (1, T).
         """
-        if postprocess_output:
+        if gen_config.postprocess_output:
             generated_audio = remove_silence(
                 generated_audio,
                 self.sampling_rate,
@@ -839,6 +845,8 @@ class OmniVoice(PreTrainedModel):
 
         generated_audio = fade_and_pad_audio(
             generated_audio,
+            pad_duration=gen_config.pad_duration,
+            fade_duration=gen_config.fade_duration,
             sample_rate=self.sampling_rate,
         )
         return generated_audio

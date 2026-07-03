@@ -904,6 +904,8 @@ def ui_locale_updates(locale: str, current_mode: str, current_text: str):
         gr.update(label=ui_text_for(selected_locale, "denoise.label"), info=ui_text_for(selected_locale, "denoise.info")),
         gr.update(label=ui_text_for(selected_locale, "preprocess_prompt.label"), info=ui_text_for(selected_locale, "preprocess_prompt.info")),
         gr.update(label=ui_text_for(selected_locale, "postprocess_output.label"), info=ui_text_for(selected_locale, "postprocess_output.info")),
+        gr.update(label=ui_text_for(selected_locale, "pad_duration.label"), info=ui_text_for(selected_locale, "pad_duration.info")),
+        gr.update(label=ui_text_for(selected_locale, "fade_duration.label"), info=ui_text_for(selected_locale, "fade_duration.info")),
         gr.update(label=ui_text_for(selected_locale, "t_shift.label"), info=ui_text_for(selected_locale, "t_shift.info")),
         gr.update(label=ui_text_for(selected_locale, "layer_penalty.label"), info=ui_text_for(selected_locale, "layer_penalty.info")),
         gr.update(label=ui_text_for(selected_locale, "position_temperature.label"), info=ui_text_for(selected_locale, "position_temperature.info")),
@@ -1035,6 +1037,8 @@ def build_generation_config(
     denoise: bool = True,
     preprocess_prompt: bool = True,
     postprocess_output: bool = True,
+    pad_duration: float = 0.1,
+    fade_duration: float = 0.1,
     t_shift: float = 0.1,
     layer_penalty_factor: float = 5.0,
     position_temperature: float = 5.0,
@@ -1048,6 +1052,8 @@ def build_generation_config(
         denoise=denoise,
         preprocess_prompt=preprocess_prompt,
         postprocess_output=postprocess_output,
+        pad_duration=pad_duration,
+        fade_duration=fade_duration,
         t_shift=t_shift,
         layer_penalty_factor=layer_penalty_factor,
         position_temperature=position_temperature,
@@ -1188,6 +1194,8 @@ def synthesize_file(
     denoise,
     preprocess_prompt,
     postprocess_output,
+    pad_duration,
+    fade_duration,
     t_shift,
     layer_penalty_factor,
     position_temperature,
@@ -1233,6 +1241,8 @@ def synthesize_file(
             denoise=bool(denoise),
             preprocess_prompt=bool(preprocess_prompt),
             postprocess_output=bool(postprocess_output),
+            pad_duration=coerce_float(pad_duration, 0.1),
+            fade_duration=coerce_float(fade_duration, 0.1),
             t_shift=coerce_float(t_shift, 0.1),
             layer_penalty_factor=coerce_float(layer_penalty_factor, 5.0),
             position_temperature=coerce_float(position_temperature, 5.0),
@@ -1284,6 +1294,8 @@ def synthesize_file_streaming(
     denoise,
     preprocess_prompt,
     postprocess_output,
+    pad_duration,
+    fade_duration,
     t_shift,
     layer_penalty_factor,
     position_temperature,
@@ -1331,6 +1343,8 @@ def synthesize_file_streaming(
             denoise=bool(denoise),
             preprocess_prompt=bool(preprocess_prompt),
             postprocess_output=bool(postprocess_output),
+            pad_duration=coerce_float(pad_duration, 0.1),
+            fade_duration=coerce_float(fade_duration, 0.1),
             t_shift=coerce_float(t_shift, 0.1),
             layer_penalty_factor=coerce_float(layer_penalty_factor, 5.0),
             position_temperature=coerce_float(position_temperature, 5.0),
@@ -1806,6 +1820,9 @@ with gr.Blocks(title="OmniVoiceTTS") as ui:
                     denoise = gr.Checkbox(value=True, label=ui_text("denoise.label"), info=ui_text("denoise.info"))
                     preprocess_prompt = gr.Checkbox(value=True, label=ui_text("preprocess_prompt.label"), info=ui_text("preprocess_prompt.info"))
                     postprocess_output = gr.Checkbox(value=True, label=ui_text("postprocess_output.label"), info=ui_text("postprocess_output.info"))
+                    with gr.Row():
+                        pad_duration = gr.Number(value=0.1, label=ui_text("pad_duration.label"), info=ui_text("pad_duration.info"))
+                        fade_duration = gr.Number(value=0.1, label=ui_text("fade_duration.label"), info=ui_text("fade_duration.info"))
                     with gr.Accordion(ui_text("advanced_controls.title"), open=False):
                         t_shift = gr.Slider(0.01, 1.0, value=0.1, step=0.01, label=ui_text("t_shift.label"), info=ui_text("t_shift.info"))
                         layer_penalty_factor = gr.Slider(0.0, 10.0, value=5.0, step=0.1, label=ui_text("layer_penalty.label"), info=ui_text("layer_penalty.info"))
@@ -1859,6 +1876,8 @@ with gr.Blocks(title="OmniVoiceTTS") as ui:
             denoise,
             preprocess_prompt,
             postprocess_output,
+            pad_duration,
+            fade_duration,
             t_shift,
             layer_penalty_factor,
             position_temperature,
@@ -1953,6 +1972,8 @@ with gr.Blocks(title="OmniVoiceTTS") as ui:
             denoise,
             preprocess_prompt,
             postprocess_output,
+            pad_duration,
+            fade_duration,
             t_shift,
             layer_penalty_factor,
             position_temperature,
@@ -2003,6 +2024,8 @@ with gr.Blocks(title="OmniVoiceTTS") as ui:
             denoise,
             preprocess_prompt,
             postprocess_output,
+            pad_duration,
+            fade_duration,
             t_shift,
             layer_penalty_factor,
             position_temperature,
@@ -2106,6 +2129,8 @@ class TTSRequest(BaseModel):
     denoise: bool = Field(True, description="Use denoising prompt when applicable.")
     preprocess_prompt: bool = Field(True, description="Trim/remove silence from reference prompt audio.")
     postprocess_output: bool = Field(True, description="Remove long silences and fade/pad generated audio.")
+    pad_duration: float = Field(0.1, ge=0.0, le=5.0, description="Silence padding duration per side in seconds. Set to 0 to disable.")
+    fade_duration: float = Field(0.1, ge=0.0, le=5.0, description="Fade-in/out curve duration in seconds. Set to 0 to disable.")
     t_shift: float = Field(0.1, gt=0.0, le=1.0, description="Time-step shift for the noise schedule.")
     layer_penalty_factor: float = Field(5.0, ge=0.0, le=20.0, description="Penalty encouraging lower codebook layers to unmask first.")
     position_temperature: float = Field(5.0, ge=0.0, le=20.0, description="Temperature for mask-position selection.")
@@ -2161,6 +2186,8 @@ class OpenAISpeechRequest(BaseModel):
     randomize_seed: bool = Field(False, description="Optional OmniVoice extension: generate a random seed.")
     device: str = Field(DEFAULT_DEVICE, description="Optional OmniVoice extension: auto, cpu, mps, or cuda:N.")
     num_step: int = Field(32, ge=4, le=64, description="Optional OmniVoice extension: diffusion decoding steps.")
+    pad_duration: float = Field(0.1, ge=0.0, le=5.0, description="Optional OmniVoice extension: silence padding duration per side in seconds.")
+    fade_duration: float = Field(0.1, ge=0.0, le=5.0, description="Optional OmniVoice extension: fade-in/out curve duration in seconds.")
     instructions: Optional[str] = Field(None, description="Optional OmniVoice extension: explicit voice-design instruction.")
     ref_audio: Optional[str] = Field(
         None,
@@ -2323,6 +2350,8 @@ def openai_speech_to_tts_request(payload: OpenAISpeechRequest) -> TTSRequest:
         speed=payload.speed,
         device=payload.device,
         num_step=payload.num_step,
+        pad_duration=payload.pad_duration,
+        fade_duration=payload.fade_duration,
         output_format=output_format,
         seed=seed,
         randomize_seed=randomize_seed,
@@ -2339,6 +2368,8 @@ def tts_request_to_openai_speech_request(payload: TTSRequest) -> OpenAISpeechReq
         "speed": payload.speed if payload.speed is not None else 1.0,
         "device": payload.device,
         "num_step": payload.num_step,
+        "pad_duration": payload.pad_duration,
+        "fade_duration": payload.fade_duration,
         "instructions": payload.instruct,
         "ref_audio": payload.ref_audio,
         "ref_text": payload.ref_text,
@@ -2404,6 +2435,8 @@ def synthesize_payload(payload: TTSRequest) -> tuple[str, int, np.ndarray, int]:
             denoise=payload.denoise,
             preprocess_prompt=payload.preprocess_prompt,
             postprocess_output=payload.postprocess_output,
+            pad_duration=payload.pad_duration,
+            fade_duration=payload.fade_duration,
             t_shift=payload.t_shift,
             layer_penalty_factor=payload.layer_penalty_factor,
             position_temperature=payload.position_temperature,
@@ -2450,6 +2483,8 @@ def synthesize_payload_chunks(payload: TTSRequest) -> tuple[str, int, Iterator[n
             denoise=payload.denoise,
             preprocess_prompt=payload.preprocess_prompt,
             postprocess_output=payload.postprocess_output,
+            pad_duration=payload.pad_duration,
+            fade_duration=payload.fade_duration,
             t_shift=payload.t_shift,
             layer_penalty_factor=payload.layer_penalty_factor,
             position_temperature=payload.position_temperature,

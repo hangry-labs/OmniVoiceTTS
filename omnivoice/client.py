@@ -77,6 +77,8 @@ class OmniVoiceTTSClient:
         output_format: str = "wav",
         num_step: int = 32,
         guidance_scale: float = 2.0,
+        pad_duration: float = 0.1,
+        fade_duration: float = 0.1,
     ) -> AudioResponse:
         return self._audio(
             "/tts/generate",
@@ -93,6 +95,8 @@ class OmniVoiceTTSClient:
                 "output_format": output_format,
                 "num_step": num_step,
                 "guidance_scale": guidance_scale,
+                "pad_duration": pad_duration,
+                "fade_duration": fade_duration,
             },
         )
 
