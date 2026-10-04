@@ -157,7 +157,7 @@ if (-not (Test-Path -LiteralPath "VERSION")) {
 $currentVersion = (Get-Content -Raw -LiteralPath "VERSION").Trim()
 $versionMatch = [regex]::Match($currentVersion, '^(\d+\.\d+(?:\.\d+)?)-snapshot$')
 if (-not $versionMatch.Success) {
-    throw "VERSION must be a snapshot such as 0.4-snapshot or 0.4.0-snapshot. Current: '$currentVersion'"
+    throw "VERSION must be a snapshot such as 1.0-snapshot or 1.0.0-snapshot. Current: '$currentVersion'"
 }
 
 $releaseDisplayVersion = $versionMatch.Groups[1].Value
@@ -178,7 +178,7 @@ if ([string]::IsNullOrWhiteSpace($NextVersion)) {
 
 $nextMatch = [regex]::Match($nextSnapshotVersion, '^(\d+\.\d+(?:\.\d+)?)-snapshot$')
 if (-not $nextMatch.Success) {
-    throw "NEXT_VERSION must look like 0.4-snapshot or 0.4.0-snapshot. Current: '$nextSnapshotVersion'"
+    throw "NEXT_VERSION must look like 1.1-snapshot or 1.1.0-snapshot. Current: '$nextSnapshotVersion'"
 }
 
 $nextDisplayVersion = $nextMatch.Groups[1].Value
@@ -192,7 +192,7 @@ $snapshotHeading = "### v$releaseDisplayVersion Snapshot"
 $stableHeading = "### $releaseTag"
 $nextSnapshotHeading = "### v$nextDisplayVersion Snapshot"
 $developmentImageNotice = 'The current development snapshot is published through the rolling tags from `master`:'
-$stableImageNotice = "Run this release with either immutable image variant:"
+$stableImageNotice = "Run this release with either image variant:"
 
 foreach ($doc in @("README.md", "docs/dockerhub.md")) {
     $content = Get-Content -Raw -LiteralPath $doc
@@ -312,5 +312,6 @@ if (Test-Enabled $DryRun) {
 } else {
     Write-Host "Release workflow complete. master and $releaseTag were pushed atomically."
     Write-Host "GitHub Actions is responsible for publishing the release images."
-    Write-Host "After validating the tagged deployment, create the public GitHub Release entry manually."
+    Write-Host "After the images publish, resolve their Docker Hub top-level OCI digests and pin them in the release-history commands."
+    Write-Host "After validating that digest-pinned deployment, create the public GitHub Release entry manually."
 }

@@ -72,8 +72,10 @@ Later image versions reuse the same `omnivoicetts_data` volume, so downloaded mo
 
 - `latest` - rolling full snapshot from `master`
 - `latest_tiny` - rolling tiny snapshot from `master`
-- `vX.Y.Z` - immutable full release, for example `v0.3.0`
-- `vX.Y.Z_tiny` - immutable tiny release, for example `v0.3.0_tiny`
+- `vX.Y` or `vX.Y.Z` - immutable full release, for example `v1.0`
+- `vX.Y_tiny` or `vX.Y.Z_tiny` - immutable tiny release, for example `v1.0_tiny`
+
+Snapshot or development version tags are intentionally not published. Release tags are created only when the project is ready for a release.
 - Full and tiny images are published to Docker Hub and GitHub Container Registry.
 
 ## Browser UI
@@ -359,14 +361,14 @@ task nuke
 
 `task imagerun`, `task imagerun-tiny`, `task localrun`, and `task localrun-tiny` all mount the same `omnivoicetts_data` volume at `/app/persistent`. A fresh named volume mounted into the full image is initialized from the baked model assets by Docker; the tiny image downloads into the same layout on first online use.
 
-Release from a clean tree:
+Preview and run a release from a clean, synchronized `master` branch:
 
 ```bash
 task release DRY_RUN=1
 task release
 ```
 
-The release task is intentionally allowed to create the release commit, annotated tag, and next-snapshot commit. Outside that bounded release flow, normal project changes should be reviewed and committed by the repository owner.
+The release task requires a snapshot `VERSION` such as `1.0-snapshot`, validates package metadata, Python compilation, tests, CodeQL results, and Dockerfile structure, and converts it into the annotated `v1.0` release tag. It then prepares the next minor snapshot and release-history section before atomically pushing `master` and the release tag to `origin`. GitHub Actions publishes identical full and tiny images to Docker Hub and GHCR. Creating the public GitHub Release entry remains a manual step: first deploy and validate the immutable version tag, resolve Docker Hub's top-level OCI digests, add those digests to the published-release commands, and then publish the release entry. Pass `NEXT_VERSION=X.Y-snapshot` to override the default next-minor snapshot, or use `SKIP_VALIDATION=1` only when the same release commit has already passed the validation sequence.
 
 ---
 
@@ -440,9 +442,11 @@ Planned items for the next development cycle:
 
 ## Version History
 
-### v0.3.1 Snapshot
+Snapshot commands intentionally follow the rolling `latest` tags. Published-release commands retain their readable version tag and also pin Docker Hub's immutable top-level OCI digest; the digest is authoritative if a tag is ever changed.
 
-The snapshot channel is the current Docker `latest` build after the latest tagged release. It is installable with `hangrylabs/omnivoicetts:latest` and is useful for testing fixes and new features before the next immutable `vX.Y.Z` release, but it can change as `master` moves. Use versioned tags such as `v0.3.0` when you need reproducible deployments.
+### v1.0 Snapshot
+
+The snapshot channel is the current Docker `latest` build after the latest tagged release. It is installable with `hangrylabs/omnivoicetts:latest` and is useful for testing fixes and new features before the next immutable `vX.Y` or `vX.Y.Z` release, but it can change as `master` moves. Use versioned tags such as `v0.3.0` when you need reproducible deployments.
 
 Current snapshot changes after `v0.3.0`:
 
@@ -485,6 +489,20 @@ docker run --name omnivoicetts-tiny --restart unless-stopped -p 7861:7861 --gpus
 - Hardened file/path handling for reference audio, uploads, generated files, subprocess commands, voice instruction parsing, and GitHub Actions token permissions.
 - Continued modularizing the service by extracting audio helpers, safe path helpers, branding, GPU monitor, translations, and OpenAI voice-profile utilities out of the main app entrypoint.
 
+Run this release with either image variant:
+
+**Standard image**
+
+```bash
+docker run --name omnivoicetts-v0-3-0 --restart unless-stopped -p 7861:7861 --gpus all -e CUDA_VISIBLE_DEVICES=0 -v omnivoicetts_openai_voice_profiles:/app/openai_voice_profiles hangrylabs/omnivoicetts:v0.3.0@sha256:d69abc539fe1630af5ffc5f863c47e34f180f4112dd243f692723d728e150bd0
+```
+
+**Tiny image**
+
+```bash
+docker run --name omnivoicetts-v0-3-0-tiny --restart unless-stopped -p 7861:7861 --gpus all -e CUDA_VISIBLE_DEVICES=0 -e HF_HUB_OFFLINE=0 -e TRANSFORMERS_OFFLINE=0 -v omnivoicetts_hf_cache:/app/.cache/huggingface -v omnivoicetts_openai_voice_profiles:/app/openai_voice_profiles hangrylabs/omnivoicetts:v0.3.0_tiny@sha256:dfefb6327ece921ad205b250d11387909ad10289d8fca4e2f55c73a13e10fb6a
+```
+
 ### v0.2.0
 
 - Reworked the browser UI into a branded Hangry Labs experience while keeping Gradio controls stable and functional.
@@ -499,6 +517,20 @@ docker run --name omnivoicetts-tiny --restart unless-stopped -p 7861:7861 --gpus
 - Added the browser UI screenshot to README and Docker Hub documentation.
 - Updated Docker Hub docs to put the public examples page and browser UI preview front and center.
 - Improved local development helpers and release scripting for the `0.2.x` release line.
+
+Run this release with either image variant:
+
+**Standard image**
+
+```bash
+docker run --name omnivoicetts-v0-2-0 --restart unless-stopped -p 7861:7861 --gpus all -e CUDA_VISIBLE_DEVICES=0 hangrylabs/omnivoicetts:v0.2.0@sha256:a4c9b7220ee6b5f5f01c95db0465a54f4888e2124fef93da34f379294111d31c
+```
+
+**Tiny image**
+
+```bash
+docker run --name omnivoicetts-v0-2-0-tiny --restart unless-stopped -p 7861:7861 --gpus all -e CUDA_VISIBLE_DEVICES=0 -e HF_HUB_OFFLINE=0 -e TRANSFORMERS_OFFLINE=0 -v omnivoicetts_hf_cache:/app/.cache/huggingface hangrylabs/omnivoicetts:v0.2.0_tiny@sha256:aece005faa270ace6cd44e5f3e8e21f928c0d892e5eea5bca5b497d4b8d91d98
+```
 
 ### v0.1.0
 
@@ -524,6 +556,20 @@ docker run --name omnivoicetts-tiny --restart unless-stopped -p 7861:7861 --gpus
 - Added a runtime guard that blocks voice-design `instruct` together with bracket expression tags such as `[laughter]` and `[sigh]`, after testing showed that combination can produce unstable non-speech audio.
 - Regenerated affected non-verbal public examples without voice-design `instruct`, avoiding whisper plus bracket tags and placing tags inside sentences with follow-up text.
 - Validated a fresh Python 3.13 baked image without a host model-cache volume mounted, with offline flags enabled, GPU inference, all output formats, stream/convert routes, purge, and reload from baked cache.
+
+Run this release with either image variant:
+
+**Standard image**
+
+```bash
+docker run --name omnivoicetts-v0-1-0 --restart unless-stopped -p 7861:7861 --gpus all -e CUDA_VISIBLE_DEVICES=0 hangrylabs/omnivoicetts:v0.1.0@sha256:7fc5955d3a14452d6dd9a3afd9801e9ccd3a036360fe29003ae49f1b07cda432
+```
+
+**Tiny image**
+
+```bash
+docker run --name omnivoicetts-v0-1-0-tiny --restart unless-stopped -p 7861:7861 --gpus all -e CUDA_VISIBLE_DEVICES=0 -e HF_HUB_OFFLINE=0 -e TRANSFORMERS_OFFLINE=0 -v omnivoicetts_hf_cache:/app/.cache/huggingface hangrylabs/omnivoicetts:v0.1.0_tiny@sha256:51aab0a0931fdd84281a39d05f40edcf558f30ab2eccd550846a24c3b8181058
+```
 
 ## Responsible Use and Privacy
 

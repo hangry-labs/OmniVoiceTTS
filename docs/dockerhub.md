@@ -74,7 +74,7 @@ The named `omnivoicetts_data` volume stores model assets, application settings, 
 
 The `latest` image is the full baked image with OmniVoice model assets, the Higgs audio tokenizer, and Whisper ASR assets included for offline-friendly use after the image is pulled. CPU runs should keep eager ASR disabled because saved voice profiles with transcripts do not need Whisper at request startup; ASR can still lazy-load only when a reference audio request omits `ref_text`. To force eager Whisper preload on CPU anyway, set `OMNIVOICE_ALLOW_CPU_EAGER_ASR=1`. The release image is based on Python 3.13 and is intended to run without live Hugging Face downloads after pull. Version tags such as `v0.3.0` are also available for reproducible deployments.
 
-Tiny tags use the `vX.Y.Z_tiny` pattern. They keep runtime dependencies but skip baked Hugging Face model assets, and are intended for persistent-volume workflows where the cache is warmed on first online use:
+Tiny tags use the `vX.Y_tiny` or `vX.Y.Z_tiny` pattern. They keep runtime dependencies but skip baked Hugging Face model assets, and are intended for persistent-volume workflows where the cache is warmed on first online use:
 
 ```bash
 docker run --name omnivoicetts-tiny --restart unless-stopped -p 7861:7861 --gpus all -e CUDA_VISIBLE_DEVICES=0 -e HF_HUB_OFFLINE=0 -e TRANSFORMERS_OFFLINE=0 -v omnivoicetts_data:/app/persistent hangrylabs/omnivoicetts:latest_tiny
@@ -225,9 +225,11 @@ GPU memory controls:
 
 - Rolling full snapshot: `latest`
 - Rolling tiny snapshot: `latest_tiny`
-- Versioned release tags use the pattern `vX.Y.Z`, for example `v0.3.0`
-- Versioned tiny tags use the pattern `vX.Y.Z_tiny`, for example `v0.3.0_tiny`
+- Versioned release tags use `vX.Y` or `vX.Y.Z`, for example `v1.0`
+- Versioned tiny tags use `vX.Y_tiny` or `vX.Y.Z_tiny`, for example `v1.0_tiny`
 - Both variants are published to Docker Hub and GitHub Container Registry.
+
+Snapshot tags are not published.
 
 ## Runtime Configuration and Persistent Data
 
@@ -257,9 +259,11 @@ The old volumes remain untouched. On first profile load, legacy absolute audio p
 
 ## Version Highlights
 
-### v0.3.1 Snapshot
+Snapshot commands intentionally follow the rolling `latest` tags. Published-release commands retain their readable version tag and also pin Docker Hub's immutable top-level OCI index digest; the digest is authoritative if a tag is ever changed.
 
-The snapshot channel is the current Docker `latest` build after the latest tagged release. It is installable with `hangrylabs/omnivoicetts:latest` and is useful for testing fixes and new features before the next immutable `vX.Y.Z` release, but it can change as `master` moves. Use versioned tags such as `v0.3.0` when you need reproducible deployments.
+### v1.0 Snapshot
+
+The snapshot channel is the current Docker `latest` build after the latest tagged release. It is installable with `hangrylabs/omnivoicetts:latest` and is useful for testing fixes and new features before the next immutable `vX.Y` or `vX.Y.Z` release, but it can change as `master` moves. Use versioned tags such as `v0.3.0` when you need reproducible deployments.
 
 Current snapshot changes after `v0.3.0`:
 
@@ -297,10 +301,56 @@ docker run --name omnivoicetts-tiny --restart unless-stopped -p 7861:7861 --gpus
 - Documents why FlashAttention is not enabled for this image after local benchmarks showed slower single-request performance and only marginal batch gains.
 - Hardens path handling for reference audio, uploads, generated files, subprocess calls, voice instruction parsing, and GitHub Actions permissions.
 
+Run this release with either image variant:
+
+**Standard image**
+
+```bash
+docker run --name omnivoicetts-v0-3-0 --restart unless-stopped -p 7861:7861 --gpus all -e CUDA_VISIBLE_DEVICES=0 -v omnivoicetts_openai_voice_profiles:/app/openai_voice_profiles hangrylabs/omnivoicetts:v0.3.0@sha256:d69abc539fe1630af5ffc5f863c47e34f180f4112dd243f692723d728e150bd0
+```
+
+**Tiny image**
+
+```bash
+docker run --name omnivoicetts-v0-3-0-tiny --restart unless-stopped -p 7861:7861 --gpus all -e CUDA_VISIBLE_DEVICES=0 -e HF_HUB_OFFLINE=0 -e TRANSFORMERS_OFFLINE=0 -v omnivoicetts_hf_cache:/app/.cache/huggingface -v omnivoicetts_openai_voice_profiles:/app/openai_voice_profiles hangrylabs/omnivoicetts:v0.3.0_tiny@sha256:dfefb6327ece921ad205b250d11387909ad10289d8fca4e2f55c73a13e10fb6a
+```
+
 ### v0.2.0
 
 - Reworked the browser UI into the current Hangry Labs branded experience.
 - Added multilingual UI support, progressive `/tts/stream` and `/tts/stream-chunks`, seed reuse, stream stop controls, and the live GPU monitor.
+
+Run this release with either image variant:
+
+**Standard image**
+
+```bash
+docker run --name omnivoicetts-v0-2-0 --restart unless-stopped -p 7861:7861 --gpus all -e CUDA_VISIBLE_DEVICES=0 hangrylabs/omnivoicetts:v0.2.0@sha256:a4c9b7220ee6b5f5f01c95db0465a54f4888e2124fef93da34f379294111d31c
+```
+
+**Tiny image**
+
+```bash
+docker run --name omnivoicetts-v0-2-0-tiny --restart unless-stopped -p 7861:7861 --gpus all -e CUDA_VISIBLE_DEVICES=0 -e HF_HUB_OFFLINE=0 -e TRANSFORMERS_OFFLINE=0 -v omnivoicetts_hf_cache:/app/.cache/huggingface hangrylabs/omnivoicetts:v0.2.0_tiny@sha256:aece005faa270ace6cd44e5f3e8e21f928c0d892e5eea5bca5b497d4b8d91d98
+```
+
+### v0.1.0
+
+- Established the Hangry Labs Python 3.13 runtime with baked and tiny Docker images, the Gradio/FastAPI service, multilingual generation, voice design, cloning, and public examples.
+
+Run this release with either image variant:
+
+**Standard image**
+
+```bash
+docker run --name omnivoicetts-v0-1-0 --restart unless-stopped -p 7861:7861 --gpus all -e CUDA_VISIBLE_DEVICES=0 hangrylabs/omnivoicetts:v0.1.0@sha256:7fc5955d3a14452d6dd9a3afd9801e9ccd3a036360fe29003ae49f1b07cda432
+```
+
+**Tiny image**
+
+```bash
+docker run --name omnivoicetts-v0-1-0-tiny --restart unless-stopped -p 7861:7861 --gpus all -e CUDA_VISIBLE_DEVICES=0 -e HF_HUB_OFFLINE=0 -e TRANSFORMERS_OFFLINE=0 -v omnivoicetts_hf_cache:/app/.cache/huggingface hangrylabs/omnivoicetts:v0.1.0_tiny@sha256:51aab0a0931fdd84281a39d05f40edcf558f30ab2eccd550846a24c3b8181058
+```
 
 ## Release Validation
 
