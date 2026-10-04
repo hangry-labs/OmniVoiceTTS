@@ -11,6 +11,7 @@ build/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.codeql/
 *.so
 /.cache*
 /exp*/
@@ -26,6 +27,7 @@ examples/data*
 examples/download*
 examples/exp*
 .claude/
+.ai/
 *.wav
 *.jsonl
 

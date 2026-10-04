@@ -10,7 +10,8 @@ Easy-to-run OmniVoice text-to-speech Docker images with a browser UI and HTTP AP
 
 This Hangry Labs fork is made for ease of use. The aim is that anyone should be able to run massively multilingual text to speech without fighting Python environments, missing model files, or unclear setup: a person trying it at home, a developer wiring it into an app, or a professional evaluating it for local deployment. Install Docker, run one command from Quick Start, open the local link, and start generating speech.
 
-You get:
+## What This Project Provides
+
 - A browser UI for auto voice, voice design, and voice cloning
 - An HTTP API for your own applications and tools
 - No manual Python, model, ASR, or audio dependency setup
@@ -25,53 +26,61 @@ Official Docker images are intended for: [hangrylabs/omnivoicetts on Docker Hub]
 
 Hangry Labs home: [nuggies.website](https://nuggies.website/).
 
-## Browser UI
-
-The included browser UI is built for local generation, voice design, voice cloning, progressive streaming tests, seed-based reproducibility, output-format control, and live GPU visibility.
-
-![OmniVoiceTTS browser UI](docs/ui.jpg)
-
----
-
-## Responsible Use
-
-OmniVoice supports voice cloning. Do not use this project for unauthorized voice cloning, impersonation, fraud, harassment, scams, or any illegal or unethical activity. Only clone voices when you have the rights and consent to do so. You are responsible for complying with applicable laws, regulations, platform rules, and ethical standards.
-
----
-
 ## Quick Start
 
 Run with NVIDIA GPU support:
 
 ```bash
-docker run -p 7861:7861 --gpus "device=0" -e CUDA_VISIBLE_DEVICES=0 -v omnivoicetts_openai_voice_profiles:/app/openai_voice_profiles hangrylabs/omnivoicetts:latest
+docker run --name omnivoicetts --restart unless-stopped -p 7861:7861 --gpus all -e CUDA_VISIBLE_DEVICES=0 -v omnivoicetts_data:/app/persistent hangrylabs/omnivoicetts:latest
 ```
 
 Run on CPU:
 
 ```bash
-docker run -p 7861:7861 -e OMNIVOICE_DEVICE=cpu -e OMNIVOICE_LOAD_ASR=0 -v omnivoicetts_openai_voice_profiles:/app/openai_voice_profiles hangrylabs/omnivoicetts:latest
+docker run --name omnivoicetts --restart unless-stopped -p 7861:7861 -e OMNIVOICE_DEVICE=cpu -e OMNIVOICE_LOAD_ASR=0 -v omnivoicetts_data:/app/persistent hangrylabs/omnivoicetts:latest
 ```
 
 CPU mode is supported as a fallback, but it still needs enough system memory. For a 140-character CPU benchmark request, conservative rounded Docker RAM recommendations were: 2 GB for random/no-prompt voice, voice design, and direct clone with transcript; 3 GB for a stored voice profile with transcript; 6 GB for direct clone without transcript; and 7 GB for a stored voice profile without transcript. The no-transcript paths may lazy-load ASR, which is why they need much more RAM. Use more for longer text, concurrent requests, larger outputs, or host environments with tighter memory behavior.
 
 When running on CPU, `/tts/status` reports container/system memory diagnostics and per-scenario RAM recommendations. If a CPU request appears close to the available memory limit, the container logs a warning and still tries to continue; Docker or the OS may still kill the process if RAM is exhausted.
 
-If a CPU container exits after `Loading weights` during a cloned-voice `/v1/audio/speech` request, it is usually an out-of-memory kill rather than a Python exception. The TTS model already needs significant RAM on CPU, and clone/profile requests without a transcript can lazy-load Whisper ASR to transcribe the reference audio. Recent snapshots reduce the default footprint by keeping eager ASR off on CPU, but no-transcript clone paths still need more memory. To lower RAM use: run the latest snapshot (`0.3.0-snapshot` or newer), keep `OMNIVOICE_LOAD_ASR=0`, do not set `OMNIVOICE_ALLOW_CPU_EAGER_ASR=1`, save voice profiles with a reference transcript, include `ref_text` when sending direct `ref_audio`, keep concurrency at the default `OMNIVOICE_MAX_CONCURRENT_GENERATIONS=1`, and prefer GPU mode when available. See `benchmarks/CPU_MEMORY.md` for measured scenario recommendations and run `task benchmark-cpu-memory` on your host if you need local numbers.
+If a CPU container exits after `Loading weights` during a cloned-voice `/v1/audio/speech` request, it is usually an out-of-memory kill rather than a Python exception. The TTS model already needs significant RAM on CPU, and clone/profile requests without a transcript can lazy-load Whisper ASR to transcribe the reference audio. Recent snapshots reduce the default footprint by keeping eager ASR off on CPU, but no-transcript clone paths still need more memory. To lower RAM use: run `latest` or a current version tag, keep `OMNIVOICE_LOAD_ASR=0`, do not set `OMNIVOICE_ALLOW_CPU_EAGER_ASR=1`, save voice profiles with a reference transcript, include `ref_text` when sending direct `ref_audio`, keep concurrency at the default `OMNIVOICE_MAX_CONCURRENT_GENERATIONS=1`, and prefer GPU mode when available. See `benchmarks/CPU_MEMORY.md` for measured scenario recommendations and run `task benchmark-cpu-memory` on your host if you need local numbers.
 
 Run on a specific GPU (example: GPU index `1`):
 
 ```bash
-docker run -p 7861:7861 --gpus "device=1" -e CUDA_VISIBLE_DEVICES=1 -v omnivoicetts_openai_voice_profiles:/app/openai_voice_profiles hangrylabs/omnivoicetts:latest
+docker run --name omnivoicetts --restart unless-stopped -p 7861:7861 --gpus all -e CUDA_VISIBLE_DEVICES=1 -v omnivoicetts_data:/app/persistent hangrylabs/omnivoicetts:latest
 ```
 
 Then open: **[http://localhost:7861](http://localhost:7861)**
 
-The named `omnivoicetts_openai_voice_profiles` volume stores voices created in the UI so they survive container replacement and image updates. Docker creates the volume automatically the first time you run one of these commands.
+The named `omnivoicetts_data` volume stores model assets, application settings, and voices created in the UI so they survive container replacement and image updates. Docker creates it automatically on first use.
 
 The full image is baked with the OmniVoice model, the Higgs audio tokenizer, and Whisper ASR assets. After the image is pulled, normal runtime is configured for offline use with `HF_HUB_OFFLINE=1` and `TRANSFORMERS_OFFLINE=1`. CPU runs should keep eager ASR disabled; saved voice profiles with transcripts do not need Whisper at request startup, and ASR can still lazy-load only when a reference audio request omits `ref_text`. To force eager Whisper preload on CPU anyway, set `OMNIVOICE_ALLOW_CPU_EAGER_ASR=1`. The Python 3.13 baked image was validated with no host model-cache volume mounted.
 
----
+## Tiny Image
+
+Use `latest_tiny` when you want runtime dependencies in the image but prefer model assets to download into the persistent volume on first online use:
+
+```bash
+docker run --name omnivoicetts-tiny --restart unless-stopped -p 7861:7861 --gpus all -e CUDA_VISIBLE_DEVICES=0 -e HF_HUB_OFFLINE=0 -e TRANSFORMERS_OFFLINE=0 -v omnivoicetts_data:/app/persistent hangrylabs/omnivoicetts:latest_tiny
+```
+
+Later image versions reuse the same `omnivoicetts_data` volume, so downloaded models, saved voices, and operator settings remain available.
+
+## Image Tags
+
+- `latest` - rolling full snapshot from `master`
+- `latest_tiny` - rolling tiny snapshot from `master`
+- `vX.Y.Z` - immutable full release, for example `v0.3.0`
+- `vX.Y.Z_tiny` - immutable tiny release, for example `v0.3.0_tiny`
+- Full and tiny images are published to Docker Hub and GitHub Container Registry.
+
+## Browser UI
+
+The included browser UI is built for local generation, voice design, voice cloning, progressive streaming tests, seed-based reproducibility, output-format control, and live GPU visibility.
+
+![OmniVoiceTTS browser UI](docs/ui.jpg)
 
 ## API Usage Example
 
@@ -107,7 +116,7 @@ Voice design is for speaker attributes only. Do not combine `instruct` with brac
 Voice cloning with a reference audio path mounted into the container:
 
 ```bash
-docker run -p 7861:7861 --gpus "device=0" -e CUDA_VISIBLE_DEVICES=0 -v omnivoicetts_openai_voice_profiles:/app/openai_voice_profiles -v "%cd%/samples:/data" hangrylabs/omnivoicetts:latest
+docker run --name omnivoicetts --restart unless-stopped -p 7861:7861 --gpus all -e CUDA_VISIBLE_DEVICES=0 -v omnivoicetts_data:/app/persistent -v "%cd%/samples:/data" hangrylabs/omnivoicetts:latest
 ```
 
 ```bash
@@ -147,7 +156,7 @@ OpenAI-compatible clients can also select or override that profile through addit
 }
 ```
 
-Voice profiles are stored inside the container at `/app/openai_voice_profiles`. The Quick Start commands mount the named Docker volume `omnivoicetts_openai_voice_profiles` there so profiles survive container replacement.
+Voice profiles are stored under `/app/persistent/voices/openai` inside the unified product volume, so profiles survive container replacement.
 
 The same saved profiles and built-in aliases are available on native `/tts/generate`, `/tts/convert`, `/tts/stream`, and `/tts/stream-chunks` requests through either `voice` or `voice_profile`. Explicit `ref_audio` still takes precedence when provided.
 
@@ -231,8 +240,7 @@ audio.save("openai-speech.mp3")
 - Optional `OMNIVOICE_RESAMPLE_BACKEND=librosa` fallback if a platform has `torchaudio` issues
 - HTTP API + web UI in one container
 - Offline-friendly runtime flags by default
-- Persistent Hugging Face cache volume support in the local Taskfile workflow
-- Persistent OpenAI voice-profile volume support in the local Taskfile workflow
+- One persistent product volume for model assets, operator settings, and saved voices
 - Kokoro-shaped compatibility routes for easier integration with existing TTS tooling
 
 ---
@@ -268,9 +276,25 @@ A larger 100-message batch gave only a small random/no-reference improvement, th
 
 The FlashAttention experiment also increased image complexity and size, added another GPU-specific binary dependency, consumed more VRAM in large-batch tests, and produced worse stability characteristics for the use cases we actually support. Based on those results, OmniVoiceTTS intentionally does not ship FlashAttention support. The same lesson applies to other Hangry Labs speech projects: do not assume FlashAttention helps STT/TTS workloads without project-specific benchmarks.
 
----
+## Runtime Settings and Persistent Data
 
-## Local Development
+The single `omnivoicetts_data` volume is mounted at `/app/persistent` and owns durable product data:
+
+- `/app/persistent/models/huggingface` - baked or downloaded model assets
+- `/app/persistent/app/settings.json` - atomic operator settings used by the current and future System UI
+- `/app/persistent/voices/openai` - saved voice profiles and their reference audio
+
+The relevant path overrides are `HF_HOME`, `OMNIVOICE_SETTINGS_PATH`, and `OMNIVOICE_OPENAI_VOICE_PROFILE_DIR`. Restart-bound deployment controls such as model, device, ASR loading, and generation concurrency remain environment variables.
+
+Existing users can migrate the two legacy volumes into the unified layout without deleting the originals:
+
+```bash
+docker run --rm --entrypoint sh -v omnivoicetts_hf_cache:/legacy/huggingface:ro -v omnivoicetts_openai_voice_profiles:/legacy/voices:ro -v omnivoicetts_data:/app/persistent hangrylabs/omnivoicetts:latest_tiny -c "mkdir -p /app/persistent/models/huggingface /app/persistent/voices/openai /app/persistent/app && cp -an /legacy/huggingface/. /app/persistent/models/huggingface/ && cp -an /legacy/voices/. /app/persistent/voices/openai/"
+```
+
+The old volumes remain untouched. On first profile load, legacy absolute audio paths are safely rebased to `/app/persistent/voices/openai` and the profile index is updated atomically. Remove the old volumes only after confirming the new deployment can see its models and saved voices.
+
+## Local Development and Testing
 
 This repository currently targets Python `>=3.13, <3.14`. The Docker image uses `python:3.13-slim`, and `task deps` regenerates Linux/Python 3.13 requirements.
 
@@ -282,6 +306,15 @@ task imagerun
 task imageweb
 task imageapi
 ```
+
+Run the lightweight checks used by CI before starting a large image build:
+
+```bash
+task doctor
+task validate
+```
+
+`task validate` compiles Python sources, runs the unit/repository-contract suite, verifies `uv.lock`, and checks Dockerfile syntax. `task codeql` remains the deeper local security-and-quality scan and is also part of release validation.
 
 Build and run the tiny image:
 
@@ -324,7 +357,7 @@ task imagestop
 task nuke
 ```
 
-`task imagerun` and `task localrun` mount named Docker volumes at `/app/.cache/huggingface` and `/app/openai_voice_profiles` so cache assets and saved OpenAI voice profiles can survive container and image rebuilds. Baked run tasks seed missing cache files from the full image before startup.
+`task imagerun`, `task imagerun-tiny`, `task localrun`, and `task localrun-tiny` all mount the same `omnivoicetts_data` volume at `/app/persistent`. A fresh named volume mounted into the full image is initialized from the baked model assets by Docker; the tiny image downloads into the same layout on first online use.
 
 Release from a clean tree:
 
@@ -397,7 +430,7 @@ If you encounter bugs, have feature requests, or need help using Hangry Labs Omn
 Planned items for the next development cycle:
 
 - Add MCP support so local agents can discover OmniVoiceTTS capabilities, generate speech, inspect voices/profiles, and query runtime status through a local tool interface.
-- Add a readiness endpoint and Docker healthcheck for cleaner container orchestration.
+- Add a model-aware readiness endpoint for orchestrators that need a stronger signal than the existing `/tts/ping` Docker healthcheck.
 - Add request IDs and structured error payloads to make issue reports easier to diagnose.
 - Add upload-based API support for reference audio plus optional transcript, so API users do not need to pass container-local file paths.
 - Add a text preflight/token estimate endpoint so clients can inspect character counts, tokenizer counts, chunking, and rough duration before sending generation requests.
@@ -407,7 +440,7 @@ Planned items for the next development cycle:
 
 ## Version History
 
-### Snapshot (`latest`)
+### v0.3.1 Snapshot
 
 The snapshot channel is the current Docker `latest` build after the latest tagged release. It is installable with `hangrylabs/omnivoicetts:latest` and is useful for testing fixes and new features before the next immutable `vX.Y.Z` release, but it can change as `master` moves. Use versioned tags such as `v0.3.0` when you need reproducible deployments.
 
@@ -416,6 +449,25 @@ Current snapshot changes after `v0.3.0`:
 - Added edge audio controls for generated clips: `pad_duration` adds configurable silence before and after output audio, and `fade_duration` fades the clip edges to reduce clicks.
 - Exposed the new edge controls in the browser UI under Generation Settings.
 - Exposed the same controls through the native API, OpenAI-compatible `/v1/audio/speech` extension fields, CLI commands, and the Python client.
+- Consolidated full and tiny image publishing into one GitHub Actions workflow and added publication to GitHub Container Registry alongside Docker Hub.
+- Added lightweight pull-request CI, repository-contract tests, and standard `doctor`, `compile`, `test`, and `validate` tasks.
+- Unified model assets, operator settings, and saved voices under one `omnivoicetts_data` volume mounted at `/app/persistent`.
+- Added automatic migration of legacy saved-profile audio paths when old profile data is copied into the unified volume.
+- Hardened release automation with version consistency checks, unit/CodeQL/Dockerfile validation, lockfile refresh, synchronized-branch checks, next-snapshot preparation, and atomic push.
+
+The current development snapshot is published through the rolling tags from `master`:
+
+**Standard image**
+
+```bash
+docker run --name omnivoicetts --restart unless-stopped -p 7861:7861 --gpus all -e CUDA_VISIBLE_DEVICES=0 -v omnivoicetts_data:/app/persistent hangrylabs/omnivoicetts:latest
+```
+
+**Tiny image**
+
+```bash
+docker run --name omnivoicetts-tiny --restart unless-stopped -p 7861:7861 --gpus all -e CUDA_VISIBLE_DEVICES=0 -e HF_HUB_OFFLINE=0 -e TRANSFORMERS_OFFLINE=0 -v omnivoicetts_data:/app/persistent hangrylabs/omnivoicetts:latest_tiny
+```
 
 ### v0.3.0
 
@@ -473,7 +525,9 @@ Current snapshot changes after `v0.3.0`:
 - Regenerated affected non-verbal public examples without voice-design `instruct`, avoiding whisper plus bracket tags and placing tags inside sentences with follow-up text.
 - Validated a fresh Python 3.13 baked image without a host model-cache volume mounted, with offline flags enabled, GPU inference, all output formats, stream/convert routes, purge, and reload from baked cache.
 
----
+## Responsible Use and Privacy
+
+OmniVoice supports voice cloning. Do not use this project for unauthorized voice cloning, impersonation, fraud, harassment, scams, or any illegal or unethical activity. Only clone voices when you have the rights and consent to do so. Text, reference audio, generated speech, settings, and saved voices remain on the machine running the local container unless you deliberately connect it to another service or expose it over a network. You are responsible for securing the deployment and complying with applicable laws, regulations, platform rules, and ethical standards.
 
 ## Citation
 

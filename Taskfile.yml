@@ -7,8 +7,13 @@ vars:
   GPU_DEVICE: '0'
   APP_DEVICE: 'auto'
   HF_TOKEN: ''
-  HF_CACHE_VOLUME: omnivoicetts_hf_cache
-  OPENAI_PROFILE_VOLUME: omnivoicetts_openai_voice_profiles
+  DATA_VOLUME: omnivoicetts_data
+  DATA_ROOT: /app/persistent
+  RUNTIME_ENV: >-
+    -e HF_HOME={{.DATA_ROOT}}/models/huggingface
+    -e OMNIVOICE_SETTINGS_PATH={{.DATA_ROOT}}/app/settings.json
+    -e OMNIVOICE_OPENAI_VOICE_PROFILE_DIR={{.DATA_ROOT}}/voices/openai
+    -v {{.DATA_VOLUME}}:{{.DATA_ROOT}}
   HF_HUB_OFFLINE: '1'
   TRANSFORMERS_OFFLINE: '1'
   LOAD_ASR: '0'
@@ -37,11 +42,6 @@ vars:
   BENCHMARK_CPU_MEMORY_MARKDOWN: 'benchmarks\CPU_MEMORY.md'
   BENCHMARK_CPU_MEMORY_START_PORT: '7870'
   CODEQL: 'C:\sandbox\tools\codeql\codeql.exe'
-  CODEQL_WORK_DIR: 'C:\sandbox\tools\codeql-work\OmniVoiceTTS'
-  CODEQL_PYTHON_DB: '{{.CODEQL_WORK_DIR}}\codeql-db'
-  CODEQL_PYTHON_SARIF: '{{.CODEQL_WORK_DIR}}\codeql-results.sarif'
-  CODEQL_ACTIONS_DB: '{{.CODEQL_WORK_DIR}}\actions-db'
-  CODEQL_ACTIONS_SARIF: '{{.CODEQL_WORK_DIR}}\actions-results.sarif'
   DRY_RUN: '0'
   NEXT_VERSION: ''
   SKIP_VALIDATION: '0'
@@ -50,6 +50,39 @@ vars:
   NAS_USER: 'admin'
 
 tasks:
+  list:
+    desc: List available tasks
+    cmds:
+      - task --list
+
+  doctor:
+    desc: Show local tool, interpreter, Docker, GPU, and repository status
+    cmds:
+      - cmd /c python --version
+      - 'cmd /c ".venv\Scripts\python.exe" --version'
+      - cmd /c docker --version
+      - cmd /c task --version
+      - cmd /c nvidia-smi --query-gpu=index,name,memory.total,memory.used --format=csv,noheader
+      - cmd /c git status --short
+
+  compile:
+    desc: Compile Python sources and tests
+    cmds:
+      - 'cmd /c ".venv\Scripts\python.exe" -m compileall -q omnivoice scripts tests'
+
+  test:
+    desc: Run the lightweight unit and repository-contract test suite
+    cmds:
+      - 'cmd /c ".venv\Scripts\python.exe" -m unittest discover -s tests -v'
+
+  validate:
+    desc: Run local lightweight validation used before Docker and release work
+    cmds:
+      - task: compile
+      - task: test
+      - uv lock --check
+      - docker build --check .
+
   gpuinfo:
     desc: Show host GPU indexes
     cmds:
@@ -71,10 +104,9 @@ tasks:
       - cmd /c docker build --target tiny -t {{.TINY_IMAGE}} .
 
   cache-init:
-    desc: Seed the persistent Hugging Face cache volume from the baked image
+    desc: Create the unified persistent product volume (Docker seeds baked assets on first mount)
     cmds:
-      - cmd /c docker volume create {{.HF_CACHE_VOLUME}} >nul
-      - cmd /c docker run --rm -v {{.HF_CACHE_VOLUME}}:/cache {{.IMAGE}} sh -c "mkdir -p /cache && cp -an /app/.cache/huggingface/. /cache/ || true"
+      - cmd /c docker volume create {{.DATA_VOLUME}} >nul
 
   init-clean:
     desc: Remove known local OmniVoiceTTS deployment containers without touching volumes or images
@@ -86,12 +118,11 @@ tasks:
     cmds:
       - task: init-clean
       - task: cache-init
-      - cmd /c docker volume create {{.OPENAI_PROFILE_VOLUME}} >nul
-      - cmd /c docker run -d --name {{.CONTAINER_LOCAL}} -p {{.PORT}}:7861 --gpus all -e CUDA_VISIBLE_DEVICES={{.GPU_DEVICE}} -e OMNIVOICE_DEVICE={{.APP_DEVICE}} -e OMNIVOICE_LOAD_ASR={{.LOAD_ASR}} -e OMNIVOICE_ALLOW_CPU_EAGER_ASR={{.ALLOW_CPU_EAGER_ASR}} -e PORT=7861 -e UVICORN_RELOAD=1 -e HF_TOKEN={{.HF_TOKEN}} -e HF_HUB_OFFLINE={{.HF_HUB_OFFLINE}} -e TRANSFORMERS_OFFLINE={{.TRANSFORMERS_OFFLINE}} -v {{.HF_CACHE_VOLUME}}:/app/.cache/huggingface -v {{.OPENAI_PROFILE_VOLUME}}:/app/openai_voice_profiles -v "{{.TASKFILE_DIR}}\omnivoice:/app/omnivoice" -v "{{.TASKFILE_DIR}}\hangrylabs:/app/hangrylabs" {{.IMAGE}}
+      - cmd /c docker run -d --name {{.CONTAINER_LOCAL}} -p {{.PORT}}:7861 --gpus all {{.RUNTIME_ENV}} -e CUDA_VISIBLE_DEVICES={{.GPU_DEVICE}} -e OMNIVOICE_DEVICE={{.APP_DEVICE}} -e OMNIVOICE_LOAD_ASR={{.LOAD_ASR}} -e OMNIVOICE_ALLOW_CPU_EAGER_ASR={{.ALLOW_CPU_EAGER_ASR}} -e PORT=7861 -e UVICORN_RELOAD=1 -e HF_TOKEN={{.HF_TOKEN}} -e HF_HUB_OFFLINE={{.HF_HUB_OFFLINE}} -e TRANSFORMERS_OFFLINE={{.TRANSFORMERS_OFFLINE}} -v "{{.TASKFILE_DIR}}\omnivoice:/app/omnivoice" -v "{{.TASKFILE_DIR}}\hangrylabs:/app/hangrylabs" {{.IMAGE}}
       - cmd /c docker ps --filter "name={{.CONTAINER_LOCAL}}"
 
   release:
-    desc: Release current VERSION snapshot, tag it, and prepare next snapshot
+    desc: Release the current VERSION snapshot, tag and push it, then prepare the next snapshot
     cmds:
       - powershell -NoProfile -ExecutionPolicy Bypass -File scripts/release.ps1 -DryRun "{{.DRY_RUN}}" -NextVersion "{{.NEXT_VERSION}}" -SkipValidation "{{.SKIP_VALIDATION}}"
 
@@ -105,47 +136,29 @@ tasks:
     cmds:
       - powershell -NoProfile -ExecutionPolicy Bypass -Command "& '{{.CODEQL}}' version"
 
-  codeql-python:
-    desc: Run local CodeQL Python scan and write SARIF outside the repo
-    cmds:
-      - powershell -NoProfile -ExecutionPolicy Bypass -Command "New-Item -ItemType Directory -Force -Path '{{.CODEQL_WORK_DIR}}' | Out-Null"
-      - powershell -NoProfile -ExecutionPolicy Bypass -Command "if (Test-Path '{{.CODEQL_PYTHON_DB}}') { Remove-Item -Recurse -Force '{{.CODEQL_PYTHON_DB}}' }"
-      - powershell -NoProfile -ExecutionPolicy Bypass -Command "& '{{.CODEQL}}' database create '{{.CODEQL_PYTHON_DB}}' --language=python --source-root '{{.TASKFILE_DIR}}'"
-      - powershell -NoProfile -ExecutionPolicy Bypass -Command "& '{{.CODEQL}}' database analyze '{{.CODEQL_PYTHON_DB}}' codeql/python-queries --format=sarif-latest --output='{{.CODEQL_PYTHON_SARIF}}'"
-
-  codeql-actions:
-    desc: Run local CodeQL GitHub Actions workflow scan and write SARIF outside the repo
-    cmds:
-      - powershell -NoProfile -ExecutionPolicy Bypass -Command "New-Item -ItemType Directory -Force -Path '{{.CODEQL_WORK_DIR}}' | Out-Null"
-      - powershell -NoProfile -ExecutionPolicy Bypass -Command "Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force"
-      - powershell -NoProfile -ExecutionPolicy Bypass -Command "if (Test-Path '{{.CODEQL_ACTIONS_DB}}') { Remove-Item -Recurse -Force '{{.CODEQL_ACTIONS_DB}}' }"
-      - powershell -NoProfile -ExecutionPolicy Bypass -Command "& '{{.CODEQL}}' database create '{{.CODEQL_ACTIONS_DB}}' --language=actions --source-root '{{.TASKFILE_DIR}}'"
-      - powershell -NoProfile -ExecutionPolicy Bypass -Command "& '{{.CODEQL}}' database analyze '{{.CODEQL_ACTIONS_DB}}' codeql/actions-queries --format=sarif-latest --output='{{.CODEQL_ACTIONS_SARIF}}'"
-
   codeql:
-    desc: Run local CodeQL Python and GitHub Actions scans
+    desc: Run CodeQL Python security-and-quality analysis on public project files
     cmds:
-      - task: codeql-python
-      - task: codeql-actions
+      - powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_codeql.ps1 -CodeqlExe "{{.CODEQL}}"
 
   imagerun:
-    desc: Run baked image with UI and API on PORT
+    desc: Run baked image with UI/API and the unified persistent product volume
     cmds:
       - cmd /c docker rm -f {{.CONTAINER}} >nul 2>&1
       - cmd /c docker rm -f {{.CONTAINER_LOCAL}} >nul 2>&1
       - task: cache-init
-      - cmd /c docker volume create {{.OPENAI_PROFILE_VOLUME}} >nul
-      - cmd /c docker run -d --name {{.CONTAINER}} -p {{.PORT}}:7861 --gpus all -e CUDA_VISIBLE_DEVICES={{.GPU_DEVICE}} -e OMNIVOICE_DEVICE={{.APP_DEVICE}} -e OMNIVOICE_LOAD_ASR={{.LOAD_ASR}} -e OMNIVOICE_ALLOW_CPU_EAGER_ASR={{.ALLOW_CPU_EAGER_ASR}} -e PORT=7861 -e HF_TOKEN={{.HF_TOKEN}} -e HF_HUB_OFFLINE={{.HF_HUB_OFFLINE}} -e TRANSFORMERS_OFFLINE={{.TRANSFORMERS_OFFLINE}} -v {{.HF_CACHE_VOLUME}}:/app/.cache/huggingface -v {{.OPENAI_PROFILE_VOLUME}}:/app/openai_voice_profiles {{.IMAGE}}
+      - cmd /c docker run -d --name {{.CONTAINER}} -p {{.PORT}}:7861 --gpus all {{.RUNTIME_ENV}} -e CUDA_VISIBLE_DEVICES={{.GPU_DEVICE}} -e OMNIVOICE_DEVICE={{.APP_DEVICE}} -e OMNIVOICE_LOAD_ASR={{.LOAD_ASR}} -e OMNIVOICE_ALLOW_CPU_EAGER_ASR={{.ALLOW_CPU_EAGER_ASR}} -e PORT=7861 -e HF_TOKEN={{.HF_TOKEN}} -e HF_HUB_OFFLINE={{.HF_HUB_OFFLINE}} -e TRANSFORMERS_OFFLINE={{.TRANSFORMERS_OFFLINE}} {{.IMAGE}}
+      - cmd /c docker update --restart unless-stopped {{.CONTAINER}}
       - cmd /c docker ps --filter "name={{.CONTAINER}}"
 
   imagerun-tiny:
-    desc: Run tiny image online on first use, using the persistent Hugging Face cache volume
+    desc: Run tiny image online on first use, using the unified persistent product volume
     cmds:
       - cmd /c docker rm -f {{.CONTAINER}} >nul 2>&1
       - cmd /c docker rm -f {{.CONTAINER_LOCAL}} >nul 2>&1
-      - cmd /c docker volume create {{.HF_CACHE_VOLUME}} >nul
-      - cmd /c docker volume create {{.OPENAI_PROFILE_VOLUME}} >nul
-      - cmd /c docker run -d --name {{.CONTAINER}} -p {{.PORT}}:7861 --gpus all -e CUDA_VISIBLE_DEVICES={{.GPU_DEVICE}} -e OMNIVOICE_DEVICE={{.APP_DEVICE}} -e OMNIVOICE_LOAD_ASR={{.LOAD_ASR}} -e OMNIVOICE_ALLOW_CPU_EAGER_ASR={{.ALLOW_CPU_EAGER_ASR}} -e PORT=7861 -e HF_TOKEN={{.HF_TOKEN}} -e HF_HUB_OFFLINE=0 -e TRANSFORMERS_OFFLINE=0 -v {{.HF_CACHE_VOLUME}}:/app/.cache/huggingface -v {{.OPENAI_PROFILE_VOLUME}}:/app/openai_voice_profiles {{.TINY_IMAGE}}
+      - task: cache-init
+      - cmd /c docker run -d --name {{.CONTAINER}} -p {{.PORT}}:7861 --gpus all {{.RUNTIME_ENV}} -e CUDA_VISIBLE_DEVICES={{.GPU_DEVICE}} -e OMNIVOICE_DEVICE={{.APP_DEVICE}} -e OMNIVOICE_LOAD_ASR={{.LOAD_ASR}} -e OMNIVOICE_ALLOW_CPU_EAGER_ASR={{.ALLOW_CPU_EAGER_ASR}} -e PORT=7861 -e HF_TOKEN={{.HF_TOKEN}} -e HF_HUB_OFFLINE=0 -e TRANSFORMERS_OFFLINE=0 {{.TINY_IMAGE}}
+      - cmd /c docker update --restart unless-stopped {{.CONTAINER}}
       - cmd /c docker ps --filter "name={{.CONTAINER}}"
 
   localrun:
@@ -154,8 +167,7 @@ tasks:
       - cmd /c docker rm -f {{.CONTAINER}} >nul 2>&1
       - cmd /c docker rm -f {{.CONTAINER_LOCAL}} >nul 2>&1
       - task: cache-init
-      - cmd /c docker volume create {{.OPENAI_PROFILE_VOLUME}} >nul
-      - cmd /c docker run -d --name {{.CONTAINER_LOCAL}} -p {{.PORT}}:7861 --gpus all -e CUDA_VISIBLE_DEVICES={{.GPU_DEVICE}} -e OMNIVOICE_DEVICE={{.APP_DEVICE}} -e OMNIVOICE_LOAD_ASR={{.LOAD_ASR}} -e OMNIVOICE_ALLOW_CPU_EAGER_ASR={{.ALLOW_CPU_EAGER_ASR}} -e PORT=7861 -e UVICORN_RELOAD=1 -e HF_TOKEN={{.HF_TOKEN}} -e HF_HUB_OFFLINE={{.HF_HUB_OFFLINE}} -e TRANSFORMERS_OFFLINE={{.TRANSFORMERS_OFFLINE}} -v {{.HF_CACHE_VOLUME}}:/app/.cache/huggingface -v {{.OPENAI_PROFILE_VOLUME}}:/app/openai_voice_profiles -v "{{.TASKFILE_DIR}}\omnivoice:/app/omnivoice" -v "{{.TASKFILE_DIR}}\hangrylabs:/app/hangrylabs" {{.IMAGE}}
+      - cmd /c docker run -d --name {{.CONTAINER_LOCAL}} -p {{.PORT}}:7861 --gpus all {{.RUNTIME_ENV}} -e CUDA_VISIBLE_DEVICES={{.GPU_DEVICE}} -e OMNIVOICE_DEVICE={{.APP_DEVICE}} -e OMNIVOICE_LOAD_ASR={{.LOAD_ASR}} -e OMNIVOICE_ALLOW_CPU_EAGER_ASR={{.ALLOW_CPU_EAGER_ASR}} -e PORT=7861 -e UVICORN_RELOAD=1 -e HF_TOKEN={{.HF_TOKEN}} -e HF_HUB_OFFLINE={{.HF_HUB_OFFLINE}} -e TRANSFORMERS_OFFLINE={{.TRANSFORMERS_OFFLINE}} -v "{{.TASKFILE_DIR}}\omnivoice:/app/omnivoice" -v "{{.TASKFILE_DIR}}\hangrylabs:/app/hangrylabs" {{.IMAGE}}
       - cmd /c docker ps --filter "name={{.CONTAINER_LOCAL}}"
 
   localrun-tiny:
@@ -163,9 +175,8 @@ tasks:
     cmds:
       - cmd /c docker rm -f {{.CONTAINER}} >nul 2>&1
       - cmd /c docker rm -f {{.CONTAINER_LOCAL}} >nul 2>&1
-      - cmd /c docker volume create {{.HF_CACHE_VOLUME}} >nul
-      - cmd /c docker volume create {{.OPENAI_PROFILE_VOLUME}} >nul
-      - cmd /c docker run -d --name {{.CONTAINER_LOCAL}} -p {{.PORT}}:7861 --gpus all -e CUDA_VISIBLE_DEVICES={{.GPU_DEVICE}} -e OMNIVOICE_DEVICE={{.APP_DEVICE}} -e OMNIVOICE_LOAD_ASR={{.LOAD_ASR}} -e OMNIVOICE_ALLOW_CPU_EAGER_ASR={{.ALLOW_CPU_EAGER_ASR}} -e PORT=7861 -e UVICORN_RELOAD=1 -e HF_TOKEN={{.HF_TOKEN}} -e HF_HUB_OFFLINE=0 -e TRANSFORMERS_OFFLINE=0 -v {{.HF_CACHE_VOLUME}}:/app/.cache/huggingface -v {{.OPENAI_PROFILE_VOLUME}}:/app/openai_voice_profiles -v "{{.TASKFILE_DIR}}\omnivoice:/app/omnivoice" -v "{{.TASKFILE_DIR}}\hangrylabs:/app/hangrylabs" {{.TINY_IMAGE}}
+      - task: cache-init
+      - cmd /c docker run -d --name {{.CONTAINER_LOCAL}} -p {{.PORT}}:7861 --gpus all {{.RUNTIME_ENV}} -e CUDA_VISIBLE_DEVICES={{.GPU_DEVICE}} -e OMNIVOICE_DEVICE={{.APP_DEVICE}} -e OMNIVOICE_LOAD_ASR={{.LOAD_ASR}} -e OMNIVOICE_ALLOW_CPU_EAGER_ASR={{.ALLOW_CPU_EAGER_ASR}} -e PORT=7861 -e UVICORN_RELOAD=1 -e HF_TOKEN={{.HF_TOKEN}} -e HF_HUB_OFFLINE=0 -e TRANSFORMERS_OFFLINE=0 -v "{{.TASKFILE_DIR}}\omnivoice:/app/omnivoice" -v "{{.TASKFILE_DIR}}\hangrylabs:/app/hangrylabs" {{.TINY_IMAGE}}
       - cmd /c docker ps --filter "name={{.CONTAINER_LOCAL}}"
 
   imageweb:
@@ -238,10 +249,10 @@ tasks:
       - cmd /c docker logs --tail 200 {{.CONTAINER_LOCAL}} 2>nul || docker logs --tail 200 {{.CONTAINER}}
 
   nuke:
-    desc: Remove OmniVoiceTTS local containers, images, and Hugging Face cache volume
+    desc: Remove OmniVoiceTTS local containers, images, and unified data volume
     cmds:
       - cmd /c docker rm -f {{.CONTAINER}} >nul 2>&1
       - cmd /c docker rm -f {{.CONTAINER_LOCAL}} >nul 2>&1
       - cmd /c docker rmi -f {{.IMAGE}} >nul 2>&1
       - cmd /c docker rmi -f {{.TINY_IMAGE}} >nul 2>&1
-      - cmd /c docker volume rm -f {{.HF_CACHE_VOLUME}} >nul 2>&1
+      - cmd /c docker volume rm -f {{.DATA_VOLUME}} >nul 2>&1

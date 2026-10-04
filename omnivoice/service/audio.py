@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import logging
 import math
 import subprocess
 import tempfile
@@ -13,6 +14,7 @@ SAMPLE_RATE = 24000
 MIN_SAMPLE_RATE = 8000
 MAX_SAMPLE_RATE = 192000
 FFMPEG_BIN = "ffmpeg"
+LOGGER = logging.getLogger(__name__)
 
 FFMPEG_ENCODING_ARGS = {
     "mp3": ("-f", "mp3", "-codec:a", "libmp3lame", "-b:a", "192k"),
@@ -309,13 +311,13 @@ def encode_audio_stream(
             for chunk in chunks:
                 process.stdin.write(to_int16_audio(chunk).tobytes())
                 process.stdin.flush()
-        except BaseException as exc:  # noqa: BLE001 - surfaced after ffmpeg exits.
+        except Exception as exc:  # noqa: BLE001 - surfaced after ffmpeg exits.
             writer_error.append(exc)
         finally:
             try:
                 process.stdin.close()
-            except OSError:
-                pass
+            except OSError as exc:
+                LOGGER.debug("Unable to close the ffmpeg input stream: %s", exc)
 
     import threading
     writer = threading.Thread(target=write_chunks, daemon=True)

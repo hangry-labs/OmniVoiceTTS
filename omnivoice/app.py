@@ -44,6 +44,7 @@ from omnivoice.service.paths import (
     parse_path_roots,
     safe_existing_file_path,
 )
+from omnivoice.settings import RuntimeSettingsStore
 from omnivoice.utils.audio import RESAMPLE_BACKEND
 from omnivoice.utils.common import fix_random_seed
 from omnivoice.utils.lang_map import LANG_IDS, LANG_NAMES, LANG_NAME_TO_ID, lang_display_name
@@ -103,7 +104,10 @@ ASSET_DIR = Path(__file__).resolve().parent.parent / "hangrylabs"
 BRAND_ASSET_BASE = "/assets/hangrylabs"
 PACKAGE_DIR = Path(__file__).resolve().parent
 OPENAI_DEFAULT_CLONE_AUDIO = PACKAGE_DIR / "assets" / "openai_default_voice.mp3"
-OPENAI_VOICE_PROFILE_DIR = Path(os.getenv("OMNIVOICE_OPENAI_VOICE_PROFILE_DIR", "/app/openai_voice_profiles"))
+RUNTIME_SETTINGS = RuntimeSettingsStore()
+OPENAI_VOICE_PROFILE_DIR = Path(
+    os.getenv("OMNIVOICE_OPENAI_VOICE_PROFILE_DIR", "/app/persistent/voices/openai")
+)
 OPENAI_VOICE_PROFILE_INDEX = OPENAI_VOICE_PROFILE_DIR / "profiles.json"
 REF_AUDIO_SAFE_ROOTS_ENV = os.getenv("OMNIVOICE_ALLOWED_REF_AUDIO_ROOTS", "")
 
@@ -165,6 +169,7 @@ STARTUP_PARAMETER_DEFAULTS = OrderedDict(
         ("NVIDIA_DRIVER_CAPABILITIES", ""),
         ("PYTORCH_CUDA_ALLOC_CONF", ""),
         ("HF_HOME", ""),
+        ("OMNIVOICE_SETTINGS_PATH", "/app/persistent/app/settings.json"),
         ("HF_HUB_OFFLINE", ""),
         ("TRANSFORMERS_OFFLINE", ""),
         ("HF_TOKEN", ""),
@@ -179,7 +184,7 @@ STARTUP_PARAMETER_DEFAULTS = OrderedDict(
         ("OMNIVOICE_EMPTY_CUDA_CACHE_AFTER_REQUEST", "0"),
         ("OMNIVOICE_RESET_CUDA_PEAK_AFTER_CACHE_CLEAR", "0"),
         ("OMNIVOICE_CPU_MEMORY_WARNING_INTERVAL_SECONDS", "300"),
-        ("OMNIVOICE_OPENAI_VOICE_PROFILE_DIR", "/app/openai_voice_profiles"),
+        ("OMNIVOICE_OPENAI_VOICE_PROFILE_DIR", "/app/persistent/voices/openai"),
         ("OMNIVOICE_ALLOWED_REF_AUDIO_ROOTS", ""),
         ("OMNIVOICE_VOICE_PROMPT_CACHE_LIMIT", "32"),
         ("OMNIVOICE_RESAMPLE_BACKEND", "torchaudio"),
@@ -628,14 +633,20 @@ def should_cache_voice_clone_prompt(ref_audio: str | None) -> bool:
     if not ref_audio:
         return False
     try:
+        # ref_audio has already passed safe_existing_file_path in the synthesis boundary.
+        # codeql[py/path-injection]
         ref_path = Path(ref_audio).resolve(strict=True)
     except OSError:
         return False
+    default_clone_path = None
     try:
-        if OPENAI_DEFAULT_CLONE_AUDIO.exists() and ref_path == OPENAI_DEFAULT_CLONE_AUDIO.resolve(strict=True):
-            return True
+        if OPENAI_DEFAULT_CLONE_AUDIO.exists():
+            default_clone_path = OPENAI_DEFAULT_CLONE_AUDIO.resolve(strict=True)
     except OSError:
-        pass
+        # The optional default clone asset may not exist in every image variant.
+        default_clone_path = None
+    if default_clone_path is not None and ref_path == default_clone_path:
+        return True
     try:
         return OPENAI_VOICE_PROFILE_DIR.resolve(strict=False) in ref_path.parents
     except OSError:
@@ -717,7 +728,10 @@ def voice_clone_prompt_cache_key(
     ref_text: str | None,
     preprocess_prompt: bool,
 ) -> tuple[Any, ...]:
+    # ref_audio has already passed safe_existing_file_path in the synthesis boundary.
+    # codeql[py/path-injection]
     ref_path = Path(ref_audio).resolve(strict=True)
+    # codeql[py/path-injection]
     stat = ref_path.stat()
     return (
         device,
@@ -832,7 +846,6 @@ def validate_voice_design_text(text: str | None, instruct: str | None) -> None:
 
 
 def nonverbal_tags_markdown() -> str:
-    tags = ", ".join(f"`{tag}`" for tag in SUPPORTED_NONVERBAL_TAGS)
     return nonverbal_tags_markdown_for(UI_LOCALE)
 
 
@@ -1435,6 +1448,13 @@ def get_status_payload() -> dict:
             "entries": len(VOICE_CLONE_PROMPT_CACHE),
             "limit": VOICE_CLONE_PROMPT_CACHE_LIMIT,
         },
+        "persistent_storage": {
+            "settings_path": str(RUNTIME_SETTINGS.path),
+            "settings_exists": RUNTIME_SETTINGS.path.is_file(),
+            "voice_profile_dir": str(OPENAI_VOICE_PROFILE_DIR),
+            "voice_profile_index_exists": OPENAI_VOICE_PROFILE_INDEX.exists(),
+            "huggingface_home": os.getenv("HF_HOME", ""),
+        },
         "output_formats": get_supported_output_formats(),
     }
 
@@ -1494,6 +1514,8 @@ def get_startup_diagnostics_payload() -> dict[str, Any]:
         },
         "startup_parameters": startup_parameter_diagnostics(),
         "paths": {
+            "settings_path": str(RUNTIME_SETTINGS.path),
+            "settings_exists": RUNTIME_SETTINGS.path.is_file(),
             "openai_voice_profile_dir": str(OPENAI_VOICE_PROFILE_DIR),
             "openai_voice_profile_index_exists": OPENAI_VOICE_PROFILE_INDEX.exists(),
             "brand_asset_dir_exists": ASSET_DIR.exists(),
@@ -2109,7 +2131,7 @@ class TTSRequest(BaseModel):
         None,
         description=(
             "Reference audio path for voice cloning. The path must be an audio file under a configured safe root "
-            "such as /data, /app/openai_voice_profiles, /app/omnivoice/assets, or /tmp/gradio."
+            "such as /data, /app/persistent/voices/openai, /app/omnivoice/assets, or /tmp/gradio."
         ),
     )
     ref_text: Optional[str] = Field(None, description="Transcript for ref_audio. If omitted, ASR may load on demand.")

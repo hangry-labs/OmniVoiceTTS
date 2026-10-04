@@ -71,8 +71,8 @@ from omnivoice.utils.voice_design import (
     _INSTRUCT_ALL_VALID,
     _INSTRUCT_EN_TO_ZH,
     _INSTRUCT_MUTUALLY_EXCLUSIVE,
-    _INSTRUCT_VALID_EN,
-    _INSTRUCT_VALID_ZH,
+    INSTRUCT_VALID_EN,
+    INSTRUCT_VALID_ZH,
     _INSTRUCT_ZH_TO_EN,
     _ZH_RE,
 )
@@ -1493,12 +1493,14 @@ def _resolve_language(language: Optional[str]) -> Union[str, None]:
     key = language.lower()
     if key in LANG_NAME_TO_ID:
         return LANG_NAME_TO_ID[key]
+    safe_language = language.replace("\r", "\\r").replace("\n", "\\n")
     logger.warning(
-        f"Language '{language}' is not recognized. "
-        f"Please use a valid language ID (e.g., 'en', 'zh', 'ja', 'de') "
-        f"or a full language name (e.g., 'English', 'Chinese', 'Japanese'). "
-        f"See supported_language_ids() or supported_language_names() for details. "
-        f"Falling back to None (language-agnostic mode)."
+        "Language %r is not recognized. Please use a valid language ID "
+        "(e.g., 'en', 'zh', 'ja', 'de') or a full language name "
+        "(e.g., 'English', 'Chinese', 'Japanese'). See supported_language_ids() "
+        "or supported_language_names() for details. Falling back to None "
+        "(language-agnostic mode).",
+        safe_language,
     )
     return None
 
@@ -1587,9 +1589,9 @@ def _resolve_instruct(
             f"Unsupported instruct items found in {instruct_str}:\n"
             + "\n".join(lines)
             + "\n\nValid English items: "
-            + ", ".join(sorted(_INSTRUCT_VALID_EN))
+            + ", ".join(sorted(INSTRUCT_VALID_EN))
             + "\nValid Chinese items: "
-            + "，".join(sorted(_INSTRUCT_VALID_ZH))
+            + "，".join(sorted(INSTRUCT_VALID_ZH))
             + "\n\nTip: Use only English or only Chinese instructs. "
             "English instructs should use comma + space (e.g. "
             "'male, indian accent'),\nChinese instructs should use full-width "

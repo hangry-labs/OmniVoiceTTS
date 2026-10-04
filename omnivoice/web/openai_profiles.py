@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import html
 import json
+import logging
+import os
 import re
 import shutil
 import tempfile
@@ -22,6 +24,7 @@ from omnivoice.service.paths import (
 OPENAI_CALL_LOG: list[dict[str, str]] = []
 OPENAI_CALL_LOG_LOCK = threading.Lock()
 OPENAI_CALL_LOG_LIMIT = 50
+LOGGER = logging.getLogger(__name__)
 
 
 def normalize_profile_name(name: str | None) -> str:
@@ -35,6 +38,58 @@ def normalize_profile_name(name: str | None) -> str:
     return value
 
 
+def _write_profile_index(profile_dir: Path, profile_index: Path, profiles: dict[str, dict[str, Any]]) -> None:
+    profile_dir.mkdir(parents=True, exist_ok=True)
+    temporary_path = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            delete=False,
+            dir=profile_dir,
+            prefix=f".{profile_index.name}.",
+            suffix=".tmp",
+        ) as output_file:
+            temporary_path = Path(output_file.name)
+            json.dump(profiles, output_file, indent=2, sort_keys=True)
+            output_file.write("\n")
+            output_file.flush()
+            os.fsync(output_file.fileno())
+        os.replace(temporary_path, profile_index)
+        temporary_path = None
+    finally:
+        if temporary_path is not None:
+            temporary_path.unlink(missing_ok=True)
+
+
+def _resolve_profile_audio_path(profile_index: Path, ref_audio: str) -> tuple[str, bool]:
+    profile_dir = profile_index.parent
+    current = None
+    try:
+        current = safe_existing_file_path(
+            ref_audio,
+            [profile_dir],
+            label="Saved profile audio path",
+            allowed_extensions=AUDIO_EXTENSIONS,
+        )
+    except ValueError:
+        current = None
+    if current is not None:
+        return str(current), False
+
+    legacy_filename = Path(ref_audio).name
+    try:
+        migrated = safe_existing_file_path(
+            profile_dir / legacy_filename,
+            [profile_dir],
+            label="Migrated profile audio path",
+            allowed_extensions=AUDIO_EXTENSIONS,
+        )
+    except ValueError:
+        return ref_audio, False
+    return str(migrated), True
+
+
 def load_openai_voice_profiles(profile_index: Path) -> dict[str, dict[str, Any]]:
     if not profile_index.exists():
         return {}
@@ -45,12 +100,15 @@ def load_openai_voice_profiles(profile_index: Path) -> dict[str, dict[str, Any]]
     if not isinstance(raw, dict):
         return {}
     profiles = {}
+    migrated_count = 0
     for name, profile in raw.items():
         if not isinstance(profile, dict):
             continue
         ref_audio = str(profile.get("ref_audio") or "").strip()
         if not ref_audio:
             continue
+        ref_audio, migrated = _resolve_profile_audio_path(profile_index, ref_audio)
+        migrated_count += int(migrated)
         raw_seed = profile.get("seed")
         profiles[str(name)] = {
             "ref_audio": ref_audio,
@@ -59,12 +117,14 @@ def load_openai_voice_profiles(profile_index: Path) -> dict[str, dict[str, Any]]
             "seed": "" if raw_seed is None or raw_seed == "" else str(raw_seed),
             "randomize_seed": bool(profile.get("randomize_seed", False)),
         }
+    if migrated_count:
+        _write_profile_index(profile_index.parent, profile_index, profiles)
+        LOGGER.info("Migrated %d saved voice profile path(s) to the persistent data layout.", migrated_count)
     return profiles
 
 
 def save_openai_voice_profiles(profile_dir: Path, profile_index: Path, profiles: dict[str, dict[str, Any]]) -> None:
-    profile_dir.mkdir(parents=True, exist_ok=True)
-    profile_index.write_text(json.dumps(profiles, indent=2, sort_keys=True), encoding="utf-8")
+    _write_profile_index(profile_dir, profile_index, profiles)
 
 
 def normalize_optional_seed(seed: int | float | str | None, max_seed: int) -> int | None:
@@ -234,8 +294,10 @@ def delete_openai_voice_profile_from_ui(profile_dir: Path, profile_index: Path, 
             allowed_extensions=AUDIO_EXTENSIONS,
         )
         target.unlink()
-    except (OSError, ValueError):
-        pass
+    except FileNotFoundError:
+        LOGGER.debug("Saved voice profile audio was already absent.")
+    except (OSError, ValueError) as exc:
+        return f"OpenAI voice profile delete error: {exc}", openai_voice_profile_dropdown_update(profile_index), render_openai_voice_profile_table(profile_index)
     profiles.pop(profile_name, None)
     save_openai_voice_profiles(profile_dir, profile_index, profiles)
     return f"Deleted OpenAI voice profile `{profile_name}`.", openai_voice_profile_dropdown_update(profile_index), render_openai_voice_profile_table(profile_index)

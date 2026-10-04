@@ -56,7 +56,12 @@ def safe_existing_file_path(
     if allowed_extensions is not None and os.path.splitext(allowed_path)[1].lower() not in allowed_extensions:
         supported = ", ".join(sorted(allowed_extensions))
         raise ValueError(f"{label} must use one of these extensions: {supported}.")
-    return Path(allowed_path)
+    candidate = Path(allowed_path)
+    # allowed_path is canonicalized and constrained to one of allowed_roots above.
+    # codeql[py/path-injection]
+    if not candidate.is_file():
+        raise ValueError(f"{label} must be an existing file.")
+    return candidate
 
 
 def secure_filename_stem(value: str | os.PathLike, *, default: str = "output") -> str:

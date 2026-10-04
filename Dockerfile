@@ -6,7 +6,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_ROOT_USER_ACTION=ignore \
-    HF_HOME=/app/.cache/huggingface
+    HF_HOME=/app/persistent/models/huggingface
 
 WORKDIR /app
 
@@ -33,11 +33,15 @@ RUN if [ -n "$HF_ENDPOINT" ]; then export HF_ENDPOINT; else unset HF_ENDPOINT; f
 
 FROM python:3.13-slim AS runtime-base
 
+LABEL org.opencontainers.image.source="https://github.com/Hangry-Labs/OmniVoiceTTS"
+
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_ROOT_USER_ACTION=ignore \
-    HF_HOME=/app/.cache/huggingface \
+    HF_HOME=/app/persistent/models/huggingface \
+    OMNIVOICE_SETTINGS_PATH=/app/persistent/app/settings.json \
+    OMNIVOICE_OPENAI_VOICE_PROFILE_DIR=/app/persistent/voices/openai \
     HF_HUB_OFFLINE=1 \
     TRANSFORMERS_OFFLINE=1 \
     OMNIVOICE_DEVICE=auto \
@@ -55,9 +59,13 @@ WORKDIR /app
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ffmpeg \
+    && mkdir -p /app/persistent/models/huggingface /app/persistent/app /app/persistent/voices/openai \
     && rm -rf /var/lib/apt/lists/*
 
 EXPOSE 7861
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+    CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:7861/tts/ping', timeout=4).read()"]
 
 CMD ["python", "-u", "omnivoice/app.py"]
 
