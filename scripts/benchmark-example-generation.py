@@ -37,7 +37,10 @@ MARKDOWN_ROUND_TITLES = {
 }
 DEFAULT_BASE_URL = os.getenv("OMNIVOICE_BENCHMARK_BASE_URL", "http://127.0.0.1:7864")
 DEFAULT_PREDEFINED_VOICE = os.getenv("OMNIVOICE_BENCHMARK_VOICE", "benchmark_original_clone")
-DEFAULT_REFERENCE_AUDIO = os.getenv("OMNIVOICE_BENCHMARK_REF_AUDIO", "/app/omnivoice/assets/openai_default_voice.mp3")
+DEFAULT_REFERENCE_AUDIO = os.getenv(
+    "OMNIVOICE_BENCHMARK_REF_AUDIO",
+    "/app/omnivoice/runtime_assets/voices/openai_default_voice.mp3",
+)
 DEFAULT_NUM_STEP = int(os.getenv("OMNIVOICE_BENCHMARK_NUM_STEP", "24"))
 DEFAULT_OUTPUT_FORMAT = os.getenv("OMNIVOICE_BENCHMARK_FORMAT", "mp3")
 DEFAULT_LANGUAGE_LIMIT = int(os.getenv("OMNIVOICE_BENCHMARK_LIMIT_LANGUAGES", "0"))

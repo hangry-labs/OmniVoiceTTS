@@ -8,6 +8,31 @@ const state = {
   lastVolume: 0.85,
 };
 
+const LANGUAGE_CODE_TO_SLUG = {
+  ar: "standard_arabic",
+  bn: "bengali",
+  de: "german",
+  en: "english",
+  es: "spanish",
+  fr: "french",
+  hi: "hindi",
+  id: "indonesian",
+  it: "italian",
+  ja: "japanese",
+  ko: "korean",
+  nl: "dutch",
+  pl: "polish",
+  pt: "portuguese",
+  ru: "russian",
+  th: "thai",
+  tr: "turkish",
+  ur: "urdu",
+  vi: "vietnamese",
+  zh: "chinese",
+};
+
+const LANGUAGE_STORAGE_KEY = "omnivoicetts-examples-language-v1";
+
 function escapeHtml(value) {
   return String(value)
     .replace(/&/g, "&amp;")
@@ -180,15 +205,15 @@ function renderLanguageButtons() {
 
 function renderAudioCard({ classes = "", eyebrow, title, description, file, label, badge = "" }) {
   return `
-    <article class="brand-card p-5 ${classes}" data-audio-card data-audio-label="${escapeHtml(label)}">
-      <div class="mb-4 flex items-start justify-between gap-3 border-b border-orange-500/20 pb-3">
-        <div class="min-w-0">
-          <p class="text-xs font-extrabold uppercase tracking-[0.2em] text-orange-300">${escapeHtml(eyebrow)}</p>
-          <h3 class="mt-2 text-lg font-bold text-orange-100">${escapeHtml(title)}</h3>
+    <article class="brand-card ${classes}" data-audio-card data-audio-label="${escapeHtml(label)}">
+      <div class="card-head">
+        <div>
+          <p>${escapeHtml(eyebrow)}</p>
+          <h3>${escapeHtml(title)}</h3>
         </div>
-        ${badge ? `<span class="rounded-full border border-orange-500/30 bg-orange-500/10 px-2 py-1 text-xs font-semibold uppercase text-gray-300">${escapeHtml(badge)}</span>` : ""}
+        ${badge ? `<span class="sample-badge">${escapeHtml(badge)}</span>` : ""}
       </div>
-      <p class="mb-4 text-sm leading-6 text-[#ffd0a3]">${escapeHtml(description)}</p>
+      <p class="card-description">${escapeHtml(description)}</p>
       <audio preload="metadata" src="${escapeHtml(assetUrl(file))}"></audio>
     </article>
   `;
@@ -222,20 +247,18 @@ function renderSelectedLanguage() {
 
   target.innerHTML = `
     <section>
-      <div class="brand-card mb-4 cursor-default p-5">
-        <div class="flex flex-wrap items-center justify-between gap-4">
-          <div class="flex min-w-0 items-center gap-4">
+      <div class="language-heading">
+          <div class="language-title">
             <span class="language-icon large" aria-hidden="true">${escapeHtml(meta.icon)}</span>
             <div>
-              <h2 class="text-3xl font-extrabold text-orange-300">${escapeHtml(meta.nativeName)}</h2>
-              <p class="mt-1 text-sm font-semibold text-[#ffb076]/75">${escapeHtml(language.language)}</p>
+              <h2>${escapeHtml(meta.nativeName)}</h2>
+              <p>${escapeHtml(language.language)}</p>
             </div>
           </div>
           <button class="filter-button is-active" type="button" data-random-intro="${escapeHtml(language.slug)}">Play random intro</button>
-        </div>
       </div>
 
-      <div class="mb-4 grid grid-cols-1 gap-4">
+      <div class="clone-grid">
         ${renderAudioCard({
           classes: "clone-card",
           eyebrow: "Cross-language clone demo",
@@ -248,7 +271,7 @@ function renderSelectedLanguage() {
         })}
       </div>
 
-      <div class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+      <div class="sample-grid">
         ${randomSamples}
       </div>
     </section>
@@ -269,6 +292,12 @@ function chooseLanguage(slug, autoplayIntro = true) {
   }
 
   state.selected = language;
+  document.documentElement.lang = Object.entries(LANGUAGE_CODE_TO_SLUG).find(([, value]) => value === slug)?.[0] || "en";
+  try {
+    localStorage.setItem(LANGUAGE_STORAGE_KEY, slug);
+  } catch {
+    // Local storage can be disabled without affecting the examples.
+  }
   renderSelectedLanguage();
 
   document.querySelectorAll("[data-language-button]").forEach((button) => {
@@ -442,7 +471,18 @@ function initExamples() {
     }
     initVolumeControl();
     renderLanguageButtons();
-    chooseLanguage("english", false);
+    const params = new URLSearchParams(window.location.search);
+    let storedSlug = "";
+    try {
+      storedSlug = localStorage.getItem(LANGUAGE_STORAGE_KEY) || "";
+    } catch {
+      storedSlug = "";
+    }
+    const requestedSlug = LANGUAGE_CODE_TO_SLUG[params.get("lang")] || params.get("language") || storedSlug;
+    const initialSlug = state.manifest.languages.some((item) => item.slug === requestedSlug)
+      ? requestedSlug
+      : "english";
+    chooseLanguage(initialSlug, false);
   } catch (error) {
     if (status) {
       status.textContent = `Examples unavailable: ${error.message}`;

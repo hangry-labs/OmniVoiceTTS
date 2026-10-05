@@ -408,15 +408,14 @@ Runtime discovery is available from the local API:
 - Output formats: `GET /tts/formats`
 - Interactive API reference: `GET /tts/docs`
 
-The original Python CLI tools are still present:
+The runtime-focused Python CLI tools are still present:
 
 ```bash
-omnivoice-demo --ip 0.0.0.0 --port 8001
 omnivoice-infer --model k2-fsa/OmniVoice --text "Hello world." --output hello.wav
 omnivoice-infer-batch --model k2-fsa/OmniVoice --test_list test.jsonl --res_dir results/
 ```
 
-This fork intentionally removes upstream training, data-preparation, and benchmark-evaluation pipelines from the runtime-focused package. For model training or research reproduction, use the original [k2-fsa/OmniVoice](https://github.com/k2-fsa/OmniVoice) repository.
+This fork intentionally removes upstream training, data-preparation, benchmark-evaluation, and the superseded Gradio demo from the runtime-focused package. The maintained browser experience is the standalone UI included with `omnivoice-serve` and the Docker images. For model training or research reproduction, use the original [k2-fsa/OmniVoice](https://github.com/k2-fsa/OmniVoice) repository.
 
 ---
 

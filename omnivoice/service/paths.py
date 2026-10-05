@@ -121,13 +121,4 @@ def safe_output_file_path(
 
 
 def default_upload_roots() -> list[Path]:
-    candidates = [Path(os.getenv("OMNIVOICE_UI_UPLOAD_DIR", Path(tempfile.gettempdir()) / "omnivoicetts-ui"))]
-    gradio_temp_dir = os.getenv("GRADIO_TEMP_DIR", "").strip()
-    if gradio_temp_dir:
-        candidates.append(Path(gradio_temp_dir))
-    tmp_dir = os.getenv("TMPDIR", "").strip()
-    if tmp_dir:
-        candidates.append(Path(tmp_dir) / "gradio")
-    candidates.append(Path(tempfile.gettempdir()) / "gradio")
-    candidates.append(Path("/tmp/gradio"))
-    return candidates
+    return [Path(os.getenv("OMNIVOICE_UI_UPLOAD_DIR", Path(tempfile.gettempdir()) / "omnivoicetts-ui"))]

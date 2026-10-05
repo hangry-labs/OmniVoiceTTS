@@ -29,7 +29,7 @@ vars:
   BENCHMARK_RESULTS: 'benchmarks\\example-generation.json'
   BENCHMARK_MARKDOWN_DIR: 'benchmarks'
   BENCHMARK_VOICE: 'benchmark_original_clone'
-  BENCHMARK_REF_AUDIO: '/app/omnivoice/assets/openai_default_voice.mp3'
+  BENCHMARK_REF_AUDIO: '/app/omnivoice/runtime_assets/voices/openai_default_voice.mp3'
   BENCHMARK_NUM_STEP: '24'
   BENCHMARK_FORMAT: 'mp3'
   BENCHMARK_LIMIT_LANGUAGES: '0'
@@ -118,7 +118,7 @@ tasks:
     cmds:
       - task: init-clean
       - task: cache-init
-      - cmd /c docker run -d --name {{.CONTAINER_LOCAL}} -p {{.PORT}}:7861 --gpus all {{.RUNTIME_ENV}} -e CUDA_VISIBLE_DEVICES={{.GPU_DEVICE}} -e OMNIVOICE_DEVICE={{.APP_DEVICE}} -e OMNIVOICE_LOAD_ASR={{.LOAD_ASR}} -e OMNIVOICE_ALLOW_CPU_EAGER_ASR={{.ALLOW_CPU_EAGER_ASR}} -e PORT=7861 -e UVICORN_RELOAD=1 -e HF_TOKEN={{.HF_TOKEN}} -e HF_HUB_OFFLINE={{.HF_HUB_OFFLINE}} -e TRANSFORMERS_OFFLINE={{.TRANSFORMERS_OFFLINE}} -v "{{.TASKFILE_DIR}}\omnivoice:/app/omnivoice" -v "{{.TASKFILE_DIR}}\hangrylabs:/app/hangrylabs" -v "{{.TASKFILE_DIR}}\assets:/app/assets" -v "{{.TASKFILE_DIR}}\VERSION:/app/VERSION:ro" {{.IMAGE}}
+      - cmd /c docker run -d --name {{.CONTAINER_LOCAL}} -p {{.PORT}}:7861 --gpus all {{.RUNTIME_ENV}} -e CUDA_VISIBLE_DEVICES={{.GPU_DEVICE}} -e OMNIVOICE_DEVICE={{.APP_DEVICE}} -e OMNIVOICE_LOAD_ASR={{.LOAD_ASR}} -e OMNIVOICE_ALLOW_CPU_EAGER_ASR={{.ALLOW_CPU_EAGER_ASR}} -e PORT=7861 -e UVICORN_RELOAD=1 -e HF_TOKEN={{.HF_TOKEN}} -e HF_HUB_OFFLINE={{.HF_HUB_OFFLINE}} -e TRANSFORMERS_OFFLINE={{.TRANSFORMERS_OFFLINE}} -v "{{.TASKFILE_DIR}}\omnivoice:/app/omnivoice" -v "{{.TASKFILE_DIR}}\assets:/app/assets" -v "{{.TASKFILE_DIR}}\VERSION:/app/VERSION:ro" {{.IMAGE}}
       - cmd /c docker ps --filter "name={{.CONTAINER_LOCAL}}"
 
   release:
@@ -167,7 +167,7 @@ tasks:
       - cmd /c docker rm -f {{.CONTAINER}} >nul 2>&1
       - cmd /c docker rm -f {{.CONTAINER_LOCAL}} >nul 2>&1
       - task: cache-init
-      - cmd /c docker run -d --name {{.CONTAINER_LOCAL}} -p {{.PORT}}:7861 --gpus all {{.RUNTIME_ENV}} -e CUDA_VISIBLE_DEVICES={{.GPU_DEVICE}} -e OMNIVOICE_DEVICE={{.APP_DEVICE}} -e OMNIVOICE_LOAD_ASR={{.LOAD_ASR}} -e OMNIVOICE_ALLOW_CPU_EAGER_ASR={{.ALLOW_CPU_EAGER_ASR}} -e PORT=7861 -e UVICORN_RELOAD=1 -e HF_TOKEN={{.HF_TOKEN}} -e HF_HUB_OFFLINE={{.HF_HUB_OFFLINE}} -e TRANSFORMERS_OFFLINE={{.TRANSFORMERS_OFFLINE}} -v "{{.TASKFILE_DIR}}\omnivoice:/app/omnivoice" -v "{{.TASKFILE_DIR}}\hangrylabs:/app/hangrylabs" -v "{{.TASKFILE_DIR}}\assets:/app/assets" -v "{{.TASKFILE_DIR}}\VERSION:/app/VERSION:ro" {{.IMAGE}}
+      - cmd /c docker run -d --name {{.CONTAINER_LOCAL}} -p {{.PORT}}:7861 --gpus all {{.RUNTIME_ENV}} -e CUDA_VISIBLE_DEVICES={{.GPU_DEVICE}} -e OMNIVOICE_DEVICE={{.APP_DEVICE}} -e OMNIVOICE_LOAD_ASR={{.LOAD_ASR}} -e OMNIVOICE_ALLOW_CPU_EAGER_ASR={{.ALLOW_CPU_EAGER_ASR}} -e PORT=7861 -e UVICORN_RELOAD=1 -e HF_TOKEN={{.HF_TOKEN}} -e HF_HUB_OFFLINE={{.HF_HUB_OFFLINE}} -e TRANSFORMERS_OFFLINE={{.TRANSFORMERS_OFFLINE}} -v "{{.TASKFILE_DIR}}\omnivoice:/app/omnivoice" -v "{{.TASKFILE_DIR}}\assets:/app/assets" -v "{{.TASKFILE_DIR}}\VERSION:/app/VERSION:ro" {{.IMAGE}}
       - cmd /c docker ps --filter "name={{.CONTAINER_LOCAL}}"
 
   localrun-tiny:
@@ -176,7 +176,7 @@ tasks:
       - cmd /c docker rm -f {{.CONTAINER}} >nul 2>&1
       - cmd /c docker rm -f {{.CONTAINER_LOCAL}} >nul 2>&1
       - task: cache-init
-      - cmd /c docker run -d --name {{.CONTAINER_LOCAL}} -p {{.PORT}}:7861 --gpus all {{.RUNTIME_ENV}} -e CUDA_VISIBLE_DEVICES={{.GPU_DEVICE}} -e OMNIVOICE_DEVICE={{.APP_DEVICE}} -e OMNIVOICE_LOAD_ASR={{.LOAD_ASR}} -e OMNIVOICE_ALLOW_CPU_EAGER_ASR={{.ALLOW_CPU_EAGER_ASR}} -e PORT=7861 -e UVICORN_RELOAD=1 -e HF_TOKEN={{.HF_TOKEN}} -e HF_HUB_OFFLINE=0 -e TRANSFORMERS_OFFLINE=0 -v "{{.TASKFILE_DIR}}\omnivoice:/app/omnivoice" -v "{{.TASKFILE_DIR}}\hangrylabs:/app/hangrylabs" -v "{{.TASKFILE_DIR}}\assets:/app/assets" -v "{{.TASKFILE_DIR}}\VERSION:/app/VERSION:ro" {{.TINY_IMAGE}}
+      - cmd /c docker run -d --name {{.CONTAINER_LOCAL}} -p {{.PORT}}:7861 --gpus all {{.RUNTIME_ENV}} -e CUDA_VISIBLE_DEVICES={{.GPU_DEVICE}} -e OMNIVOICE_DEVICE={{.APP_DEVICE}} -e OMNIVOICE_LOAD_ASR={{.LOAD_ASR}} -e OMNIVOICE_ALLOW_CPU_EAGER_ASR={{.ALLOW_CPU_EAGER_ASR}} -e PORT=7861 -e UVICORN_RELOAD=1 -e HF_TOKEN={{.HF_TOKEN}} -e HF_HUB_OFFLINE=0 -e TRANSFORMERS_OFFLINE=0 -v "{{.TASKFILE_DIR}}\omnivoice:/app/omnivoice" -v "{{.TASKFILE_DIR}}\assets:/app/assets" -v "{{.TASKFILE_DIR}}\VERSION:/app/VERSION:ro" {{.TINY_IMAGE}}
       - cmd /c docker ps --filter "name={{.CONTAINER_LOCAL}}"
 
   imageweb:

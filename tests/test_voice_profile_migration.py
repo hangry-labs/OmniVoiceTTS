@@ -18,9 +18,6 @@ def load_profiles_module():
     omnivoice_package.__path__ = []
     service_package = types.ModuleType("omnivoice.service")
     service_package.__path__ = []
-    web_package = types.ModuleType("omnivoice.web")
-    web_package.__path__ = []
-
     paths_spec = importlib.util.spec_from_file_location(
         "omnivoice.service.paths",
         ROOT / "omnivoice" / "service" / "paths.py",
@@ -32,13 +29,12 @@ def load_profiles_module():
         "omnivoice": omnivoice_package,
         "omnivoice.service": service_package,
         "omnivoice.service.paths": paths_module,
-        "omnivoice.web": web_package,
     }
     with patch.dict(sys.modules, modules):
         paths_spec.loader.exec_module(paths_module)
         profiles_spec = importlib.util.spec_from_file_location(
-            "omnivoice.web.openai_profiles",
-            ROOT / "omnivoice" / "web" / "openai_profiles.py",
+            "omnivoice.service.voice_profiles",
+            ROOT / "omnivoice" / "service" / "voice_profiles.py",
         )
         assert profiles_spec and profiles_spec.loader
         profiles_module = importlib.util.module_from_spec(profiles_spec)

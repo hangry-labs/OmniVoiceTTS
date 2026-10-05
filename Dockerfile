@@ -16,7 +16,6 @@ RUN apt-get update \
 
 COPY pyproject.toml README.md LICENSE VERSION requirements.txt /app/
 COPY omnivoice /app/omnivoice
-COPY hangrylabs /app/hangrylabs
 COPY assets /app/assets
 
 RUN if [ -n "$HF_ENDPOINT" ]; then export HF_ENDPOINT; else unset HF_ENDPOINT; fi \

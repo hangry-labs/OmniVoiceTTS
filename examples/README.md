@@ -2,7 +2,7 @@
 
 This directory contains the static public project page used for GitHub Pages.
 
-The page embeds the example manifest in `voices.js`, so opening `index.html` directly works. Serving over HTTP is still useful for a closer GitHub Pages preview:
+The dependency-free page embeds the example manifest in `voices.js`, so opening `index.html` directly works. `styles.css` and `player.js` provide the shared Hangry Labs examples shell and OmniVoice-specific language playback. Serving over HTTP is still useful for a closer GitHub Pages preview:
 
 ```bash
 python -m http.server 8055

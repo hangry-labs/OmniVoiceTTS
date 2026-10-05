@@ -20,7 +20,7 @@ DEFAULT_TEXT = (
     "This CPU memory benchmark uses a realistic two-sentence request to estimate "
     "the RAM needed for local text to speech with common voice modes."
 )
-DEFAULT_REF_AUDIO = "/app/omnivoice/assets/openai_default_voice.mp3"
+DEFAULT_REF_AUDIO = "/app/omnivoice/runtime_assets/voices/openai_default_voice.mp3"
 DEFAULT_REF_TEXT = "Hello from OmniVoice. This Docker image includes a browser UI and an HTTP API."
 PROFILE_WITH_TEXT = "benchmark_cpu_with_text"
 PROFILE_NO_TEXT = "benchmark_cpu_no_text"
@@ -366,7 +366,6 @@ def run_attempt(
         "-v",
         f"{(ROOT / 'omnivoice').resolve()}:/app/omnivoice",
         "-v",
-        f"{(ROOT / 'hangrylabs').resolve()}:/app/hangrylabs",
         image,
     ]
     start = run(cmd, timeout=60)

@@ -2,12 +2,12 @@
 
 accelerate==1.13.0
 fastapi==0.136.1
-gradio==6.14.0
 huggingface-hub==1.14.0
 librosa==0.11.0
 numpy==2.4.4
 pydub==0.25.1
 pydantic==2.13.4
+python-multipart==0.0.28
 soundfile==0.13.1
 torch==2.8.0
 torchaudio==2.8.0
