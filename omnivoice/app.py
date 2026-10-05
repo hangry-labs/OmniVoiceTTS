@@ -76,6 +76,7 @@ def env_int(name: str, default: int, minimum: int = 1) -> int:
 DEFAULT_MODEL = os.getenv("OMNIVOICE_MODEL", "k2-fsa/OmniVoice")
 DEFAULT_DEVICE = os.getenv("OMNIVOICE_DEVICE", "auto")
 DEFAULT_ASR_MODEL = os.getenv("OMNIVOICE_ASR_MODEL", "openai/whisper-large-v3-turbo")
+DEFAULT_ASR_DEVICE = os.getenv("OMNIVOICE_ASR_DEVICE", "").strip() or None
 LOAD_ASR = env_bool("OMNIVOICE_LOAD_ASR", False)
 ALLOW_CPU_EAGER_ASR = env_bool("OMNIVOICE_ALLOW_CPU_EAGER_ASR", False)
 MAX_CONCURRENT_GENERATIONS = env_int("OMNIVOICE_MAX_CONCURRENT_GENERATIONS", 1)
@@ -165,6 +166,7 @@ STARTUP_PARAMETER_DEFAULTS = OrderedDict(
         ("OMNIVOICE_MODEL", "k2-fsa/OmniVoice"),
         ("OMNIVOICE_DEVICE", "auto"),
         ("OMNIVOICE_ASR_MODEL", "openai/whisper-large-v3-turbo"),
+        ("OMNIVOICE_ASR_DEVICE", ""),
         ("OMNIVOICE_LOAD_ASR", "0"),
         ("OMNIVOICE_ALLOW_CPU_EAGER_ASR", "0"),
         ("OMNIVOICE_MAX_CONCURRENT_GENERATIONS", "1"),
@@ -413,6 +415,7 @@ def get_model(device: str) -> OmniVoice:
                 dtype=dtype,
                 load_asr=load_asr,
                 asr_model_name=DEFAULT_ASR_MODEL,
+                asr_device=DEFAULT_ASR_DEVICE,
             )
         return MODEL_CACHE[resolved_device]
 
@@ -991,6 +994,7 @@ def get_status_payload() -> dict:
         "requested_load_asr": LOAD_ASR,
         "allow_cpu_eager_asr": ALLOW_CPU_EAGER_ASR,
         "asr_model": DEFAULT_ASR_MODEL if effective_load_asr else None,
+        "asr_device": DEFAULT_ASR_DEVICE or default_device,
         "resample_backend": RESAMPLE_BACKEND,
         "languages": len(LANG_IDS),
         "cuda_memory": cuda_memory_stats(),
@@ -1064,6 +1068,7 @@ def get_startup_diagnostics_payload() -> dict[str, Any]:
             "requested_load_asr": LOAD_ASR,
             "allow_cpu_eager_asr": ALLOW_CPU_EAGER_ASR,
             "asr_model": DEFAULT_ASR_MODEL if effective_load_asr else None,
+            "asr_device": DEFAULT_ASR_DEVICE or resolved_device,
             "max_concurrent_generations": MAX_CONCURRENT_GENERATIONS,
             "empty_cuda_cache_after_request": EMPTY_CUDA_CACHE_AFTER_REQUEST,
             "reset_cuda_peak_after_cache_clear": RESET_CUDA_PEAK_AFTER_CACHE_CLEAR,

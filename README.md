@@ -299,7 +299,7 @@ The single `omnivoicetts_data` volume is mounted at `/app/persistent` and owns d
 - `/app/persistent/app/settings.json` - atomic operator settings used by the current and future System UI
 - `/app/persistent/voices/openai` - saved voice profiles and their reference audio
 
-The relevant path overrides are `HF_HOME`, `OMNIVOICE_SETTINGS_PATH`, and `OMNIVOICE_OPENAI_VOICE_PROFILE_DIR`. Restart-bound deployment controls such as model, device, ASR loading, and generation concurrency remain environment variables.
+The relevant path overrides are `HF_HOME`, `OMNIVOICE_SETTINGS_PATH`, and `OMNIVOICE_OPENAI_VOICE_PROFILE_DIR`. Restart-bound deployment controls such as model, device, ASR loading, and generation concurrency remain environment variables. `OMNIVOICE_ASR_MODEL` selects the ASR checkpoint used by eager and lazy reference transcription; optional `OMNIVOICE_ASR_DEVICE` can place it on a different device such as `cpu` or `cuda:1`.
 
 Existing users can migrate the two legacy volumes into the unified layout without deleting the originals:
 
@@ -477,6 +477,7 @@ Current snapshot changes after `v0.3.0`:
 - Added lightweight pull-request CI, repository-contract tests, and standard `doctor`, `compile`, `test`, and `validate` tasks.
 - Unified model assets, operator settings, and saved voices under one `omnivoicetts_data` volume mounted at `/app/persistent`.
 - Added automatic migration of legacy saved-profile audio paths when old profile data is copied into the unified volume.
+- Synced with upstream through `08be0b4`, preserving configured ASR model/device choices during lazy loading and avoiding unnecessary full reference-audio decoding during batch planning.
 - Hardened release automation with version consistency checks, unit/CodeQL/Dockerfile validation, lockfile refresh, synchronized-branch checks, next-snapshot preparation, and atomic push.
 
 The current development snapshot is published through the rolling tags from `master`:

@@ -242,7 +242,7 @@ The single `omnivoicetts_data` volume is mounted at `/app/persistent` and stores
 - `/app/persistent/app/settings.json` - atomic operator settings used by the current and future System UI
 - `/app/persistent/voices/openai` - saved voice profiles and reference audio
 
-Path overrides are available through `HF_HOME`, `OMNIVOICE_SETTINGS_PATH`, and `OMNIVOICE_OPENAI_VOICE_PROFILE_DIR`. Model, device, ASR loading, concurrency, and other restart-bound controls remain environment variables.
+Path overrides are available through `HF_HOME`, `OMNIVOICE_SETTINGS_PATH`, and `OMNIVOICE_OPENAI_VOICE_PROFILE_DIR`. Model, device, ASR loading, concurrency, and other restart-bound controls remain environment variables. `OMNIVOICE_ASR_MODEL` selects the ASR checkpoint used by eager and lazy reference transcription; optional `OMNIVOICE_ASR_DEVICE` can place it on a different device such as `cpu` or `cuda:1`.
 
 Existing users can migrate both legacy volumes once without deleting them:
 
@@ -283,6 +283,7 @@ Current snapshot changes after `v0.3.0`:
 - Consolidates full and tiny publishing into one workflow for Docker Hub and GitHub Container Registry, with lightweight pull-request CI.
 - Unifies model assets, operator settings, and saved voices under one `omnivoicetts_data` volume mounted at `/app/persistent`.
 - Migrates legacy saved-profile audio paths automatically when old profile data is copied into the unified volume.
+- Syncs with upstream through `08be0b4`, preserving configured ASR model/device choices during lazy loading and avoiding unnecessary full reference-audio decoding during batch planning.
 - Adds atomic settings storage, repository-contract tests, standard validation tasks, and stricter release automation.
 
 The current development snapshot is published through the rolling tags from `master`:

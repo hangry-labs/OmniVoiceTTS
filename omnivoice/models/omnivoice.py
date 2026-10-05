@@ -241,12 +241,15 @@ class OmniVoice(PreTrainedModel):
         self.duration_estimator = None
         self.sampling_rate = None
         self._asr_pipe = None
+        self._asr_model_name = "openai/whisper-large-v3-turbo"
+        self._asr_device = None
 
     @classmethod
     def from_pretrained(cls, pretrained_model_name_or_path, *args, **kwargs):
         train_mode = kwargs.pop("train", False)
         load_asr = kwargs.pop("load_asr", False)
-        asr_model_name = kwargs.pop("asr_model_name", "openai/whisper-large-v3-turbo")
+        asr_model_name = kwargs.pop("asr_model_name", None)
+        asr_device = kwargs.pop("asr_device", None)
 
         # Suppress noisy INFO logs from transformers/huggingface_hub during loading
         _prev_disable = logging.root.manager.disable
@@ -284,8 +287,12 @@ class OmniVoice(PreTrainedModel):
 
                 model.duration_estimator = RuleDurationEstimator()
 
+                if asr_model_name is not None:
+                    model._asr_model_name = asr_model_name
+                if asr_device is not None:
+                    model._asr_device = asr_device
                 if load_asr:
-                    model.load_asr_model(model_name=asr_model_name)
+                    model.load_asr_model()
         finally:
             logging.disable(_prev_disable)
 
@@ -295,17 +302,32 @@ class OmniVoice(PreTrainedModel):
     # ASR support (optional, for auto-transcription)
     # -------------------------------------------------------------------
 
-    def load_asr_model(self, model_name: str = "openai/whisper-large-v3-turbo"):
+    def load_asr_model(
+        self,
+        model_name: Optional[str] = None,
+        device: Optional[str] = None,
+    ):
         """Load a Whisper ASR model for reference audio transcription.
 
         Args:
-            model_name: HuggingFace model name or local path for the Whisper model.
+            model_name: HuggingFace model name or local path for the Whisper
+                model. Defaults to the model configured during
+                :meth:`from_pretrained`.
+            device: Device used for ASR. Defaults to the device configured
+                during :meth:`from_pretrained`, then to the TTS model device.
         """
         from transformers import pipeline as hf_pipeline
 
+        if model_name is None:
+            model_name = self._asr_model_name
+        if device is None:
+            device = self._asr_device if self._asr_device is not None else self.device
+
         logger.info("Loading ASR model %s ...", model_name)
         asr_dtype = (
-            torch.float16 if str(self.device).startswith("cuda") else torch.float32
+            torch.float16
+            if str(device).startswith(("cuda", "xpu"))
+            else torch.float32
         )
 
         model_name = _resolve_model_path(model_name)
@@ -314,9 +336,9 @@ class OmniVoice(PreTrainedModel):
             "automatic-speech-recognition",
             model=model_name,
             dtype=asr_dtype,
-            device_map=self.device,
+            device=device,
         )
-        logger.info("ASR model loaded on %s.", self.device)
+        logger.info("ASR model loaded on %s.", device)
 
     @torch.inference_mode()
     def transcribe(

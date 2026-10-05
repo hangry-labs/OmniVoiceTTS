@@ -41,12 +41,11 @@ import traceback
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from typing import List, Optional, Tuple
 
+import soundfile as sf
 import torch
 from tqdm import tqdm
 
 from omnivoice.models.omnivoice import OmniVoice
-import soundfile as sf
-
 from omnivoice.service.paths import safe_output_file_path
 from omnivoice.utils.audio import load_audio
 from omnivoice.utils.common import str2bool
@@ -269,6 +268,16 @@ def process_init(rank_queue, model_checkpoint, warmup=0):
     logging.info(f"Worker on {worker_device} initialized successfully.")
 
 
+def _get_audio_duration(audio_path: str) -> float:
+    """Read duration from metadata, falling back to a full audio decode."""
+    try:
+        info = sf.info(audio_path)
+        return info.frames / info.samplerate
+    except Exception:
+        wav = load_audio(audio_path, SAMPLING_RATE)
+        return wav.shape[-1] / SAMPLING_RATE
+
+
 def estimate_sample_total_duration(
     duration_estimator: RuleDurationEstimator,
     text: str,
@@ -283,8 +292,7 @@ def estimate_sample_total_duration(
     duration contributes to the total.
     """
     if ref_audio_path is not None:
-        ref_wav = load_audio(ref_audio_path, SAMPLING_RATE)
-        ref_duration = ref_wav.shape[-1] / SAMPLING_RATE
+        ref_duration = _get_audio_duration(ref_audio_path)
     else:
         ref_duration = 0
 
