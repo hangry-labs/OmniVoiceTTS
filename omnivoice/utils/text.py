@@ -21,8 +21,12 @@ Provides:
 - ``chunk_text_punctuation()``: Splits long text into model-friendly chunks at
   sentence boundaries, with abbreviation-aware punctuation splitting.
 - ``add_punctuation()``: Appends missing end punctuation (Chinese or English).
+- ``normalize_terminal_punctuation_spacing()``: Uses the model-compatible token
+  form for attached terminal question and exclamation marks.
+- ``validate_synthesis_text()``: Rejects empty or symbol-only generation input.
 """
 
+import re
 from typing import List, Optional
 
 
@@ -114,6 +118,51 @@ ABBREVIATIONS = {
     "fig.",
     "def.",
 }
+
+
+SYMBOL_ONLY_TEXT_MESSAGE = (
+    "Text must contain at least one letter or number; symbol-only input can produce "
+    "unpredictable audio."
+)
+
+
+_ATTACHED_TERMINAL_PUNCTUATION = re.compile(
+    r"(?<![\s\u3400-\u4dbf\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af])"
+    r"([!?]+)(?=\s|$)"
+)
+
+
+def normalize_terminal_punctuation_spacing(text: str) -> str:
+    """Separate terminal ``?``/``!`` runs for the model's preferred tokens.
+
+    OmniVoice's tokenizer assigns different IDs to attached and space-prefixed
+    question/exclamation marks. The space-prefixed form avoids observed final
+    syllable truncation in whitespace-delimited text. Compact CJK scripts are
+    excluded because their punctuation convention does not use this spacing.
+    """
+    return _ATTACHED_TERMINAL_PUNCTUATION.sub(r" \1", text)
+
+
+def validate_synthesis_text(text: str, *, field_name: str = "Text") -> str:
+    """Return text unchanged after verifying that it contains spoken content."""
+    if not isinstance(text, str) or not text.strip():
+        raise ValueError(f"{field_name} must not be empty.")
+    if not any(char.isalnum() for char in text):
+        raise ValueError(SYMBOL_ONLY_TEXT_MESSAGE)
+    return text
+
+
+def validate_synthesis_texts(text: str | list[str]) -> str | list[str]:
+    """Validate one synthesis string or every entry in a batch."""
+    if isinstance(text, str):
+        return validate_synthesis_text(text)
+    if not isinstance(text, list):
+        raise TypeError("text should be a string or a list of strings")
+    if not text:
+        raise ValueError("Text batch must contain at least one item.")
+    for index, item in enumerate(text):
+        validate_synthesis_text(item, field_name=f"Text item {index}")
+    return text
 
 
 def chunk_text_punctuation(

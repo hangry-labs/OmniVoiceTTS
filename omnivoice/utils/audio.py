@@ -25,31 +25,57 @@ with shape ``(C, T)`` (channels-first).
 """
 
 import io
+import importlib
 import logging
 import os
+from functools import lru_cache
 
 import numpy as np
 import soundfile as sf
 import torch
-import torchaudio
 from pydub import AudioSegment
 from pydub.silence import detect_leading_silence, detect_nonsilent, split_on_silence
 
 logger = logging.getLogger(__name__)
-RESAMPLE_BACKEND = os.getenv("OMNIVOICE_RESAMPLE_BACKEND", "torchaudio").strip().lower()
+RESAMPLE_BACKEND = os.getenv("OMNIVOICE_RESAMPLE_BACKEND", "auto").strip().lower()
+_LIBROSA_BACKENDS = {"librosa", "fallback", "no-torchaudio"}
+_VALID_RESAMPLE_BACKENDS = {"auto", "torchaudio", *_LIBROSA_BACKENDS}
+
+if RESAMPLE_BACKEND not in _VALID_RESAMPLE_BACKENDS:
+    choices = ", ".join(sorted(_VALID_RESAMPLE_BACKENDS))
+    raise ValueError(f"Unsupported OMNIVOICE_RESAMPLE_BACKEND={RESAMPLE_BACKEND!r}; choose one of: {choices}")
+
+
+@lru_cache(maxsize=1)
+def get_resample_backend() -> str:
+    """Resolve the configured backend without requiring torchaudio at import time."""
+    if RESAMPLE_BACKEND in _LIBROSA_BACKENDS:
+        return "librosa"
+    try:
+        importlib.import_module("torchaudio")
+    except (ImportError, OSError) as exc:
+        if RESAMPLE_BACKEND == "torchaudio":
+            raise RuntimeError(
+                "torchaudio was explicitly selected but could not be loaded. Install the "
+                "'omnivoice[torchaudio]' extra or set OMNIVOICE_RESAMPLE_BACKEND=librosa."
+            ) from exc
+        logger.warning("torchaudio is unavailable; using the Librosa resampling backend: %s", exc)
+        return "librosa"
+    return "torchaudio"
 
 
 def resample_audio(data: np.ndarray, orig_freq: int, new_freq: int) -> np.ndarray:
     """Resample channels-first float32 audio with a configurable backend."""
     if orig_freq == new_freq:
         return data
-    if RESAMPLE_BACKEND in {"librosa", "fallback", "no-torchaudio"}:
+    if get_resample_backend() == "librosa":
         import librosa
 
         return librosa.resample(data, orig_sr=orig_freq, target_sr=new_freq, axis=-1).astype(
             np.float32,
             copy=False,
         )
+    torchaudio = importlib.import_module("torchaudio")
     return torchaudio.functional.resample(
         torch.from_numpy(data),
         orig_freq=orig_freq,

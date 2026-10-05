@@ -66,7 +66,12 @@ from omnivoice.utils.audio import (
 )
 from omnivoice.utils.duration import RuleDurationEstimator
 from omnivoice.utils.lang_map import LANG_IDS, LANG_NAMES
-from omnivoice.utils.text import add_punctuation, chunk_text_punctuation
+from omnivoice.utils.text import (
+    add_punctuation,
+    chunk_text_punctuation,
+    normalize_terminal_punctuation_spacing,
+    validate_synthesis_texts,
+)
 from omnivoice.utils.voice_design import (
     _INSTRUCT_ALL_VALID,
     _INSTRUCT_EN_TO_ZH,
@@ -1080,14 +1085,16 @@ class OmniVoice(PreTrainedModel):
         speed: Union[float, list[Optional[float]], None] = None,
         duration: Union[float, list[Optional[float]], None] = None,
     ) -> GenerationTask:
-
+        validate_synthesis_texts(text)
         if isinstance(text, str):
-            text_list = [text]
+            text_list = [normalize_terminal_punctuation_spacing(text)]
         else:
             assert isinstance(
                 text, list
             ), "text should be a string or a list of strings"
-            text_list = text
+            text_list = [
+                normalize_terminal_punctuation_spacing(item) for item in text
+            ]
         batch_size = len(text_list)
 
         language_list = self._ensure_list(language, batch_size)

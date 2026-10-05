@@ -89,6 +89,7 @@ docker run --name omnivoicetts-tiny --restart unless-stopped -p 7861:7861 --gpus
 - Multilingual UI language selector with English fallback for missing labels
 - Dedicated Generate and Stream workspaces with waveform playback, seeking, speed, volume, trimming, download, sharing, and removal controls
 - Seed and random-seed controls for repeatable generation
+- Automatic model-compatible spacing for attached terminal `?` and `!` in whitespace-delimited text
 - Live GPU monitor for visible NVIDIA GPU utilization, VRAM, temperature, and power draw
 - HTTP API for applications and automation
 - 600+ language support inherited from OmniVoice
@@ -98,7 +99,7 @@ docker run --name omnivoicetts-tiny --restart unless-stopped -p 7861:7861 --gpus
 - OpenAI-compatible `/v1/audio/speech`, `/v1/models`, and `/v1/models/{model}` routes for tools that can target local OpenAI-style TTS servers
 - Local voice profiles: upload or drop, preview, trim, name, search, select, and safely delete reference voices in the UI Voices tab, then use the saved name as the TTS voice in compatible clients
 - Stored voice profiles reuse cached clone prompts after the first request
-- Optional `OMNIVOICE_RESAMPLE_BACKEND=librosa` fallback if a platform has `torchaudio` issues
+- Automatic Librosa resampling fallback when optional `torchaudio` is unavailable; force either backend with `OMNIVOICE_RESAMPLE_BACKEND`
 - Kokoro-shaped compatibility fields and routes such as `voice`, `use_gpu`, `response_format`, `/tts/voices`, `/tts/speakers`, `/tts/stream-formats`, `/tts/convert`, progressive `/tts/stream`, and progressive `/tts/stream-chunks`
 
 ## API Example
@@ -209,6 +210,8 @@ Long text can also be requested through `/tts/stream` or `/tts/stream-chunks`. T
 
 Generated audio edge handling can be tuned with `pad_duration` and `fade_duration` on native and OpenAI-compatible speech requests. `pad_duration` adds silence before and after the clip; `fade_duration` fades the clip in and out to reduce clicks. Both default to `0.1` seconds and can be set to `0` to disable.
 
+The runtime also separates attached ASCII question and exclamation marks from the preceding word before model inference. For example, `Jesteśmy gotowi do ofiary?` is submitted to the model as `Jesteśmy gotowi do ofiary ?` to avoid an observed final-syllable truncation case. This changes text tokenization rather than adding audio padding, and compact CJK punctuation remains unchanged.
+
 ```bash
 curl -X POST "http://localhost:7861/tts/stream-chunks" \
   -H "Content-Type: application/json" \
@@ -277,6 +280,9 @@ Current snapshot changes after `v0.3.0`:
 - Adds browser workflows for API/runtime inspection, saved generation defaults, CUDA cache cleanup, model purge, and demand-driven GPU history charts.
 - Adds bounded temporary reference-audio uploads for the browser UI and native profile-management, OpenAI call-log, settings, and GPU telemetry endpoints.
 - Adds browser-level validation for desktop/mobile layouts plus real generated and progressively streamed MP3 playback.
+- Rejects empty or symbol-only synthesis input before model inference across native, OpenAI-compatible, direct-model, and batch paths.
+- Normalizes attached terminal `?` and `!` to the model-compatible space-prefixed token form, avoiding an observed final-syllable truncation case.
+- Makes `torchaudio` an optional package extra with lazy automatic Librosa fallback, while official Docker images retain the validated CUDA wheel.
 - Adds edge audio controls: `pad_duration` for configurable silence before and after generated audio, and `fade_duration` for fading clip edges to reduce clicks.
 - Exposes the new controls in the browser UI under Generation Settings.
 - Exposes the same controls through the native API, OpenAI-compatible `/v1/audio/speech` extension fields, CLI commands, and the Python client.

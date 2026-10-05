@@ -3,7 +3,9 @@ from __future__ import annotations
 import os
 from typing import Literal
 
-from pydantic import AliasChoices, BaseModel, ConfigDict, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
+
+from omnivoice.utils.text import validate_synthesis_text
 
 
 MAX_RANDOM_SEED = 2**32 - 1
@@ -76,6 +78,11 @@ class TTSRequest(BaseModel):
         validation_alias=AliasChoices("format", "output_format", "response_format"),
         description="wav, mp3, flac, or ogg.",
     )
+
+    @field_validator("text")
+    @classmethod
+    def validate_text_content(cls, value: str) -> str:
+        return validate_synthesis_text(value)
 
 
 class PurgeRequest(BaseModel):
@@ -153,3 +160,8 @@ class OpenAISpeechRequest(BaseModel):
     )
     ref_text: str | None = Field(None, description="Optional OmniVoice extension: transcript for ref_audio.")
     voice_profile: str | None = Field(None, description="Optional OmniVoice extension: saved OpenAI voice profile name.")
+
+    @field_validator("input")
+    @classmethod
+    def validate_input_content(cls, value: str) -> str:
+        return validate_synthesis_text(value, field_name="Input")

@@ -41,10 +41,12 @@ dependencies = [
     "python-multipart==0.0.28",
     "soundfile==0.13.1",
     "torch==2.8.0",
-    "torchaudio==2.8.0",
     "transformers==5.8.0",
     "uvicorn[standard]==0.46.0",
 ]
+
+[project.optional-dependencies]
+torchaudio = ["torchaudio==2.8.0"]
 
 [project.scripts]
 omnivoice-infer = "omnivoice.cli.infer:main"

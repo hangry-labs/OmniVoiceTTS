@@ -65,6 +65,8 @@ class RepositoryContractTests(unittest.TestCase):
             config = tomllib.load(handle)
         project = config["project"]
         self.assertNotIn("gradio==6.14.0", project["dependencies"])
+        self.assertNotIn("torchaudio==2.8.0", project["dependencies"])
+        self.assertEqual(project["optional-dependencies"]["torchaudio"], ["torchaudio==2.8.0"])
         self.assertNotIn("omnivoice-demo", project["scripts"])
         self.assertFalse((ROOT / "omnivoice" / "cli" / "demo.py").exists())
         self.assertIn("python-multipart==0.0.28", project["dependencies"])

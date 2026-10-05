@@ -60,9 +60,10 @@ from omnivoice.service.voice_profiles import (
 from omnivoice.settings import RuntimeSettingsStore
 from omnivoice.standalone_ui.gpu import GPU_MONITOR
 from omnivoice.standalone_ui.server import ASSET_DIR, attach_ui
-from omnivoice.utils.audio import RESAMPLE_BACKEND
+from omnivoice.utils.audio import get_resample_backend
 from omnivoice.utils.common import fix_random_seed
 from omnivoice.utils.lang_map import LANG_IDS, LANG_NAMES, LANG_NAME_TO_ID, lang_display_name
+from omnivoice.utils.text import validate_synthesis_text
 
 
 def env_bool(name: str, default: bool) -> bool:
@@ -183,7 +184,7 @@ STARTUP_PARAMETER_DEFAULTS = OrderedDict(
         ("OMNIVOICE_OPENAI_VOICE_PROFILE_DIR", "/app/persistent/voices/openai"),
         ("OMNIVOICE_ALLOWED_REF_AUDIO_ROOTS", ""),
         ("OMNIVOICE_VOICE_PROMPT_CACHE_LIMIT", "32"),
-        ("OMNIVOICE_RESAMPLE_BACKEND", "torchaudio"),
+        ("OMNIVOICE_RESAMPLE_BACKEND", "auto"),
         ("OMNIVOICE_UI_LOCALE", "en"),
     ]
 )
@@ -869,8 +870,7 @@ def synthesize_array(
     normalize: bool = False,
     cache_voice_prompt: bool = False,
 ) -> tuple[int, np.ndarray]:
-    if not (text or "").strip():
-        raise ValueError("Text must not be empty")
+    validate_synthesis_text(text)
     validate_voice_design_text(text, instruct)
     safe_ref_audio = validate_ref_audio_path(ref_audio)
     resolved_device = normalize_device(device)
@@ -925,8 +925,7 @@ def synthesize_chunks(
     normalize: bool = False,
     cache_voice_prompt: bool = False,
 ) -> tuple[int, Iterator[np.ndarray]]:
-    if not (text or "").strip():
-        raise ValueError("Text must not be empty")
+    validate_synthesis_text(text)
     validate_voice_design_text(text, instruct)
     safe_ref_audio = validate_ref_audio_path(ref_audio)
     resolved_device = normalize_device(device)
@@ -999,7 +998,7 @@ def get_status_payload() -> dict:
         "allow_cpu_eager_asr": ALLOW_CPU_EAGER_ASR,
         "asr_model": DEFAULT_ASR_MODEL if effective_load_asr else None,
         "asr_device": DEFAULT_ASR_DEVICE or default_device,
-        "resample_backend": RESAMPLE_BACKEND,
+        "resample_backend": get_resample_backend(),
         "languages": len(LANG_IDS),
         "cuda_memory": cuda_memory_stats(),
         "cpu_memory": cpu_memory_stats() if default_device == "cpu" else None,
@@ -1050,7 +1049,7 @@ def get_startup_diagnostics_payload() -> dict[str, Any]:
             "torch": torch.__version__,
             "torch_cuda": torch.version.cuda,
             "cudnn": torch.backends.cudnn.version(),
-            "resample_backend": RESAMPLE_BACKEND,
+            "resample_backend": get_resample_backend(),
         },
         "hardware": {
             "cuda_available": torch.cuda.is_available(),
