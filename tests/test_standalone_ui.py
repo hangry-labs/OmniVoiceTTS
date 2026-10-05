@@ -58,7 +58,7 @@ class StandaloneUiTests(unittest.TestCase):
         index = responses["/"]
         self.assertIn('src="/assets/omnivoice_logo_horizontal.webp"', index.text)
         self.assertIn('href="/assets/omnivoice_favicon.webp"', index.text)
-        self.assertIn('href="https://hangrylabs.app/software"', index.text)
+        self.assertIn('href="https://hangrylabs.app/"', index.text)
         self.assertLess(index.text.index('class="labs-signature"'), index.text.index('class="collapsed-mascot"'))
         self.assertIn('data-tab="generate"', index.text)
         self.assertIn('data-tab="stream"', index.text)

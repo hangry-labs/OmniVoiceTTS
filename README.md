@@ -1,6 +1,6 @@
 <p align="center">
   <a href="https://hangry-labs.github.io/OmniVoiceTTS/examples/">
-    <img src="logo.jpg" alt="Hangry Labs OmniVoiceTTS logo" width="720">
+    <img src="assets/omnivoice_logo_horizontal.webp" alt="Hangry Labs OmniVoiceTTS logo" width="900">
   </a>
 </p>
 
@@ -20,11 +20,11 @@ This Hangry Labs fork is made for ease of use. The aim is that anyone should be 
 - GPU acceleration when Docker/NVIDIA support is available
 - Offline-friendly usage: download the full image once, keep it, and run it later without relying on live model downloads
 
-Official Docker images are intended for: [hangrylabs/omnivoicetts on Docker Hub](https://hub.docker.com/r/hangrylabs/omnivoicetts/tags).
+Official images are published to [Docker Hub](https://hub.docker.com/r/hangrylabs/omnivoicetts/tags) and [GitHub Container Registry](https://github.com/Hangry-Labs/OmniVoiceTTS/pkgs/container/omnivoicetts).
 
 **Listen to examples first:** [hangry-labs.github.io/OmniVoiceTTS/examples](https://hangry-labs.github.io/OmniVoiceTTS/examples/).
 
-Hangry Labs home: [nuggies.website](https://nuggies.website/).
+Hangry Labs home: [hangrylabs.app](https://hangrylabs.app/).
 
 ## Quick Start
 
@@ -80,9 +80,15 @@ Snapshot or development version tags are intentionally not published. Release ta
 
 ## Browser UI
 
-The included standalone browser UI is built for local generation, voice design, voice cloning, progressive streaming, reusable voice profiles, seed-based reproducibility, output-format control, API diagnostics, persistent deployment defaults, CUDA memory controls, and demand-driven GPU visibility. Generated, streamed, and reference audio use the same local waveform workspace with playback, seeking, speed, volume, trim, download, share, and removal controls. It is served directly by the local FastAPI application and does not require a CDN or a separate frontend service.
+The included standalone browser UI provides focused Generate, Stream, Voices, API, and System workspaces. Generate and Stream keep the primary text, voice, language, and output controls together; Voices manages reusable cloned profiles; API exposes local integration details and recent calls; and System places runtime and memory controls beside the wider GPU overview. Generated, streamed, and reference audio use the same local waveform workspace with playback, seeking, speed, volume, trim, download, share, and removal controls.
 
-![OmniVoiceTTS browser UI](docs/ui.png)
+The responsive interface includes 60 display languages, uses bundled WebP assets, and is served directly by the local FastAPI application without a CDN or separate frontend service.
+
+<p align="center">
+  <a href="https://hangry-labs.github.io/OmniVoiceTTS/examples/">
+    <img src="assets/ui.webp" alt="OmniVoiceTTS browser interface with generation, voice, API, system, and GPU controls">
+  </a>
+</p>
 
 ## API Usage Example
 
@@ -316,14 +322,14 @@ task imageweb
 task imageapi
 ```
 
-Run the lightweight checks used by CI before starting a large image build:
+Inspect the local environment and run the complete local validation gate before starting a large image build:
 
 ```bash
 task doctor
 task validate
 ```
 
-`task validate` compiles Python sources, runs the unit/repository-contract suite, verifies `uv.lock`, and checks Dockerfile syntax. `task codeql` remains the deeper local security-and-quality scan and is also part of release validation.
+`task validate` compiles Python sources, runs the unit and repository-contract suite with the project environment, verifies `uv.lock`, and checks Dockerfile syntax. It is intentionally broader than the dependency-free hosted CI job, which checks compilation, package metadata, and Dockerfile syntax on every push and pull request. `task codeql` remains the deeper local security-and-quality scan and is also part of release validation.
 
 Build and run the tiny image:
 
@@ -458,7 +464,7 @@ The snapshot channel is the current Docker `latest` build after the latest tagge
 Current snapshot changes after `v0.3.0`:
 
 - Replaced the Gradio application shell with a purpose-built, responsive standalone UI based on the Hangry Labs v1.0 interface architecture.
-- Added focused Generate, Stream, Voices, API, and System workspaces with a shared settings rail, compact/expanded branded header, local assets, and responsive desktop/mobile layouts.
+- Added focused Generate, Stream, Voices, API, and System workspaces with a shared settings rail, compact/expanded branded header, bundled WebP product assets, and responsive desktop/mobile layouts.
 - Added a shared local waveform workspace for generated, streamed, and reference audio with playback, seeking, volume, speed, trim, download, share, and removal controls.
 - Added a polished persisted-voice workflow with drag-and-drop reference audio, waveform verification and trimming, normalized-name and replacement feedback, transcript/ASR guidance, profile search and metadata, one-click selection, and guarded deletion.
 - Added browser workflows for API/runtime inspection, saved generation defaults, CUDA cache cleanup, model purge, and demand-driven GPU history charts.

@@ -28,6 +28,7 @@ examples/download*
 examples/exp*
 .claude/
 .ai/
+/.AGENTS.md
 *.wav
 *.jsonl
 

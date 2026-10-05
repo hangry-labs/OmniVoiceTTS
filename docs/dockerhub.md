@@ -1,6 +1,6 @@
 <p>
   <a href="https://hangry-labs.github.io/OmniVoiceTTS/examples/">
-    <img src="https://github.com/Hangry-Labs/OmniVoiceTTS/raw/master/logo.jpg" alt="Hangry Labs OmniVoiceTTS logo">
+    <img src="https://github.com/Hangry-Labs/OmniVoiceTTS/raw/master/assets/omnivoice_logo_horizontal.webp" alt="Hangry Labs OmniVoiceTTS logo">
   </a>
 </p>
 
@@ -22,10 +22,12 @@ Maintainers can reuse the same example workload as a local performance benchmark
 
 ## Browser UI
 
-The image includes a responsive standalone browser UI for no-prompt generation, voice design, voice cloning, progressive streaming, reusable voice profiles, reproducible seeds, output-format control, API diagnostics, persistent deployment defaults, CUDA memory controls, demand-driven GPU visibility, and a multilingual interface with 60 UI languages. Generated, streamed, and reference audio share a local waveform workspace with playback, seeking, speed, volume, trim, download, share, and removal controls. The interface is served by the same local FastAPI process and uses bundled assets without a CDN.
+The image includes a responsive standalone browser UI with focused Generate, Stream, Voices, API, and System workspaces. Generate and Stream keep text, voice, language, seed, and output controls together; Voices manages reusable cloned profiles; API exposes local integration details and recent calls; and System places runtime and memory controls beside the wider GPU overview. Generated, streamed, and reference audio share a local waveform workspace with playback, seeking, speed, volume, trim, download, share, and removal controls. The multilingual interface includes 60 display languages and is served by the same local FastAPI process using bundled WebP assets without a CDN.
 
 <p>
-  <img src="https://github.com/Hangry-Labs/OmniVoiceTTS/raw/master/docs/ui.png" alt="OmniVoiceTTS browser UI">
+  <a href="https://hangry-labs.github.io/OmniVoiceTTS/examples/">
+    <img src="https://github.com/Hangry-Labs/OmniVoiceTTS/raw/master/assets/ui.webp" alt="OmniVoiceTTS browser interface with generation, voice, API, system, and GPU controls">
+  </a>
 </p>
 
 ## Responsible Use
@@ -38,7 +40,7 @@ OmniVoice supports voice cloning. Do not use this image for unauthorized voice c
 - Project page: https://hangry-labs.github.io/OmniVoiceTTS/examples/
 - Upstream OmniVoice project: https://github.com/k2-fsa/OmniVoice
 - Upstream model: https://huggingface.co/k2-fsa/OmniVoice
-- Hangry Labs: https://nuggies.website/
+- Hangry Labs: https://hangrylabs.app/
 
 ## Quick Start
 
@@ -269,7 +271,7 @@ The snapshot channel is the current Docker `latest` build after the latest tagge
 Current snapshot changes after `v0.3.0`:
 
 - Replaces the Gradio application shell with a purpose-built, responsive standalone UI based on the Hangry Labs v1.0 interface architecture.
-- Adds focused Generate, Stream, Voices, API, and System workspaces with a shared settings rail, compact/expanded branded header, bundled assets, and responsive desktop/mobile layouts.
+- Adds focused Generate, Stream, Voices, API, and System workspaces with a shared settings rail, compact/expanded branded header, bundled WebP product assets, and responsive desktop/mobile layouts.
 - Adds a shared local waveform workspace for generated, streamed, and reference audio with playback, seeking, volume, speed, trim, download, share, and removal controls.
 - Adds a polished persisted-voice workflow with drag-and-drop reference audio, waveform verification and trimming, normalized-name and replacement feedback, transcript/ASR guidance, profile search and metadata, one-click selection, and guarded deletion.
 - Adds browser workflows for API/runtime inspection, saved generation defaults, CUDA cache cleanup, model purge, and demand-driven GPU history charts.
