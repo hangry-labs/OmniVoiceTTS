@@ -45,6 +45,14 @@ class RepositoryContractTests(unittest.TestCase):
         ):
             self.assertIn(expected, workflow)
 
+    def test_lightweight_ci_remains_dependency_free(self) -> None:
+        workflow = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+        self.assertIn("python -m compileall -q omnivoice scripts tests", workflow)
+        self.assertIn("tomllib.load", workflow)
+        self.assertIn("docker build --check .", workflow)
+        self.assertNotIn("pip install", workflow)
+        self.assertNotIn("unittest discover", workflow)
+
     def test_taskfile_uses_one_product_volume(self) -> None:
         taskfile = (ROOT / "Taskfile.yml").read_text(encoding="utf-8")
         self.assertIn("DATA_VOLUME: omnivoicetts_data", taskfile)
