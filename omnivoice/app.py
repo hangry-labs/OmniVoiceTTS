@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import gc
 import io
-import html
 import json
 import logging
 import os
@@ -10,20 +9,20 @@ import platform
 import random
 import re
 import sys
+import tempfile
 import threading
+from uuid import uuid4
 from collections import OrderedDict
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Iterator, Optional
+from typing import Any, Iterator, Literal, Optional
 
-import gradio as gr
 import numpy as np
 import torch
 import uvicorn
-from fastapi import Body, FastAPI, HTTPException
+from fastapi import Body, FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
-from fastapi.staticfiles import StaticFiles
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 from omnivoice import OmniVoice, OmniVoiceGenerationConfig, __version__
@@ -34,43 +33,28 @@ from omnivoice.service.audio import (
     apply_audio_effects,
     encode_audio_bytes,
     encode_audio_stream,
-    encoded_audio_to_temp_file,
     normalize_audio_format,
-    to_int16_audio,
 )
 from omnivoice.service.paths import (
     AUDIO_EXTENSIONS,
-    default_gradio_upload_roots,
+    default_upload_roots,
     parse_path_roots,
     safe_existing_file_path,
 )
 from omnivoice.settings import RuntimeSettingsStore
+from omnivoice.standalone_ui.gpu import GPU_MONITOR
+from omnivoice.standalone_ui.server import ASSET_DIR, attach_ui
 from omnivoice.utils.audio import RESAMPLE_BACKEND
 from omnivoice.utils.common import fix_random_seed
 from omnivoice.utils.lang_map import LANG_IDS, LANG_NAMES, LANG_NAME_TO_ID, lang_display_name
-from omnivoice.web.branding import brand_css, brand_header_html
-from omnivoice.web.gpu import gpu_monitor_html
 from omnivoice.web.openai_profiles import (
     append_openai_call_log,
-    delete_openai_voice_profile_from_ui as _delete_openai_voice_profile_from_ui,
+    delete_openai_voice_profile as _delete_openai_voice_profile,
     load_openai_voice_profiles as _load_openai_voice_profiles,
     normalize_optional_seed as _normalize_optional_seed,
     normalize_profile_name,
-    openai_voice_profile_choices as _openai_voice_profile_choices,
-    openai_voice_profile_dropdown_update as _openai_voice_profile_dropdown_update,
-    render_openai_call_log,
-    render_openai_voice_profile_table as _render_openai_voice_profile_table,
-    render_openai_voice_profiles as _render_openai_voice_profiles,
+    openai_call_log_payload,
     save_openai_voice_profile as _save_openai_voice_profile,
-    save_openai_voice_profile_from_ui as _save_openai_voice_profile_from_ui,
-)
-from omnivoice.web.translations import (
-    UI_LOCALE,
-    UI_STRINGS,
-    normalize_ui_locale,
-    ui_locale_choices,
-    ui_text,
-    ui_text_for,
 )
 
 
@@ -100,8 +84,6 @@ EMPTY_CUDA_CACHE_AFTER_REQUEST = env_bool("OMNIVOICE_EMPTY_CUDA_CACHE_AFTER_REQU
 RESET_CUDA_PEAK_AFTER_CACHE_CLEAR = env_bool("OMNIVOICE_RESET_CUDA_PEAK_AFTER_CACHE_CLEAR", False)
 APP_VERSION = os.getenv("APP_VERSION", __version__)
 BUILD_ID = os.getenv("BUILD_ID", "stable")
-ASSET_DIR = Path(__file__).resolve().parent.parent / "hangrylabs"
-BRAND_ASSET_BASE = "/assets/hangrylabs"
 PACKAGE_DIR = Path(__file__).resolve().parent
 OPENAI_DEFAULT_CLONE_AUDIO = PACKAGE_DIR / "assets" / "openai_default_voice.mp3"
 RUNTIME_SETTINGS = RuntimeSettingsStore()
@@ -110,6 +92,10 @@ OPENAI_VOICE_PROFILE_DIR = Path(
 )
 OPENAI_VOICE_PROFILE_INDEX = OPENAI_VOICE_PROFILE_DIR / "profiles.json"
 REF_AUDIO_SAFE_ROOTS_ENV = os.getenv("OMNIVOICE_ALLOWED_REF_AUDIO_ROOTS", "")
+UI_UPLOAD_DIR = Path(os.getenv("OMNIVOICE_UI_UPLOAD_DIR", Path(tempfile.gettempdir()) / "omnivoicetts-ui"))
+UI_UPLOAD_LIMIT_BYTES = env_int("OMNIVOICE_UI_UPLOAD_LIMIT_MIB", 64) * 1024 * 1024
+UI_UPLOADS: dict[str, Path] = {}
+UI_UPLOADS_LOCK = threading.Lock()
 
 OPENAI_MODEL_ALIASES = {
     "omnivoice": "omnivoice",
@@ -173,7 +159,8 @@ STARTUP_PARAMETER_DEFAULTS = OrderedDict(
         ("HF_HUB_OFFLINE", ""),
         ("TRANSFORMERS_OFFLINE", ""),
         ("HF_TOKEN", ""),
-        ("GRADIO_TEMP_DIR", ""),
+        ("OMNIVOICE_UI_UPLOAD_DIR", str(UI_UPLOAD_DIR)),
+        ("OMNIVOICE_UI_UPLOAD_LIMIT_MIB", "64"),
         ("TMPDIR", ""),
         ("OMNIVOICE_MODEL", "k2-fsa/OmniVoice"),
         ("OMNIVOICE_DEVICE", "auto"),
@@ -231,29 +218,6 @@ GENERATION_SEMAPHORE_LOCK = threading.Lock()
 VOICE_CLONE_PROMPT_CACHE: OrderedDict[tuple[Any, ...], Any] = OrderedDict()
 VOICE_CLONE_PROMPT_CACHE_LOCK = threading.Lock()
 VOICE_CLONE_PROMPT_CACHE_LIMIT = int(os.getenv("OMNIVOICE_VOICE_PROMPT_CACHE_LIMIT", "32"))
-UI_CANCEL_EVENT = threading.Event()
-UI_STREAM_LOCK = threading.Lock()
-UI_STREAM_GENERATION = 0
-
-
-def next_ui_stream_generation() -> int:
-    global UI_STREAM_GENERATION
-    with UI_STREAM_LOCK:
-        UI_STREAM_GENERATION += 1
-        return UI_STREAM_GENERATION
-
-
-def is_current_ui_stream_generation(stream_generation: int) -> bool:
-    with UI_STREAM_LOCK:
-        return stream_generation == UI_STREAM_GENERATION
-
-
-def stop_active_ui_stream():
-    UI_CANCEL_EVENT.set()
-    next_ui_stream_generation()
-    return SAMPLE_RATE, np.zeros(1, dtype=np.int16)
-
-
 VOICE_DESIGN_CATEGORIES = {
     "gender": {
         "label": "Gender",
@@ -373,34 +337,6 @@ def get_runtime_label() -> str:
     return "CPU"
 
 
-def get_banner_runtime_html() -> str:
-    version = html.escape(read_version_file())
-    build = html.escape(get_build_label())
-    cuda_devices = get_cuda_devices()
-    if cuda_devices:
-        visible = os.getenv("CUDA_VISIBLE_DEVICES", "").strip()
-        visible_ids = [part.strip() for part in visible.split(",") if part.strip()] if visible and visible.lower() != "all" else []
-        gpu_lines = []
-        for idx, name in enumerate(cuda_devices):
-            display_idx = visible_ids[idx] if idx < len(visible_ids) else str(idx)
-            gpu_lines.append(f"{html.escape(display_idx)} : {html.escape(name)}")
-        hardware = "GPUs :<br>" + "<br>".join(gpu_lines)
-    elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
-        hardware = "Runtime : Apple MPS"
-    else:
-        hardware = "Runtime : CPU"
-    return f"v{version} | Build {build}<br>{hardware}"
-
-
-def get_hardware_choices() -> list[tuple[str, str]]:
-    choices = [("Auto", "auto"), ("CPU", "cpu")]
-    if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
-        choices.append(("Apple MPS", "mps"))
-    for idx, name in enumerate(get_cuda_devices()):
-        choices.append((f"GPU {idx} ({name})", f"cuda:{idx}"))
-    return choices
-
-
 def normalize_device(device: str | None) -> str:
     hardware = (device or "auto").strip().lower()
     if hardware == "auto":
@@ -447,7 +383,7 @@ def ref_audio_allowed_roots() -> list[Path]:
         OPENAI_VOICE_PROFILE_DIR,
         PACKAGE_DIR / "assets",
         Path("/data"),
-        *default_gradio_upload_roots(),
+        *default_upload_roots(),
     ]
     return parse_path_roots(REF_AUDIO_SAFE_ROOTS_ENV, defaults)
 
@@ -830,12 +766,6 @@ def build_voice_design_instruct(*selected_options: str | None, manual_instruct: 
     return ", ".join(parts)
 
 
-def build_auto_voice_instruct(text: str | None) -> tuple[str | None, str | None]:
-    if has_bracket_token(text):
-        return None, "True no-prompt mode used because expressive bracket tags are present."
-    return None, "True no-prompt mode used."
-
-
 def has_bracket_token(text: str | None) -> bool:
     return bool(BRACKET_TOKEN_PATTERN.search(text or ""))
 
@@ -843,101 +773,6 @@ def has_bracket_token(text: str | None) -> bool:
 def validate_voice_design_text(text: str | None, instruct: str | None) -> None:
     if (instruct or "").strip() and has_bracket_token(text):
         raise ValueError(VOICE_DESIGN_BRACKET_TOKEN_MESSAGE)
-
-
-def nonverbal_tags_markdown() -> str:
-    return nonverbal_tags_markdown_for(UI_LOCALE)
-
-
-def nonverbal_tags_markdown_for(locale: str | None) -> str:
-    tags = ", ".join(f"`{tag}`" for tag in SUPPORTED_NONVERBAL_TAGS)
-    return (
-        f"### {ui_text_for(locale, 'nonverbal.title')}\n\n"
-        f"{ui_text_for(locale, 'nonverbal.intro')}\n\n"
-        f"{tags}\n\n"
-        f"{ui_text_for(locale, 'nonverbal.placement')}\n\n"
-        f"{ui_text_for(locale, 'nonverbal.warning')}"
-    )
-
-
-def mode_choices_for(locale: str | None) -> list[tuple[str, str]]:
-    return [
-        (ui_text_for(locale, "mode.no_voice_prompt"), "No Voice Prompt"),
-        (ui_text_for(locale, "mode.voice_design"), "Voice Design"),
-        (ui_text_for(locale, "mode.voice_clone"), "Voice Clone"),
-    ]
-
-
-def default_input_values() -> set[str]:
-    defaults = UI_STRINGS.get("input_text.default", {})
-    if not isinstance(defaults, dict):
-        return set()
-    return {str(value).strip() for value in defaults.values() if str(value).strip()}
-
-
-def input_text_update_for(locale: str | None, current_text: str | None):
-    update = gr.update(label=ui_text_for(locale, "input_text.label"))
-    current = (current_text or "").strip()
-    if not current or current in default_input_values():
-        update["value"] = ui_text_for(locale, "input_text.default")
-    return update
-
-
-def ui_locale_updates(locale: str, current_mode: str, current_text: str):
-    selected_locale = normalize_ui_locale(locale)
-    stable_mode = current_mode if current_mode in {"No Voice Prompt", "Voice Design", "Voice Clone"} else "No Voice Prompt"
-    return (
-        gr.update(label=ui_text_for(selected_locale, "mode.label"), choices=mode_choices_for(selected_locale), value=stable_mode),
-        gr.update(label=ui_text_for(selected_locale, "ui_language.label")),
-        input_text_update_for(selected_locale, current_text),
-        nonverbal_tags_markdown_for(selected_locale),
-        gr.update(value=ui_text_for(selected_locale, "generate.label")),
-        ui_text_for(selected_locale, "voice_design.note"),
-        gr.update(label=ui_text_for(selected_locale, "language.label"), choices=language_choices_for(selected_locale)),
-        gr.update(label=ui_text_for(selected_locale, "design.gender"), choices=design_choices_for(selected_locale, "gender")),
-        gr.update(label=ui_text_for(selected_locale, "design.age"), choices=design_choices_for(selected_locale, "age")),
-        gr.update(label=ui_text_for(selected_locale, "design.pitch"), choices=design_choices_for(selected_locale, "pitch")),
-        gr.update(label=ui_text_for(selected_locale, "design.style"), choices=design_choices_for(selected_locale, "style")),
-        gr.update(label=ui_text_for(selected_locale, "design.english_accent"), choices=design_choices_for(selected_locale, "english_accent")),
-        gr.update(label=ui_text_for(selected_locale, "design.chinese_dialect"), choices=design_choices_for(selected_locale, "chinese_dialect")),
-        gr.update(label=ui_text_for(selected_locale, "reference_audio.label")),
-        gr.update(
-            label=ui_text_for(selected_locale, "reference_text.label"),
-            placeholder=ui_text_for(selected_locale, "reference_text.placeholder"),
-            info=ui_text_for(selected_locale, "reference_text.info"),
-        ),
-        gr.update(label=ui_text_for(selected_locale, "output_audio.label")),
-        gr.update(label=ui_text_for(selected_locale, "status.label")),
-        gr.update(label=ui_text_for(selected_locale, "hardware.label"), choices=hardware_choices_for(selected_locale)),
-        gr.update(label=ui_text_for(selected_locale, "output_format.label")),
-        gr.update(label=ui_text_for(selected_locale, "speed.label"), info=ui_text_for(selected_locale, "speed.info")),
-        gr.update(label=ui_text_for(selected_locale, "duration.label"), info=ui_text_for(selected_locale, "duration.info")),
-        gr.update(label=ui_text_for(selected_locale, "num_step.label"), info=ui_text_for(selected_locale, "num_step.info")),
-        gr.update(label=ui_text_for(selected_locale, "guidance_scale.label"), info=ui_text_for(selected_locale, "guidance_scale.info")),
-        gr.update(label=ui_text_for(selected_locale, "denoise.label"), info=ui_text_for(selected_locale, "denoise.info")),
-        gr.update(label=ui_text_for(selected_locale, "preprocess_prompt.label"), info=ui_text_for(selected_locale, "preprocess_prompt.info")),
-        gr.update(label=ui_text_for(selected_locale, "postprocess_output.label"), info=ui_text_for(selected_locale, "postprocess_output.info")),
-        gr.update(label=ui_text_for(selected_locale, "pad_duration.label"), info=ui_text_for(selected_locale, "pad_duration.info")),
-        gr.update(label=ui_text_for(selected_locale, "fade_duration.label"), info=ui_text_for(selected_locale, "fade_duration.info")),
-        gr.update(label=ui_text_for(selected_locale, "t_shift.label"), info=ui_text_for(selected_locale, "t_shift.info")),
-        gr.update(label=ui_text_for(selected_locale, "layer_penalty.label"), info=ui_text_for(selected_locale, "layer_penalty.info")),
-        gr.update(label=ui_text_for(selected_locale, "position_temperature.label"), info=ui_text_for(selected_locale, "position_temperature.info")),
-        gr.update(label=ui_text_for(selected_locale, "class_temperature.label"), info=ui_text_for(selected_locale, "class_temperature.info")),
-        gr.update(label=ui_text_for(selected_locale, "seed.label"), info=ui_text_for(selected_locale, "seed.info")),
-        gr.update(label=ui_text_for(selected_locale, "randomize_seed.label"), info=ui_text_for(selected_locale, "randomize_seed.info")),
-        gr.update(label=ui_text_for(selected_locale, "audio_chunk_duration.label"), info=ui_text_for(selected_locale, "audio_chunk_duration.info")),
-        gr.update(label=ui_text_for(selected_locale, "audio_chunk_threshold.label"), info=ui_text_for(selected_locale, "audio_chunk_threshold.info")),
-        gr.update(label=ui_text_for(selected_locale, "pitch.label"), info=ui_text_for(selected_locale, "pitch.info")),
-        gr.update(label=ui_text_for(selected_locale, "tempo.label"), info=ui_text_for(selected_locale, "tempo.info")),
-        gr.update(label=ui_text_for(selected_locale, "volume.label"), info=ui_text_for(selected_locale, "volume.info")),
-        gr.update(label=ui_text_for(selected_locale, "normalize_loudness.label"), info=ui_text_for(selected_locale, "normalize_loudness.info")),
-    )
-
-
-def coerce_float(value, default: float) -> float:
-    if value is None or value == "":
-        return default
-    return float(value)
 
 
 def resolve_generation_seed(seed, randomize_seed: bool) -> int:
@@ -971,77 +806,12 @@ def save_openai_voice_profile(
         MAX_RANDOM_SEED,
         name,
         audio_path,
-        default_gradio_upload_roots(),
+        [UI_UPLOAD_DIR, *default_upload_roots()],
         ref_text,
         language,
         seed,
         randomize_seed,
     )
-
-
-def render_openai_voice_profiles() -> str:
-    return _render_openai_voice_profiles(OPENAI_VOICE_PROFILE_INDEX)
-
-
-def render_openai_voice_profile_table() -> str:
-    return _render_openai_voice_profile_table(OPENAI_VOICE_PROFILE_INDEX)
-
-
-def openai_voice_profile_choices() -> list[str]:
-    return _openai_voice_profile_choices(OPENAI_VOICE_PROFILE_INDEX)
-
-
-def openai_voice_profile_dropdown_update(selected: str | None = None):
-    return _openai_voice_profile_dropdown_update(OPENAI_VOICE_PROFILE_INDEX, selected)
-
-
-def save_openai_voice_profile_from_ui(
-    name: str,
-    audio_path: str | None,
-    ref_text: str | None,
-    language: str | None,
-    seed: int | float | str | None,
-    randomize_seed: bool,
-) -> tuple[str, object, str]:
-    return _save_openai_voice_profile_from_ui(
-        OPENAI_VOICE_PROFILE_DIR,
-        OPENAI_VOICE_PROFILE_INDEX,
-        MAX_RANDOM_SEED,
-        default_gradio_upload_roots(),
-        name,
-        audio_path,
-        ref_text,
-        language,
-        seed,
-        randomize_seed,
-    )
-
-
-def delete_openai_voice_profile_from_ui(name: str | None) -> tuple[str, object, str]:
-    result = _delete_openai_voice_profile_from_ui(OPENAI_VOICE_PROFILE_DIR, OPENAI_VOICE_PROFILE_INDEX, name)
-    if result[0].startswith("Deleted OpenAI voice profile"):
-        clear_voice_clone_prompt_cache()
-    return result
-
-
-def show_generation_side_controls():
-    return gr.update(visible=True)
-
-
-def hide_generation_side_controls():
-    return gr.update(visible=False)
-
-
-def show_openai_tab_state():
-    return gr.update(visible=False), render_openai_call_log()
-
-
-def show_add_voice_tab_state():
-    return gr.update(visible=False)
-
-
-def show_manage_tab_state():
-    return gr.update(visible=False), openai_voice_profile_dropdown_update(), render_openai_voice_profile_table()
 
 
 def build_generation_config(
@@ -1192,216 +962,6 @@ def synthesize_chunks(
     return sample_rate, chunk_iterator()
 
 
-def synthesize_file(
-    text,
-    language,
-    ref_audio,
-    ref_text,
-    mode,
-    num_step,
-    guidance_scale,
-    speed,
-    duration,
-    device,
-    output_format,
-    denoise,
-    preprocess_prompt,
-    postprocess_output,
-    pad_duration,
-    fade_duration,
-    t_shift,
-    layer_penalty_factor,
-    position_temperature,
-    class_temperature,
-    seed,
-    randomize_seed,
-    audio_chunk_duration,
-    audio_chunk_threshold,
-    pitch_semitones,
-    tempo,
-    volume,
-    normalize,
-    design_gender,
-    design_age,
-    design_pitch,
-    design_style,
-    design_english_accent,
-    design_chinese_dialect,
-):
-    try:
-        UI_CANCEL_EVENT.clear()
-        used_seed = resolve_generation_seed(seed, bool(randomize_seed))
-        fix_random_seed(used_seed)
-        effective_instruct = None
-        profile_status = None
-        effective_class_temperature = coerce_float(class_temperature, 0.0)
-        if mode == "No Voice Prompt":
-            effective_instruct, profile_status = build_auto_voice_instruct(text)
-            effective_class_temperature = 0.0
-        if mode == "Voice Design":
-            effective_instruct = build_voice_design_instruct(
-                design_gender,
-                design_age,
-                design_pitch,
-                design_style,
-                design_english_accent,
-                design_chinese_dialect,
-            )
-            validate_voice_design_text(text, effective_instruct)
-        config = build_generation_config(
-            num_step=int(num_step),
-            guidance_scale=float(guidance_scale),
-            denoise=bool(denoise),
-            preprocess_prompt=bool(preprocess_prompt),
-            postprocess_output=bool(postprocess_output),
-            pad_duration=coerce_float(pad_duration, 0.1),
-            fade_duration=coerce_float(fade_duration, 0.1),
-            t_shift=coerce_float(t_shift, 0.1),
-            layer_penalty_factor=coerce_float(layer_penalty_factor, 5.0),
-            position_temperature=coerce_float(position_temperature, 5.0),
-            class_temperature=effective_class_temperature,
-            audio_chunk_duration=coerce_float(audio_chunk_duration, 15.0),
-            audio_chunk_threshold=coerce_float(audio_chunk_threshold, 30.0),
-        )
-        config.cancel_event = UI_CANCEL_EVENT
-        clone_ref_audio = ref_audio if mode == "Voice Clone" else None
-        sample_rate, waveform = synthesize_array(
-            text=text,
-            language=language,
-            ref_audio=clone_ref_audio,
-            ref_text=ref_text,
-            instruct=effective_instruct,
-            duration=float(duration) if duration else None,
-            speed=float(speed) if speed else None,
-            device=device,
-            generation_config=config,
-            pitch_semitones=float(pitch_semitones),
-            tempo=float(tempo),
-            volume=float(volume),
-            normalize=bool(normalize),
-        )
-        status = f"Done. Seed: {used_seed}."
-        if profile_status:
-            status = f"{status} {profile_status}"
-        return encoded_audio_to_temp_file(waveform, output_format, sample_rate), status, used_seed
-    except RuntimeError as exc:
-        if str(exc) == "Generation cancelled.":
-            return None, "Generation cancelled.", gr.skip()
-        raise gr.Error(f"{type(exc).__name__}: {exc}") from exc
-    except Exception as exc:
-        raise gr.Error(f"{type(exc).__name__}: {exc}") from exc
-
-
-def synthesize_file_streaming(
-    text,
-    language,
-    ref_audio,
-    ref_text,
-    mode,
-    num_step,
-    guidance_scale,
-    speed,
-    duration,
-    device,
-    output_format,
-    denoise,
-    preprocess_prompt,
-    postprocess_output,
-    pad_duration,
-    fade_duration,
-    t_shift,
-    layer_penalty_factor,
-    position_temperature,
-    class_temperature,
-    seed,
-    randomize_seed,
-    audio_chunk_duration,
-    audio_chunk_threshold,
-    pitch_semitones,
-    tempo,
-    volume,
-    normalize,
-    design_gender,
-    design_age,
-    design_pitch,
-    design_style,
-    design_english_accent,
-    design_chinese_dialect,
-):
-    try:
-        stream_generation = next_ui_stream_generation()
-        UI_CANCEL_EVENT.clear()
-        used_seed = resolve_generation_seed(seed, bool(randomize_seed))
-        fix_random_seed(used_seed)
-        yield (SAMPLE_RATE, np.zeros(1, dtype=np.int16)), f"Preparing stream. Seed: {used_seed}.", used_seed
-        effective_instruct = None
-        profile_status = None
-        effective_class_temperature = coerce_float(class_temperature, 0.0)
-        if mode == "No Voice Prompt":
-            effective_instruct, profile_status = build_auto_voice_instruct(text)
-            effective_class_temperature = 0.0
-        if mode == "Voice Design":
-            effective_instruct = build_voice_design_instruct(
-                design_gender,
-                design_age,
-                design_pitch,
-                design_style,
-                design_english_accent,
-                design_chinese_dialect,
-            )
-            validate_voice_design_text(text, effective_instruct)
-        config = build_generation_config(
-            num_step=int(num_step),
-            guidance_scale=float(guidance_scale),
-            denoise=bool(denoise),
-            preprocess_prompt=bool(preprocess_prompt),
-            postprocess_output=bool(postprocess_output),
-            pad_duration=coerce_float(pad_duration, 0.1),
-            fade_duration=coerce_float(fade_duration, 0.1),
-            t_shift=coerce_float(t_shift, 0.1),
-            layer_penalty_factor=coerce_float(layer_penalty_factor, 5.0),
-            position_temperature=coerce_float(position_temperature, 5.0),
-            class_temperature=effective_class_temperature,
-            audio_chunk_duration=coerce_float(audio_chunk_duration, 15.0),
-            audio_chunk_threshold=coerce_float(audio_chunk_threshold, 30.0),
-        )
-        config.cancel_event = UI_CANCEL_EVENT
-        clone_ref_audio = ref_audio if mode == "Voice Clone" else None
-        sample_rate, chunks = synthesize_chunks(
-            text=text,
-            language=language,
-            ref_audio=clone_ref_audio,
-            ref_text=ref_text,
-            instruct=effective_instruct,
-            duration=float(duration) if duration else None,
-            speed=float(speed) if speed else None,
-            device=device,
-            generation_config=config,
-            pitch_semitones=float(pitch_semitones),
-            tempo=float(tempo),
-            volume=float(volume),
-            normalize=bool(normalize),
-        )
-        for index, chunk in enumerate(chunks, start=1):
-            if not is_current_ui_stream_generation(stream_generation):
-                return
-            status = f"Streaming chunk {index}."
-            if index == 1 and profile_status:
-                status = f"{status} Seed: {used_seed}. {profile_status}"
-            elif index == 1:
-                status = f"{status} Seed: {used_seed}."
-            yield (sample_rate, to_int16_audio(chunk)), status, gr.skip()
-        if is_current_ui_stream_generation(stream_generation):
-            yield gr.skip(), "Streaming complete.", gr.skip()
-    except RuntimeError as exc:
-        if str(exc) == "Generation cancelled.":
-            yield gr.skip(), "Generation cancelled.", gr.skip()
-            return
-        raise gr.Error(f"{type(exc).__name__}: {exc}") from exc
-    except Exception as exc:
-        raise gr.Error(f"{type(exc).__name__}: {exc}") from exc
-
-
 def get_supported_output_formats() -> dict[str, dict[str, str]]:
     return {
         key: {
@@ -1543,540 +1103,20 @@ def log_startup_diagnostics() -> None:
 @asynccontextmanager
 async def api_lifespan(app: FastAPI):
     log_startup_diagnostics()
-    yield
+    UI_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    for stale_upload in UI_UPLOAD_DIR.glob("upload-*"):
+        if stale_upload.is_file():
+            stale_upload.unlink(missing_ok=True)
+    try:
+        yield
+    finally:
+        GPU_MONITOR.close()
+        with UI_UPLOADS_LOCK:
+            uploads = list(UI_UPLOADS.values())
+            UI_UPLOADS.clear()
+        for upload in uploads:
+            upload.unlink(missing_ok=True)
 
-
-LANGUAGE_CHOICES = [("Auto", "Auto")] + sorted((lang_display_name(name), name) for name in LANG_NAMES)
-hardware_choices = get_hardware_choices()
-hardware_values = {value for _, value in hardware_choices}
-default_hardware = DEFAULT_DEVICE if DEFAULT_DEVICE in hardware_values else "auto"
-
-
-def language_choices_for(locale: str | None) -> list[tuple[str, str]]:
-    return [(ui_text_for(locale, "option.auto"), "Auto")] + sorted(
-        (lang_display_name(name), name) for name in LANG_NAMES
-    )
-
-
-def design_choices_for(locale: str | None, category: str) -> list[tuple[str, str]]:
-    return [(ui_text_for(locale, "option.no_preference"), "No preference")] + [
-        (option, option) for option in VOICE_DESIGN_CATEGORIES[category]["options"]
-    ]
-
-
-def hardware_choices_for(locale: str | None) -> list[tuple[str, str]]:
-    choices = []
-    for label, value in hardware_choices:
-        if value == "auto":
-            label = ui_text_for(locale, "option.auto")
-        elif value == "cpu":
-            label = ui_text_for(locale, "hardware.cpu")
-        choices.append((label, value))
-    return choices
-
-
-def current_language_choices() -> list[tuple[str, str]]:
-    return language_choices_for(UI_LOCALE)
-
-
-def current_design_choices(category: str) -> list[tuple[str, str]]:
-    return design_choices_for(UI_LOCALE, category)
-
-
-def current_hardware_choices() -> list[tuple[str, str]]:
-    return hardware_choices_for(UI_LOCALE)
-
-APP_CSS = brand_css(BRAND_ASSET_BASE) + """
-.gpu-monitor {
-    margin: 10px 0 4px;
-    padding: 12px;
-    border: 1px solid rgba(255, 176, 118, 0.22);
-    border-radius: 10px;
-    background: linear-gradient(135deg, rgba(22, 12, 6, 0.95), rgba(7, 7, 8, 0.96));
-    color: #fff3e7;
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 12px 24px rgba(0, 0, 0, 0.20);
-}
-
-.gpu-monitor-title {
-    margin-bottom: 9px;
-    font-size: 0.86rem;
-    font-weight: 800;
-    letter-spacing: 0.02em;
-}
-
-.gpu-monitor-muted {
-    color: rgba(255, 243, 231, 0.68);
-    font-size: 0.86rem;
-}
-
-.gpu-card + .gpu-card {
-    margin-top: 12px;
-    padding-top: 12px;
-    border-top: 1px solid rgba(255, 176, 118, 0.15);
-}
-
-.gpu-card-head {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: 10px;
-    margin-bottom: 8px;
-}
-
-.gpu-card-head strong {
-    color: #ffb066;
-}
-
-.gpu-card-head span,
-.gpu-metric-row span,
-.gpu-foot span {
-    color: rgba(255, 243, 231, 0.68);
-    font-size: 0.78rem;
-}
-
-.gpu-metric-row,
-.gpu-foot {
-    display: flex;
-    justify-content: space-between;
-    gap: 10px;
-    font-size: 0.82rem;
-}
-
-.gpu-bar {
-    overflow: hidden;
-    height: 7px;
-    margin: 5px 0 8px;
-    border-radius: 999px;
-    background: rgba(255, 255, 255, 0.09);
-}
-
-.gpu-bar span {
-    display: block;
-    height: 100%;
-    border-radius: inherit;
-    background: linear-gradient(90deg, #ff6b00, #ffb066);
-}
-
-.gpu-vram span {
-    background: linear-gradient(90deg, #ffb066, #ffe0bd);
-}
-
-.gpu-sparkline {
-    display: block;
-    width: 100%;
-    height: 44px;
-    margin-bottom: 8px;
-    border-radius: 8px;
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.02));
-}
-
-"""
-
-BRAND_HEADER_HTML = brand_header_html(
-    product_name="OmniVoiceTTS",
-    description="Massively multilingual text-to-speech with voice design, voice cloning, local generation, and an HTTP API in the same Docker image.",
-    links=[
-        ("Voice examples", "https://hangry-labs.github.io/OmniVoiceTTS/examples/"),
-        ("GitHub", "https://github.com/Hangry-Labs/OmniVoiceTTS"),
-        ("Docker Hub", "https://hub.docker.com/r/hangrylabs/omnivoicetts/tags"),
-        ("API docs", "/tts/docs"),
-    ],
-    capabilities=["600+ languages", "Voice design", "Voice clone", "Offline baked image"],
-    runtime_html=get_banner_runtime_html(),
-    asset_base=BRAND_ASSET_BASE,
-)
-
-with gr.Blocks(title="OmniVoiceTTS") as ui:
-    gr.HTML(f"<style>{APP_CSS}</style>")
-    gr.HTML(BRAND_HEADER_HTML)
-    with gr.Row(elem_classes="app-grid"):
-        with gr.Column(scale=1, elem_classes="control-panel"):
-            with gr.Row():
-                mode = gr.Radio(
-                    mode_choices_for(UI_LOCALE),
-                    value="No Voice Prompt",
-                    label=ui_text("mode.label"),
-                    scale=2,
-                )
-                ui_locale = gr.Dropdown(
-                    ui_locale_choices(),
-                    value=normalize_ui_locale(UI_LOCALE),
-                    label=ui_text("ui_language.label"),
-                    scale=1,
-                )
-            text = gr.Textbox(
-                label=ui_text("input_text.label"),
-                lines=5,
-                value=ui_text("input_text.default"),
-            )
-            with gr.Accordion(ui_text("hints.title"), open=False):
-                hints_markdown = gr.Markdown(nonverbal_tags_markdown(), elem_classes="notice-card")
-            generate_btn = gr.Button(ui_text("generate.label"), variant="primary", elem_id="generate-btn")
-            with gr.Accordion(ui_text("voice_design.title"), open=False):
-                voice_design_note = gr.Markdown(ui_text("voice_design.note"))
-                language = gr.Dropdown(current_language_choices(), value="Auto", label=ui_text("language.label"))
-                with gr.Row():
-                    design_gender = gr.Dropdown(
-                        choices=current_design_choices("gender"),
-                        value="No preference",
-                        label=ui_text("design.gender"),
-                    )
-                    design_age = gr.Dropdown(
-                        choices=current_design_choices("age"),
-                        value="No preference",
-                        label=ui_text("design.age"),
-                    )
-                with gr.Row():
-                    design_pitch = gr.Dropdown(
-                        choices=current_design_choices("pitch"),
-                        value="No preference",
-                        label=ui_text("design.pitch"),
-                    )
-                    design_style = gr.Dropdown(
-                        choices=current_design_choices("style"),
-                        value="No preference",
-                        label=ui_text("design.style"),
-                    )
-                with gr.Row():
-                    design_english_accent = gr.Dropdown(
-                        choices=current_design_choices("english_accent"),
-                        value="No preference",
-                        label=ui_text("design.english_accent"),
-                    )
-                    design_chinese_dialect = gr.Dropdown(
-                        choices=current_design_choices("chinese_dialect"),
-                        value="No preference",
-                        label=ui_text("design.chinese_dialect"),
-                    )
-            ref_audio = gr.Audio(label=ui_text("reference_audio.label"), sources=["upload"], type="filepath")
-            ref_text = gr.Textbox(
-                label=ui_text("reference_text.label"),
-                lines=2,
-                placeholder=ui_text("reference_text.placeholder"),
-                info=ui_text("reference_text.info"),
-            )
-        with gr.Column(scale=1, elem_classes="output-panel"):
-            with gr.Tabs():
-                with gr.Tab("Generate") as generate_tab:
-                    output_audio = gr.Audio(label=ui_text("output_audio.label"), type="filepath", autoplay=True, streaming=False)
-                with gr.Tab("Stream") as stream_tab:
-                    output_stream = gr.Audio(label="Output Audio Stream", interactive=False, streaming=True, autoplay=True)
-                    with gr.Row():
-                        stream_btn = gr.Button("Stream", variant="primary")
-                        stop_generation_btn = gr.Button(ui_text("stop_generation.label"), variant="stop")
-                with gr.Tab("OpenAI") as openai_tab:
-                    gr.Markdown(
-                        "Use this server as an OpenAI-compatible local TTS endpoint. "
-                        "Create reusable voices in the Add Voice tab, then set OpenWebUI TTS Voice to the saved name."
-                    )
-                    openai_log_refresh = gr.Button("Refresh OpenAI Call Log")
-                    openai_call_log = gr.Markdown(render_openai_call_log())
-                with gr.Tab("Add Voice") as add_voice_tab:
-                    gr.Markdown(
-                        "Create local clone profiles for OpenAI-compatible tools. "
-                        "In OpenWebUI, set the TTS voice to the saved profile name. "
-                        "Additional parameters are only needed when you want to override profile defaults."
-                    )
-                    openai_profile_name = gr.Textbox(
-                        label="Voice profile name",
-                        placeholder="my-voice",
-                        info="Use letters, numbers, dash, or underscore. The saved name is normalized for API use.",
-                    )
-                    openai_profile_audio = gr.Audio(
-                        label="Reference audio sample",
-                        sources=["upload"],
-                        type="filepath",
-                    )
-                    openai_profile_text = gr.Textbox(
-                        label="Reference transcript",
-                        lines=2,
-                        placeholder="Optional transcript for the uploaded reference audio.",
-                    )
-                    openai_profile_language = gr.Dropdown(
-                        choices=LANGUAGE_CHOICES,
-                        value="english",
-                        label="Default language",
-                        info="Used when the OpenAI request does not send a language override.",
-                    )
-                    with gr.Row():
-                        openai_profile_seed = gr.Number(
-                            value=12345,
-                            minimum=0,
-                            maximum=MAX_RANDOM_SEED,
-                            precision=0,
-                            label="Default seed",
-                            info="Used for stable profile playback unless a request overrides it.",
-                        )
-                        openai_profile_randomize_seed = gr.Checkbox(
-                            value=False,
-                            label="Randomize seed by default",
-                            info="Leave off for repeatable profile behavior.",
-                    )
-                    openai_profile_save = gr.Button("Save OpenAI Voice Profile", variant="primary")
-                    openai_profile_status = gr.Textbox(label="OpenAI profile status", lines=2)
-                with gr.Tab("Manage") as manage_tab:
-                    openai_profile_table = gr.Markdown(render_openai_voice_profile_table())
-                    with gr.Row():
-                        openai_profile_delete_name = gr.Dropdown(
-                            choices=openai_voice_profile_choices(),
-                            value=None,
-                            label="Saved voice profile",
-                        )
-                        openai_profile_delete = gr.Button("Delete Voice Profile", variant="stop")
-                    openai_profile_delete_status = gr.Textbox(label="Voice profile status", lines=2)
-            with gr.Group(visible=True) as generation_side_controls:
-                status_box = gr.Textbox(label=ui_text("status.label"), lines=2)
-                with gr.Row():
-                    hardware = gr.Dropdown(current_hardware_choices(), value=default_hardware, label=ui_text("hardware.label"))
-                    output_format = gr.Dropdown(
-                        choices=[(config["label"], key) for key, config in OUTPUT_FORMATS.items()],
-                        value="mp3",
-                        label=ui_text("output_format.label"),
-                    )
-                gpu_monitor = gr.HTML(gpu_monitor_html())
-                with gr.Accordion(ui_text("generation_settings.title"), open=False):
-                    speed = gr.Slider(0.5, 1.5, value=1.0, step=0.05, label=ui_text("speed.label"), info=ui_text("speed.info"))
-                    duration = gr.Number(value=None, label=ui_text("duration.label"), info=ui_text("duration.info"))
-                    num_step = gr.Slider(4, 64, value=32, step=1, label=ui_text("num_step.label"), info=ui_text("num_step.info"))
-                    guidance_scale = gr.Slider(0.0, 4.0, value=2.0, step=0.1, label=ui_text("guidance_scale.label"), info=ui_text("guidance_scale.info"))
-                    denoise = gr.Checkbox(value=True, label=ui_text("denoise.label"), info=ui_text("denoise.info"))
-                    preprocess_prompt = gr.Checkbox(value=True, label=ui_text("preprocess_prompt.label"), info=ui_text("preprocess_prompt.info"))
-                    postprocess_output = gr.Checkbox(value=True, label=ui_text("postprocess_output.label"), info=ui_text("postprocess_output.info"))
-                    with gr.Row():
-                        pad_duration = gr.Number(value=0.1, label=ui_text("pad_duration.label"), info=ui_text("pad_duration.info"))
-                        fade_duration = gr.Number(value=0.1, label=ui_text("fade_duration.label"), info=ui_text("fade_duration.info"))
-                    with gr.Accordion(ui_text("advanced_controls.title"), open=False):
-                        t_shift = gr.Slider(0.01, 1.0, value=0.1, step=0.01, label=ui_text("t_shift.label"), info=ui_text("t_shift.info"))
-                        layer_penalty_factor = gr.Slider(0.0, 10.0, value=5.0, step=0.1, label=ui_text("layer_penalty.label"), info=ui_text("layer_penalty.info"))
-                        position_temperature = gr.Slider(
-                            0.0,
-                            10.0,
-                            value=5.0,
-                            step=0.1,
-                            label=ui_text("position_temperature.label"),
-                            info=ui_text("position_temperature.info"),
-                        )
-                        class_temperature = gr.Slider(0.0, 2.0, value=0.0, step=0.05, label=ui_text("class_temperature.label"), info=ui_text("class_temperature.info"))
-                        with gr.Row():
-                            seed = gr.Number(value=42, minimum=0, maximum=MAX_RANDOM_SEED, precision=0, label=ui_text("seed.label"), info=ui_text("seed.info"))
-                            randomize_seed = gr.Checkbox(value=True, label=ui_text("randomize_seed.label"), info=ui_text("randomize_seed.info"))
-                        audio_chunk_duration = gr.Number(value=15.0, label=ui_text("audio_chunk_duration.label"), info=ui_text("audio_chunk_duration.info"))
-                        audio_chunk_threshold = gr.Number(value=30.0, label=ui_text("audio_chunk_threshold.label"), info=ui_text("audio_chunk_threshold.info"))
-                with gr.Accordion(ui_text("audio_controls.title"), open=False):
-                    pitch_semitones = gr.Slider(-12, 12, value=0, step=0.5, label=ui_text("pitch.label"), info=ui_text("pitch.info"))
-                    tempo = gr.Slider(0.5, 2, value=1, step=0.05, label=ui_text("tempo.label"), info=ui_text("tempo.info"))
-                    volume = gr.Slider(0, 2, value=1, step=0.05, label=ui_text("volume.label"), info=ui_text("volume.info"))
-                    loudness_normalize = gr.Checkbox(value=False, label=ui_text("normalize_loudness.label"), info=ui_text("normalize_loudness.info"))
-
-    ui_locale.change(
-        fn=ui_locale_updates,
-        inputs=[ui_locale, mode, text],
-        outputs=[
-            mode,
-            ui_locale,
-            text,
-            hints_markdown,
-            generate_btn,
-            voice_design_note,
-            language,
-            design_gender,
-            design_age,
-            design_pitch,
-            design_style,
-            design_english_accent,
-            design_chinese_dialect,
-            ref_audio,
-            ref_text,
-            output_audio,
-            status_box,
-            hardware,
-            output_format,
-            speed,
-            duration,
-            num_step,
-            guidance_scale,
-            denoise,
-            preprocess_prompt,
-            postprocess_output,
-            pad_duration,
-            fade_duration,
-            t_shift,
-            layer_penalty_factor,
-            position_temperature,
-            class_temperature,
-            seed,
-            randomize_seed,
-            audio_chunk_duration,
-            audio_chunk_threshold,
-            pitch_semitones,
-            tempo,
-            volume,
-            loudness_normalize,
-        ],
-    )
-
-    gpu_timer = gr.Timer(value=1.0)
-    gpu_timer.tick(
-        fn=gpu_monitor_html,
-        outputs=gpu_monitor,
-        queue=False,
-    )
-
-    generate_tab.select(
-        fn=show_generation_side_controls,
-        outputs=generation_side_controls,
-        queue=False,
-    )
-    stream_tab.select(
-        fn=show_generation_side_controls,
-        outputs=generation_side_controls,
-        queue=False,
-    )
-    openai_tab.select(
-        fn=show_openai_tab_state,
-        outputs=[generation_side_controls, openai_call_log],
-        queue=False,
-    )
-    add_voice_tab.select(
-        fn=show_add_voice_tab_state,
-        outputs=generation_side_controls,
-        queue=False,
-    )
-    manage_tab.select(
-        fn=show_manage_tab_state,
-        outputs=[generation_side_controls, openai_profile_delete_name, openai_profile_table],
-        queue=False,
-    )
-
-    openai_profile_save.click(
-        fn=save_openai_voice_profile_from_ui,
-        inputs=[
-            openai_profile_name,
-            openai_profile_audio,
-            openai_profile_text,
-            openai_profile_language,
-            openai_profile_seed,
-            openai_profile_randomize_seed,
-        ],
-        outputs=[openai_profile_status, openai_profile_delete_name, openai_profile_table],
-    )
-    openai_profile_delete.click(
-        fn=delete_openai_voice_profile_from_ui,
-        inputs=openai_profile_delete_name,
-        outputs=[openai_profile_delete_status, openai_profile_delete_name, openai_profile_table],
-    )
-    openai_log_refresh.click(
-        fn=render_openai_call_log,
-        outputs=openai_call_log,
-        queue=False,
-    )
-
-    seed.input(
-        fn=lambda: False,
-        outputs=randomize_seed,
-        queue=False,
-    )
-
-    generate_event = generate_btn.click(
-        fn=synthesize_file,
-        inputs=[
-            text,
-            language,
-            ref_audio,
-            ref_text,
-            mode,
-            num_step,
-            guidance_scale,
-            speed,
-            duration,
-            hardware,
-            output_format,
-            denoise,
-            preprocess_prompt,
-            postprocess_output,
-            pad_duration,
-            fade_duration,
-            t_shift,
-            layer_penalty_factor,
-            position_temperature,
-            class_temperature,
-            seed,
-            randomize_seed,
-            audio_chunk_duration,
-            audio_chunk_threshold,
-            pitch_semitones,
-            tempo,
-            volume,
-            loudness_normalize,
-            design_gender,
-            design_age,
-            design_pitch,
-            design_style,
-            design_english_accent,
-            design_chinese_dialect,
-        ],
-        outputs=[output_audio, status_box, seed],
-    )
-
-    output_stream.pause(
-        fn=lambda: "Playback paused. Use Stop Generation to cancel ongoing synthesis.",
-        outputs=status_box,
-    )
-
-    output_stream.stop(
-        fn=lambda: "Playback stopped. Use Stop Generation to cancel ongoing synthesis.",
-        outputs=status_box,
-    )
-
-    stream_btn.click(fn=stop_active_ui_stream, outputs=[output_stream], queue=False)
-    stream_event = stream_btn.click(
-        fn=synthesize_file_streaming,
-        inputs=[
-            text,
-            language,
-            ref_audio,
-            ref_text,
-            mode,
-            num_step,
-            guidance_scale,
-            speed,
-            duration,
-            hardware,
-            output_format,
-            denoise,
-            preprocess_prompt,
-            postprocess_output,
-            pad_duration,
-            fade_duration,
-            t_shift,
-            layer_penalty_factor,
-            position_temperature,
-            class_temperature,
-            seed,
-            randomize_seed,
-            audio_chunk_duration,
-            audio_chunk_threshold,
-            pitch_semitones,
-            tempo,
-            volume,
-            loudness_normalize,
-            design_gender,
-            design_age,
-            design_pitch,
-            design_style,
-            design_english_accent,
-            design_chinese_dialect,
-        ],
-        outputs=[output_stream, status_box, seed],
-        trigger_mode="always_last",
-    )
-
-    stop_generation_btn.click(
-        fn=stop_active_ui_stream,
-        outputs=[output_stream],
-        cancels=[stream_event],
-        queue=False,
-    )
 
 api = FastAPI(
     title="OmniVoiceTTS API",
@@ -2100,15 +1140,8 @@ async def log_requests(request, call_next):
         request.url.path,
         response.status_code,
     )
-    if request.url.path.startswith("/gradio_api/run/"):
-        ACCESS_LOGGER.debug(message)
-    else:
-        ACCESS_LOGGER.info(message)
+    ACCESS_LOGGER.info(message)
     return response
-
-
-if ASSET_DIR.exists():
-    api.mount(BRAND_ASSET_BASE, StaticFiles(directory=ASSET_DIR), name="hangrylabs-assets")
 
 
 class TTSRequest(BaseModel):
@@ -2131,7 +1164,7 @@ class TTSRequest(BaseModel):
         None,
         description=(
             "Reference audio path for voice cloning. The path must be an audio file under a configured safe root "
-            "such as /data, /app/persistent/voices/openai, /app/omnivoice/assets, or /tmp/gradio."
+            "such as /data, /app/persistent/voices/openai, /app/omnivoice/assets, or the browser UI upload directory."
         ),
     )
     ref_text: Optional[str] = Field(None, description="Transcript for ref_audio. If omitted, ASR may load on demand.")
@@ -2189,6 +1222,39 @@ class CacheClearRequest(BaseModel):
     )
 
 
+class UIGenerationDefaults(BaseModel):
+    voice_mode: Literal["random", "design", "clone", "profile"] = "random"
+    language: str = ""
+    voice_profile: str = ""
+    device: str = DEFAULT_DEVICE
+    output_format: Literal["wav", "mp3", "flac", "ogg"] = "mp3"
+    speed: float = Field(1.0, ge=0.5, le=1.5)
+    pitch_semitones: float = Field(0.0, ge=-12.0, le=12.0)
+    tempo: float = Field(1.0, ge=0.5, le=2.0)
+    volume: float = Field(1.0, ge=0.0, le=2.0)
+    normalize: bool = False
+    num_step: int = Field(32, ge=4, le=64)
+    guidance_scale: float = Field(2.0, ge=0.0, le=4.0)
+    pad_duration: float = Field(0.1, ge=0.0, le=5.0)
+    fade_duration: float = Field(0.1, ge=0.0, le=5.0)
+    seed: int = Field(42, ge=0, le=MAX_RANDOM_SEED)
+    randomize_seed: bool = True
+    denoise: bool = True
+    preprocess_prompt: bool = True
+    postprocess_output: bool = True
+    audio_chunk_duration: float = Field(15.0, ge=0.0, le=120.0)
+    audio_chunk_threshold: float = Field(30.0, ge=0.0, le=300.0)
+
+
+class VoiceProfileCreateRequest(BaseModel):
+    name: str = Field(..., min_length=1, max_length=48)
+    upload_token: str = Field(..., min_length=1, max_length=64)
+    ref_text: str = ""
+    language: str = ""
+    seed: Optional[int] = Field(12345, ge=0, le=MAX_RANDOM_SEED)
+    randomize_seed: bool = False
+
+
 class OpenAISpeechRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
@@ -2220,6 +1286,44 @@ class OpenAISpeechRequest(BaseModel):
     )
     ref_text: Optional[str] = Field(None, description="Optional OmniVoice extension: transcript for ref_audio.")
     voice_profile: Optional[str] = Field(None, description="Optional OmniVoice extension: saved OpenAI voice profile name.")
+
+
+def get_ui_generation_defaults() -> UIGenerationDefaults:
+    stored = RUNTIME_SETTINGS.get("ui_generation_defaults", {})
+    try:
+        return UIGenerationDefaults.model_validate(stored)
+    except (TypeError, ValueError):
+        return UIGenerationDefaults()
+
+
+def voice_profile_payloads() -> list[dict[str, Any]]:
+    return [
+        {
+            "id": name,
+            "language": profile.get("language") or "",
+            "seed": profile.get("seed") or None,
+            "randomize_seed": bool(profile.get("randomize_seed", False)),
+            "has_transcript": bool((profile.get("ref_text") or "").strip()),
+        }
+        for name, profile in sorted(load_openai_voice_profiles().items())
+    ]
+
+
+def resolve_ui_upload(upload_token: str) -> Path:
+    with UI_UPLOADS_LOCK:
+        upload_path = UI_UPLOADS.get(upload_token)
+    if upload_path is None or not upload_path.is_file():
+        raise ValueError("The temporary reference-audio upload no longer exists.")
+    return upload_path
+
+
+def discard_ui_upload(upload_token: str) -> bool:
+    with UI_UPLOADS_LOCK:
+        upload_path = UI_UPLOADS.pop(upload_token, None)
+    if upload_path is None:
+        return False
+    upload_path.unlink(missing_ok=True)
+    return True
 
 
 def normalize_openai_model(model: str | None) -> str:
@@ -2661,6 +1765,103 @@ def openai_audio_speech(payload: OpenAISpeechRequest = Body(...)) -> StreamingRe
     return stream_audio_response(tts_payload, "/v1/audio/speech")
 
 
+@api.post("/ui/reference-audio", include_in_schema=False)
+async def upload_ui_reference_audio(audio: UploadFile = File(...)) -> dict[str, str]:
+    suffix = Path(audio.filename or "").suffix.lower()
+    if suffix not in AUDIO_EXTENSIONS:
+        supported = ", ".join(sorted(AUDIO_EXTENSIONS))
+        raise HTTPException(status_code=400, detail=f"Reference audio must use one of: {supported}.")
+    token = uuid4().hex
+    UI_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    upload_path = UI_UPLOAD_DIR / f"upload-{token}{suffix}"
+    total = 0
+    try:
+        with upload_path.open("xb") as output:
+            while chunk := await audio.read(1024 * 1024):
+                total += len(chunk)
+                if total > UI_UPLOAD_LIMIT_BYTES:
+                    raise HTTPException(
+                        status_code=413,
+                        detail=f"Reference audio exceeds the {UI_UPLOAD_LIMIT_BYTES // (1024 * 1024)} MiB upload limit.",
+                    )
+                output.write(chunk)
+    except Exception:
+        upload_path.unlink(missing_ok=True)
+        raise
+    finally:
+        await audio.close()
+    if total == 0:
+        upload_path.unlink(missing_ok=True)
+        raise HTTPException(status_code=400, detail="Reference audio is empty.")
+    with UI_UPLOADS_LOCK:
+        UI_UPLOADS[token] = upload_path
+    return {"token": token, "path": str(upload_path), "name": Path(audio.filename or upload_path.name).name}
+
+
+@api.delete("/ui/reference-audio/{upload_token}", include_in_schema=False)
+def delete_ui_reference_audio(upload_token: str) -> dict[str, bool]:
+    return {"deleted": discard_ui_upload(upload_token)}
+
+
+@api.get("/tts/voice-profiles", tags=["Voices"])
+def voice_profiles() -> dict[str, Any]:
+    profiles = voice_profile_payloads()
+    return {"object": "list", "data": profiles, "count": len(profiles)}
+
+
+@api.post("/tts/voice-profiles", tags=["Voices"])
+def create_voice_profile(payload: VoiceProfileCreateRequest) -> dict[str, Any]:
+    try:
+        upload_path = resolve_ui_upload(payload.upload_token)
+        profile_name = save_openai_voice_profile(
+            payload.name,
+            str(upload_path),
+            payload.ref_text,
+            payload.language,
+            payload.seed,
+            payload.randomize_seed,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    finally:
+        discard_ui_upload(payload.upload_token)
+    clear_voice_clone_prompt_cache()
+    profile = next(item for item in voice_profile_payloads() if item["id"] == profile_name)
+    return profile
+
+
+@api.delete("/tts/voice-profiles/{profile_name}", tags=["Voices"])
+def delete_voice_profile(profile_name: str) -> dict[str, str]:
+    try:
+        deleted = _delete_openai_voice_profile(
+            OPENAI_VOICE_PROFILE_DIR,
+            OPENAI_VOICE_PROFILE_INDEX,
+            profile_name,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    clear_voice_clone_prompt_cache()
+    return {"deleted": deleted}
+
+
+@api.get("/tts/openai-calls", tags=["OpenAI compatibility"])
+def openai_calls() -> dict[str, Any]:
+    calls = openai_call_log_payload()
+    return {"object": "list", "data": calls, "count": len(calls)}
+
+
+@api.get("/system/settings", tags=["System"])
+def system_settings() -> dict[str, Any]:
+    return {"generation_defaults": get_ui_generation_defaults().model_dump()}
+
+
+@api.put("/system/settings/generation-defaults", tags=["System"])
+def save_generation_defaults(payload: UIGenerationDefaults) -> dict[str, Any]:
+    defaults = payload.model_dump()
+    RUNTIME_SETTINGS.set("ui_generation_defaults", defaults)
+    return {"generation_defaults": defaults}
+
+
 @api.get("/tts/status")
 def status() -> dict:
     return get_status_payload()
@@ -2687,10 +1888,18 @@ def formats() -> dict:
 
 @api.get("/tts/languages")
 def languages() -> dict:
+    language_options = sorted(
+        (
+            {"id": language_id, "name": lang_display_name(name)}
+            for name, language_id in LANG_NAME_TO_ID.items()
+        ),
+        key=lambda language: language["name"].casefold(),
+    )
     return {
         "count": len(LANG_IDS),
         "language_ids": sorted(LANG_IDS),
         "language_names": sorted(lang_display_name(name) for name in LANG_NAMES),
+        "languages": language_options,
     }
 
 
@@ -2840,7 +2049,7 @@ def purge_models(payload: PurgeRequest | None = Body(None)) -> dict:
     }
 
 
-app = gr.mount_gradio_app(api, ui, path="/")
+app = attach_ui(api_app=api)
 
 
 def main() -> None:

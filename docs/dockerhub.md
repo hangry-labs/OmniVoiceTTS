@@ -22,10 +22,10 @@ Maintainers can reuse the same example workload as a local performance benchmark
 
 ## Browser UI
 
-The image includes a local browser UI for no-prompt generation, voice design, voice cloning, progressive streaming tests, reproducible seeds, output-format control, live GPU visibility, and a multilingual interface with 60 UI languages.
+The image includes a responsive standalone browser UI for no-prompt generation, voice design, voice cloning, progressive streaming, reusable voice profiles, reproducible seeds, output-format control, API diagnostics, persistent deployment defaults, CUDA memory controls, demand-driven GPU visibility, and a multilingual interface with 60 UI languages. Generated, streamed, and reference audio share a local waveform workspace with playback, seeking, speed, volume, trim, download, share, and removal controls. The interface is served by the same local FastAPI process and uses bundled assets without a CDN.
 
 <p>
-  <img src="https://github.com/Hangry-Labs/OmniVoiceTTS/raw/master/docs/ui.jpg" alt="OmniVoiceTTS browser UI">
+  <img src="https://github.com/Hangry-Labs/OmniVoiceTTS/raw/master/docs/ui.png" alt="OmniVoiceTTS browser UI">
 </p>
 
 ## Responsible Use
@@ -82,9 +82,10 @@ docker run --name omnivoicetts-tiny --restart unless-stopped -p 7861:7861 --gpus
 
 ## What You Get
 
-- Browser UI for no-prompt auto voice, voice design, and voice cloning
+- Browser UI with Generate, Stream, Voices, API, and System workspaces
+- No-prompt auto voice, voice design, direct cloning, and reusable saved voice profiles
 - Multilingual UI language selector with English fallback for missing labels
-- Dedicated Generate and Stream playback tabs for normal output and progressive long-text playback
+- Dedicated Generate and Stream workspaces with waveform playback, seeking, speed, volume, trimming, download, sharing, and removal controls
 - Seed and random-seed controls for repeatable generation
 - Live GPU monitor for visible NVIDIA GPU utilization, VRAM, temperature, and power draw
 - HTTP API for applications and automation
@@ -93,7 +94,7 @@ docker run --name omnivoicetts-tiny --restart unless-stopped -p 7861:7861 --gpus
 - GPU support when Docker/NVIDIA support is available
 - Offline-friendly usage with the standard full image once it is available locally
 - OpenAI-compatible `/v1/audio/speech`, `/v1/models`, and `/v1/models/{model}` routes for tools that can target local OpenAI-style TTS servers
-- Local voice profiles: upload a reference sample in the UI Add Voice tab, manage it in the Manage tab, then use that name as the TTS voice in compatible clients
+- Local voice profiles: upload or drop, preview, trim, name, search, select, and safely delete reference voices in the UI Voices tab, then use the saved name as the TTS voice in compatible clients
 - Stored voice profiles reuse cached clone prompts after the first request
 - Optional `OMNIVOICE_RESAMPLE_BACKEND=librosa` fallback if a platform has `torchaudio` issues
 - Kokoro-shaped compatibility fields and routes such as `voice`, `use_gpu`, `response_format`, `/tts/voices`, `/tts/speakers`, `/tts/stream-formats`, `/tts/convert`, progressive `/tts/stream`, and progressive `/tts/stream-chunks`
@@ -267,6 +268,13 @@ The snapshot channel is the current Docker `latest` build after the latest tagge
 
 Current snapshot changes after `v0.3.0`:
 
+- Replaces the Gradio application shell with a purpose-built, responsive standalone UI based on the Hangry Labs v1.0 interface architecture.
+- Adds focused Generate, Stream, Voices, API, and System workspaces with a shared settings rail, compact/expanded branded header, bundled assets, and responsive desktop/mobile layouts.
+- Adds a shared local waveform workspace for generated, streamed, and reference audio with playback, seeking, volume, speed, trim, download, share, and removal controls.
+- Adds a polished persisted-voice workflow with drag-and-drop reference audio, waveform verification and trimming, normalized-name and replacement feedback, transcript/ASR guidance, profile search and metadata, one-click selection, and guarded deletion.
+- Adds browser workflows for API/runtime inspection, saved generation defaults, CUDA cache cleanup, model purge, and demand-driven GPU history charts.
+- Adds bounded temporary reference-audio uploads for the browser UI and native profile-management, OpenAI call-log, settings, and GPU telemetry endpoints.
+- Adds browser-level validation for desktop/mobile layouts plus real generated and progressively streamed MP3 playback.
 - Adds edge audio controls: `pad_duration` for configurable silence before and after generated audio, and `fade_duration` for fading clip edges to reduce clicks.
 - Exposes the new controls in the browser UI under Generation Settings.
 - Exposes the same controls through the native API, OpenAI-compatible `/v1/audio/speech` extension fields, CLI commands, and the Python client.

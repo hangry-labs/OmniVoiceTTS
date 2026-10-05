@@ -82,3 +82,7 @@ include = ["omnivoice"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["omnivoice"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"assets" = "omnivoice/standalone_ui/assets"
+"VERSION" = "omnivoice/standalone_ui/VERSION"

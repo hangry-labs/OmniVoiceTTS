@@ -20,7 +20,6 @@ def load_profiles_module():
     service_package.__path__ = []
     web_package = types.ModuleType("omnivoice.web")
     web_package.__path__ = []
-    gradio_stub = types.ModuleType("gradio")
 
     paths_spec = importlib.util.spec_from_file_location(
         "omnivoice.service.paths",
@@ -34,7 +33,6 @@ def load_profiles_module():
         "omnivoice.service": service_package,
         "omnivoice.service.paths": paths_module,
         "omnivoice.web": web_package,
-        "gradio": gradio_stub,
     }
     with patch.dict(sys.modules, modules):
         paths_spec.loader.exec_module(paths_module)
@@ -80,6 +78,53 @@ class VoiceProfileMigrationTests(unittest.TestCase):
             persisted = json.loads(profile_index.read_text(encoding="utf-8"))
             self.assertEqual(persisted["example"]["ref_audio"], expected)
             self.assertFalse(any(profile_dir.glob(".profiles.json.*.tmp")))
+
+    def test_replacing_profile_removes_only_previous_copied_audio(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            profile_dir = Path(directory) / "profiles"
+            source_dir = Path(directory) / "uploads"
+            source_dir.mkdir()
+            first_source = source_dir / "first.wav"
+            second_source = source_dir / "second.wav"
+            first_source.write_bytes(b"RIFF-first")
+            second_source.write_bytes(b"RIFF-second")
+            profile_index = profile_dir / "profiles.json"
+
+            PROFILES_MODULE.save_openai_voice_profile(
+                profile_dir,
+                profile_index,
+                2**32 - 1,
+                "Example Voice",
+                str(first_source),
+                [source_dir],
+                "First transcript.",
+                "English",
+                12345,
+                False,
+            )
+            first_copy = Path(PROFILES_MODULE.load_openai_voice_profiles(profile_index)["example-voice"]["ref_audio"])
+
+            PROFILES_MODULE.save_openai_voice_profile(
+                profile_dir,
+                profile_index,
+                2**32 - 1,
+                "Example Voice",
+                str(second_source),
+                [source_dir],
+                "Second transcript.",
+                "English",
+                54321,
+                False,
+            )
+            replaced = PROFILES_MODULE.load_openai_voice_profiles(profile_index)["example-voice"]
+            second_copy = Path(replaced["ref_audio"])
+
+            self.assertFalse(first_copy.exists())
+            self.assertTrue(second_copy.exists())
+            self.assertEqual(second_copy.read_bytes(), b"RIFF-second")
+            self.assertEqual(replaced["ref_text"], "Second transcript.")
+            self.assertTrue(first_source.exists())
+            self.assertTrue(second_source.exists())
 
 
 if __name__ == "__main__":

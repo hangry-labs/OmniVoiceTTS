@@ -80,9 +80,9 @@ Snapshot or development version tags are intentionally not published. Release ta
 
 ## Browser UI
 
-The included browser UI is built for local generation, voice design, voice cloning, progressive streaming tests, seed-based reproducibility, output-format control, and live GPU visibility.
+The included standalone browser UI is built for local generation, voice design, voice cloning, progressive streaming, reusable voice profiles, seed-based reproducibility, output-format control, API diagnostics, persistent deployment defaults, CUDA memory controls, and demand-driven GPU visibility. Generated, streamed, and reference audio use the same local waveform workspace with playback, seeking, speed, volume, trim, download, share, and removal controls. It is served directly by the local FastAPI application and does not require a CDN or a separate frontend service.
 
-![OmniVoiceTTS browser UI](docs/ui.jpg)
+![OmniVoiceTTS browser UI](docs/ui.png)
 
 ## API Usage Example
 
@@ -145,7 +145,7 @@ Model discovery through `/v1/models` reports the local `omnivoice` model. For cl
 
 For OpenAI-compatible TTS, standard voice aliases use a local built-in clone reference by default so sentence-by-sentence playback stays closer to the same speaker identity. Advanced clients may also pass OmniVoice extensions such as `language`, `seed`, `randomize_seed`, `voice_profile`, `ref_audio`, and `ref_text` in the request body.
 
-The browser UI includes a **Voices** tab where you can upload a reference sample and save it as a named local voice profile. The profile stores its default language, seed, and seed-randomization behavior. In OpenWebUI, set the TTS voice to the saved profile name, for example `my-voice`.
+The browser UI includes a **Voices** tab where you can upload or drop a reference sample, inspect or trim its waveform, and save it as a named local voice profile. The workflow previews the normalized profile id, warns before an existing id is replaced, identifies profiles that need on-demand ASR, and provides search, use, and guarded delete actions. The profile stores its default language, seed, seed-randomization behavior, copied reference audio, and optional transcript. In OpenWebUI, set the TTS voice to the saved profile name, for example `my-voice`.
 
 OpenAI-compatible clients can also select or override that profile through additional request parameters:
 
@@ -177,7 +177,11 @@ Useful endpoints:
 - `GET /tts/languages`
 - `GET /tts/speakers?language=a`
 - `GET /tts/voices`
+- `GET /tts/voice-profiles`
+- `POST /tts/voice-profiles`
+- `DELETE /tts/voice-profiles/{name}`
 - `GET /tts/voice-design/options`
+- `GET /tts/openai-calls`
 - `POST /tts/generate`
 - `POST /tts/convert`
 - `POST /tts/stream`
@@ -185,6 +189,9 @@ Useful endpoints:
 - `POST /tts/cache/clear`
 - `POST /tts/metrics`
 - `POST /tts/purge`
+- `GET /system/settings`
+- `PUT /system/settings/generation-defaults`
+- `GET /system/gpu`
 
 `/tts/generate` and `/tts/convert` return complete generated audio. `/tts/stream` and `/tts/stream-chunks` progressively return encoded audio after each generated long-text chunk and support the same `voice`/`voice_profile` profile resolution; WAV stream requests are returned as MP3 for live playback compatibility.
 
@@ -450,6 +457,13 @@ The snapshot channel is the current Docker `latest` build after the latest tagge
 
 Current snapshot changes after `v0.3.0`:
 
+- Replaced the Gradio application shell with a purpose-built, responsive standalone UI based on the Hangry Labs v1.0 interface architecture.
+- Added focused Generate, Stream, Voices, API, and System workspaces with a shared settings rail, compact/expanded branded header, local assets, and responsive desktop/mobile layouts.
+- Added a shared local waveform workspace for generated, streamed, and reference audio with playback, seeking, volume, speed, trim, download, share, and removal controls.
+- Added a polished persisted-voice workflow with drag-and-drop reference audio, waveform verification and trimming, normalized-name and replacement feedback, transcript/ASR guidance, profile search and metadata, one-click selection, and guarded deletion.
+- Added browser workflows for API/runtime inspection, saved generation defaults, CUDA cache cleanup, model purge, and demand-driven GPU history charts.
+- Added bounded temporary reference-audio uploads for the browser UI and native profile-management, OpenAI call-log, settings, and GPU telemetry endpoints.
+- Added browser-level validation for desktop/mobile layouts plus real generated and progressively streamed MP3 playback.
 - Added edge audio controls for generated clips: `pad_duration` adds configurable silence before and after output audio, and `fade_duration` fades the clip edges to reduce clicks.
 - Exposed the new edge controls in the browser UI under Generation Settings.
 - Exposed the same controls through the native API, OpenAI-compatible `/v1/audio/speech` extension fields, CLI commands, and the Python client.

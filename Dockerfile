@@ -17,6 +17,7 @@ RUN apt-get update \
 COPY pyproject.toml README.md LICENSE VERSION requirements.txt /app/
 COPY omnivoice /app/omnivoice
 COPY hangrylabs /app/hangrylabs
+COPY assets /app/assets
 
 RUN if [ -n "$HF_ENDPOINT" ]; then export HF_ENDPOINT; else unset HF_ENDPOINT; fi \
     && python -m pip install --upgrade pip setuptools wheel \
@@ -42,6 +43,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     HF_HOME=/app/persistent/models/huggingface \
     OMNIVOICE_SETTINGS_PATH=/app/persistent/app/settings.json \
     OMNIVOICE_OPENAI_VOICE_PROFILE_DIR=/app/persistent/voices/openai \
+    OMNIVOICE_UI_UPLOAD_DIR=/tmp/omnivoicetts-ui \
+    OMNIVOICE_UI_UPLOAD_LIMIT_MIB=64 \
     HF_HUB_OFFLINE=1 \
     TRANSFORMERS_OFFLINE=1 \
     OMNIVOICE_DEVICE=auto \
@@ -59,7 +62,7 @@ WORKDIR /app
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ffmpeg \
-    && mkdir -p /app/persistent/models/huggingface /app/persistent/app /app/persistent/voices/openai \
+    && mkdir -p /app/persistent/models/huggingface /app/persistent/app /app/persistent/voices/openai /tmp/omnivoicetts-ui \
     && rm -rf /var/lib/apt/lists/*
 
 EXPOSE 7861
