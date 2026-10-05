@@ -26,6 +26,14 @@ Official images are published to [Docker Hub](https://hub.docker.com/r/hangrylab
 
 Hangry Labs home: [hangrylabs.app](https://hangrylabs.app/).
 
+The complete browser interface is included in the image and is available immediately after startup:
+
+<p align="center">
+  <a href="https://hangry-labs.github.io/OmniVoiceTTS/examples/">
+    <img src="assets/ui.webp" alt="OmniVoiceTTS browser interface with generation, voice, API, system, and GPU controls">
+  </a>
+</p>
+
 ## Quick Start
 
 Run with NVIDIA GPU support:
@@ -83,12 +91,6 @@ Snapshot or development version tags are intentionally not published. Release ta
 The included standalone browser UI provides focused Generate, Stream, Voices, API, and System workspaces. Generate and Stream keep the primary text, voice, language, and output controls together; Voices manages reusable cloned profiles; API exposes local integration details and recent calls; and System places runtime and memory controls beside the wider GPU overview. Generated, streamed, and reference audio use the same local waveform workspace with playback, seeking, speed, volume, trim, download, share, and removal controls.
 
 The responsive interface includes 60 display languages, uses bundled WebP assets, and is served directly by the local FastAPI application without a CDN or separate frontend service.
-
-<p align="center">
-  <a href="https://hangry-labs.github.io/OmniVoiceTTS/examples/">
-    <img src="assets/ui.webp" alt="OmniVoiceTTS browser interface with generation, voice, API, system, and GPU controls">
-  </a>
-</p>
 
 ## API Usage Example
 

@@ -29,6 +29,8 @@ examples/exp*
 .claude/
 .ai/
 /.AGENTS.md
+/UPSTREAM_ISSUES.md
+/UPSTREAM_PULL_REQUESTS.md
 *.wav
 *.jsonl
 
