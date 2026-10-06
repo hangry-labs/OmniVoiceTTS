@@ -38,7 +38,7 @@
   "composer.characters": "{count} characters",
   "composer.spokenPreview": "Spoken preview",
   "composer.normalizationChanges": "{count} changes",
-  "composer.normalizationUnsupported": "Structured-text normalization currently supports English plain text.",
+  "composer.normalizationUnsupported": "Structured-text normalization currently supports English and Malayalam plain text.",
   "composer.newSample": "New sample",
   "composer.expressionGuide": "Expression guide",
   "design.title": "Voice design",

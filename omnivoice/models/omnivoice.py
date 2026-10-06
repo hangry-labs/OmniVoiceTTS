@@ -640,9 +640,8 @@ class OmniVoice(PreTrainedModel):
             speed: Speaking speed factor. ``> 1.0`` for faster, ``< 1.0`` for
                 slower. If a list, one value per item. ``None`` (default) uses
                 the model's default estimation.
-            normalize_text: Convert supported English structured tokens such as
-                numbers, email addresses, URLs, ISO dates, and identifiers to
-                an inspectable spoken form. The default is ``False``.
+            normalize_text: Convert supported English or Malayalam structured
+                tokens to an inspectable spoken form. The default is ``False``.
             generation_config: Explicit config object. If provided, takes
                 precedence over ``**kwargs``.
             **kwargs: Generation config or its fields:

@@ -124,8 +124,8 @@ class TTSRequest(BaseModel):
     normalize_text: bool = Field(
         False,
         description=(
-            "Convert supported English structured text such as numbers, email addresses, URLs, ISO dates, "
-            "phone numbers, and identifiers to a spoken form before synthesis. Plain-text input only."
+            "Convert supported English or Malayalam structured text to a spoken form before synthesis. "
+            "Plain-text input only; use /tts/text/normalize to preview the exact result."
         ),
     )
     audio_chunk_duration: float = Field(15.0, ge=0.0, le=120.0, description="Target chunk duration for long text.")
@@ -172,7 +172,7 @@ class TextNormalizationRequest(BaseModel):
     text: str = Field(..., min_length=1, max_length=MAX_NORMALIZATION_CHARACTERS)
     language: str | None = Field(
         None,
-        description="Language name or id. Structured normalization currently supports English.",
+        description="Language name or id. Structured normalization supports English and Malayalam.",
     )
 
     @field_validator("text")
@@ -241,7 +241,10 @@ class OpenAISpeechRequest(BaseModel):
     randomize_seed: bool = Field(False, description="Optional OmniVoice extension: generate a random seed.")
     normalize_text: bool = Field(
         False,
-        description="Optional OmniVoice extension: normalize supported English structured text before synthesis.",
+        description=(
+            "Optional OmniVoice extension: normalize supported English or Malayalam structured text "
+            "before synthesis."
+        ),
     )
     device: str = Field(DEFAULT_DEVICE, description="Optional OmniVoice extension: auto, cpu, mps, or cuda:N.")
     num_step: int = Field(32, ge=4, le=64, description="Optional OmniVoice extension: diffusion decoding steps.")

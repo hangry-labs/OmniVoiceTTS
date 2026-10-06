@@ -12,10 +12,11 @@ from urllib.parse import urlsplit
 from num2words import num2words
 
 from omnivoice.utils.lang_map import LANG_NAME_TO_ID
+from omnivoice.utils.malayalam_normalization import collect_malayalam_candidates
 
 
 MAX_NORMALIZATION_CHARACTERS = 20_000
-SUPPORTED_NORMALIZATION_LANGUAGES = ("en",)
+SUPPORTED_NORMALIZATION_LANGUAGES = ("en", "ml")
 
 _BRACKET_CONTROL_RE = re.compile(r"\[[^\[\]]*\]")
 _AMBIGUOUS_SLASH_DATE_RE = re.compile(r"(?<!\w)\d{1,2}/\d{1,2}/\d{2,4}(?!\w)")
@@ -221,6 +222,8 @@ def _resolve_language(language: str | None, text: str) -> str | None:
         value = language.strip().lower().replace("_", "-")
         code = LANG_NAME_TO_ID.get(value, value).split("-", 1)[0]
         return code
+    if any("\u0d00" <= character <= "\u0d7f" for character in text):
+        return "ml"
     has_non_ascii_letters = any(character.isalpha() and not character.isascii() for character in text)
     if re.search(r"[A-Za-z]", text) and not has_non_ascii_letters:
         return "en"
@@ -247,7 +250,7 @@ def normalize_structured_text(text: str, language: str | None = None) -> TextNor
             supported=False,
             changes=(),
             warnings=(
-                "Structured-text normalization currently supports explicit English input or ASCII English auto-detection.",
+                "Structured-text normalization currently supports English and Malayalam plain text.",
             ),
         )
 
@@ -285,38 +288,49 @@ def normalize_structured_text(text: str, language: str | None = None) -> TextNor
             candidates.append(_Candidate(kind, match.start(), match.end(), spoken))
             occupied.append(match.span())
 
-    collect(_EMAIL_RE, "email", _verbalize_email)
+    if resolved_language == "ml":
+        malayalam = collect_malayalam_candidates(text, occupied)
+        candidates.extend(
+            _Candidate(item.kind, item.start, item.end, item.spoken)
+            for item in malayalam.candidates
+        )
+        warnings.extend(malayalam.warnings)
+    else:
+        collect(_EMAIL_RE, "email", _verbalize_email)
 
-    for match in _URL_RE.finditer(text):
-        if _overlaps(match.start(), match.end(), occupied):
-            continue
-        length, spoken = _verbalize_url(match)
-        if length and spoken:
-            candidates.append(_Candidate("url", match.start(), match.start() + length, spoken))
-            occupied.append((match.start(), match.start() + length))
+        for match in _URL_RE.finditer(text):
+            if _overlaps(match.start(), match.end(), occupied):
+                continue
+            length, spoken = _verbalize_url(match)
+            if length and spoken:
+                candidates.append(_Candidate("url", match.start(), match.start() + length, spoken))
+                occupied.append((match.start(), match.start() + length))
 
-    collect(_ISO_DATE_RE, "date", _verbalize_iso_date)
-    collect(
-        _PHONE_RE,
-        "phone",
-        lambda match: ("plus " if match.group().lstrip().startswith("+") else "")
-        + _digit_words(match.group()),
-        lambda match: sum(character.isdigit() for character in match.group()) >= 7,
-    )
-    collect(_CURRENCY_RE, "currency", _verbalize_currency)
-    collect(_PERCENT_RE, "percentage", lambda match: f"{_verbalize_number(match.group(1))} percent")
-    collect(_DECIMAL_RE, "decimal", lambda match: _verbalize_number(match.group(1)))
-    collect(
-        _ALPHANUMERIC_RE,
-        "identifier",
-        lambda match: _verbalize_symbolic(match.group(), spell_letters=True),
-        lambda match: (
-            any(character.isdigit() for character in match.group())
-            and any(character.isalpha() for character in match.group())
-            and (re.search(r"[-_]", match.group()) is not None or match.group().upper() == match.group())
-        ),
-    )
-    collect(_INTEGER_RE, "integer", lambda match: _verbalize_number(match.group()))
+        collect(_ISO_DATE_RE, "date", _verbalize_iso_date)
+        collect(
+            _PHONE_RE,
+            "phone",
+            lambda match: ("plus " if match.group().lstrip().startswith("+") else "")
+            + _digit_words(match.group()),
+            lambda match: sum(character.isdigit() for character in match.group()) >= 7,
+        )
+        collect(_CURRENCY_RE, "currency", _verbalize_currency)
+        collect(_PERCENT_RE, "percentage", lambda match: f"{_verbalize_number(match.group(1))} percent")
+        collect(_DECIMAL_RE, "decimal", lambda match: _verbalize_number(match.group(1)))
+        collect(
+            _ALPHANUMERIC_RE,
+            "identifier",
+            lambda match: _verbalize_symbolic(match.group(), spell_letters=True),
+            lambda match: (
+                any(character.isdigit() for character in match.group())
+                and any(character.isalpha() for character in match.group())
+                and (
+                    re.search(r"[-_]", match.group()) is not None
+                    or match.group().upper() == match.group()
+                )
+            ),
+        )
+        collect(_INTEGER_RE, "integer", lambda match: _verbalize_number(match.group()))
 
     normalized = text
     changes: list[TextNormalizationChange] = []

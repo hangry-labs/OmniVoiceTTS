@@ -41,14 +41,23 @@ class SSMLApiTests(unittest.TestCase):
                     "/tts/text/normalize",
                     json={"text": "Email ops@example.com about invoice 42.", "language": "English"},
                 )
+                malayalam_preview = client.post(
+                    "/tts/text/normalize",
+                    json={"text": "എനിക്ക് ₹250 ഉണ്ട്.", "language": "Malayalam"},
+                )
                 metrics = client.post(
                     "/tts/metrics",
                     json={"text": "Invoice 42.", "language": "English", "normalize_text": True},
                 )
 
         self.assertEqual(preview.status_code, 200)
-        self.assertEqual(preview.json()["supported_languages"], ["en"])
+        self.assertEqual(preview.json()["supported_languages"], ["en", "ml"])
         self.assertIn("ops at example dot com", preview.json()["normalized"])
+        self.assertEqual(malayalam_preview.status_code, 200)
+        self.assertEqual(
+            malayalam_preview.json()["normalized"],
+            "എനിക്ക് ഇരുനൂറ്റി അമ്പത് രൂപ ഉണ്ട്.",
+        )
         self.assertEqual(metrics.status_code, 200)
         self.assertEqual(metrics.json()["text_normalization"]["normalized"], "Invoice forty two.")
         get_model.assert_not_called()
