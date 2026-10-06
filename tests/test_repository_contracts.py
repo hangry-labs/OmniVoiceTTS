@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 import tomllib
 import unittest
+from html import unescape
 from pathlib import Path
 
 
@@ -91,6 +92,55 @@ class RepositoryContractTests(unittest.TestCase):
         self.assertNotIn("tailwindcss.com", page)
         self.assertNotIn("../hangrylabs/", page)
         self.assertTrue((ROOT / "examples" / "styles.css").is_file())
+
+    def test_ssml_h_showcase_has_reproducible_audio_examples(self) -> None:
+        page = (ROOT / "examples" / "ssml-h.html").read_text(encoding="utf-8")
+        self.assertIn("SSML-H Conversation Examples", page)
+        self.assertIn("The shopping negotiation", page)
+        self.assertNotIn("Loading source...", page)
+        self.assertNotIn("data-ssml-source", page)
+        self.assertIn('&lt;h:voice-definition name="Isabel"', page)
+        mother_daughter = (ROOT / "examples" / "assets" / "ssml-h" / "mother-daughter.ssml").read_text(encoding="utf-8")
+        for fragment in (
+            'name="Isabel" age="child" pitch="high" accent="british" scope="request" seed="1476293754"',
+            'name="Mother" gender="female" age="middle-aged" pitch="high" accent="british" scope="request" seed="998282591"',
+            "Mommy mommy I want this",
+            "Put it down please !",
+            "> But, I [sigh] !</prosody>",
+            "> I [sigh] ! </prosody>",
+            "But I, I really really want it. I spotted it first !",
+            "No, put it down right now.",
+            " This is the end of this discussion !!!",
+        ):
+            self.assertIn(fragment, mother_daughter)
+        self.assertEqual(
+            re.findall(r'<break time="(\d+ms)"\s*/>', mother_daughter),
+            ["500ms", "600ms", "400ms", "400ms"],
+        )
+        self.assertIn("https://hangrylabs.app/ns/ssml-h/1.0", page)
+        self.assertIn("request seed 24680", page)
+        self.assertIn('"randomize_seed":false', page)
+        for slug in ("mother-daughter", "model-meeting", "moon-navigation"):
+            self.assertIn(f"assets/ssml-h/{slug}.mp3", page)
+            self.assertGreater((ROOT / "examples" / "assets" / "ssml-h" / f"{slug}.mp3").stat().st_size, 1_000)
+            source_path = ROOT / "examples" / "assets" / "ssml-h" / f"{slug}.ssml"
+            self.assertTrue(source_path.is_file())
+            embedded = re.search(
+                rf'<code id="{re.escape(slug)}-source">(.*?)</code>',
+                page,
+                flags=re.DOTALL,
+            )
+            self.assertIsNotNone(embedded)
+            self.assertEqual(
+                unescape(embedded.group(1)).strip(),
+                source_path.read_text(encoding="utf-8").strip(),
+            )
+        self.assertTrue((ROOT / "scripts" / "generate-ssml-h-examples.py").is_file())
+        highlighter = (ROOT / "examples" / "ssml-h.js").read_text(encoding="utf-8")
+        self.assertIn("function highlightSsml(source)", highlighter)
+        self.assertIn('class="syntax-cue"', highlighter)
+        taskfile = (ROOT / "Taskfile.yml").read_text(encoding="utf-8")
+        self.assertIn("generate-ssml-h-examples:", taskfile)
 
 
 if __name__ == "__main__":

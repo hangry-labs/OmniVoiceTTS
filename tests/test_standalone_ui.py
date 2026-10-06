@@ -39,6 +39,7 @@ class StandaloneUiTests(unittest.TestCase):
                         "/",
                         "/static/app.js",
                         "/static/audio-editor.js",
+                        "/static/audio-recorder.js",
                         "/static/audio-utils.js",
                         "/static/i18n.js",
                         "/static/styles.css",
@@ -66,8 +67,15 @@ class StandaloneUiTests(unittest.TestCase):
         self.assertIn('data-tab="api"', index.text)
         self.assertIn('data-tab="system"', index.text)
         self.assertIn('id="profile-audio-preview"', index.text)
+        self.assertIn('id="reference-record-toggle"', index.text)
+        self.assertIn('id="profile-record-toggle"', index.text)
+        self.assertIn('id="reference-audio-preview"', index.text)
         self.assertIn('id="delete-profile-dialog"', index.text)
         self.assertIn('id="advanced-generation"', index.text)
+        self.assertIn('id="last-generated-seed"', index.text)
+        self.assertEqual(index.text.count('id="seed"'), 1)
+        self.assertEqual(index.text.count('id="randomize-seed"'), 1)
+        self.assertLess(index.text.index('id="seed"'), index.text.index('id="advanced-generation"'))
         self.assertIn('id="reset-advanced-controls"', index.text)
         self.assertIn('id="float-preserving-silence"', index.text)
         self.assertIn('id="output-peak-limit"', index.text)
@@ -117,6 +125,9 @@ class StandaloneUiTests(unittest.TestCase):
         self.assertIn("new AudioEditor($('#generate-output')", script)
         self.assertIn("new AudioEditor($('#stream-output')", script)
         self.assertIn("new AudioEditor($('#profile-audio-preview')", script)
+        self.assertIn("new AudioEditor($('#reference-audio-preview')", script)
+        self.assertIn("new AudioRecorder({", script)
+        self.assertIn("const file = referenceAudio.currentFile()", script)
         self.assertIn("state.streamAbort?.abort()", script)
         self.assertIn("function startGpuMonitor()", script)
         self.assertIn("function stopGpuMonitor()", script)
@@ -124,6 +135,11 @@ class StandaloneUiTests(unittest.TestCase):
         self.assertIn("GPU_HISTORY_RETENTION_MS = 10 * 60 * 1000", script)
         self.assertIn("function nativeLanguageLabel(id, fallback)", script)
         self.assertIn("input_type: state.inputType", script)
+        self.assertIn("inputDrafts: { text: null, ssml: null, 'ssml-h': null }", script)
+        self.assertIn("state.inputDrafts[currentType] = editor.value", script)
+        self.assertIn("$$('.input-type-control [data-input-type]')", script)
+        self.assertIn("function setLastGeneratedSeed(seed)", script)
+        self.assertIn("$('#seed').value = seed", script)
         self.assertIn("/tts/ssml/capabilities", script)
         self.assertIn("/tts/text/normalize", script)
         self.assertIn("normalize_text: controls.normalize_text && state.inputType === 'text'", script)

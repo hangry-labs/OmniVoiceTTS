@@ -329,6 +329,15 @@ pre { margin: 10px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 .number-input { min-width: 0; min-height: 34px; padding: 6px 7px; text-align: right; font-variant-numeric: tabular-nums; }
 .reset-controls { flex: 0 0 34px; }
 
+.seed-panel { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 8px 12px; margin-top: 13px; padding-top: 12px; border-top: 1px solid var(--line-soft); }
+.seed-field { min-width: 0; }
+.seed-field input { min-height: 34px; padding: 6px 8px; font-variant-numeric: tabular-nums; }
+.seed-field:has(input:disabled) { color: var(--muted); }
+.seed-field input:disabled { color: #777a82; cursor: not-allowed; opacity: 0.65; }
+.seed-randomize { min-width: 0; margin-top: 18px; }
+.seed-result { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 30px; padding: 6px 8px; border: 1px solid var(--line-soft); border-radius: 4px; background: #17181b; color: var(--muted); font-size: 0.68rem; }
+.seed-result output { color: var(--text); font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 0.74rem; font-variant-numeric: tabular-nums; }
+
 .toggle-field { position: relative; display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 34px; margin-top: 14px; color: #d8d9dd; font-size: 0.76rem; font-weight: 650; cursor: pointer; }
 .toggle-field input { position: absolute; width: 1px; min-height: 1px; opacity: 0; pointer-events: none; }
 .toggle-track { position: relative; flex: 0 0 42px; width: 42px; height: 23px; border: 1px solid var(--line); border-radius: 999px; background: #30323a; transition: border-color 120ms ease, background 120ms ease; }
@@ -353,11 +362,25 @@ pre { margin: 10px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 .conditioning-panel > p { margin: 7px 0 0; color: var(--muted); font-size: 0.75rem; line-height: 1.5; }
 .design-grid, .advanced-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 14px; }
 .file-drop { position: relative; display: grid; place-items: center; gap: 6px; min-height: 112px; margin-top: 14px; padding: 16px; border: 1px dashed #555861; border-radius: 5px; background: #17181b; color: var(--muted); text-align: center; }
-.file-drop:hover, .file-drop:focus-within { border-color: var(--accent); color: var(--text); }
+.file-drop:hover, .file-drop:focus-within, .file-drop.dragging { border-color: var(--accent); color: var(--text); }
+.file-drop.has-file { border-style: solid; border-color: #4b765f; background: #151d19; }
 .file-drop input { position: absolute; inset: 0; width: 100%; height: 100%; min-height: 0; opacity: 0; cursor: pointer; }
 .file-drop i { color: var(--accent); font-size: 1.35rem; }
 .file-drop span { font-size: 0.82rem; font-weight: 750; }
 .file-drop small, .field small { color: var(--muted); font-size: 0.68rem; line-height: 1.4; }
+.reference-source-grid, .profile-audio-sources { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(210px, 0.75fr); gap: 10px; margin-top: 14px; }
+.reference-source-grid .file-drop { margin-top: 0; }
+.microphone-capture { display: grid; grid-template-rows: 1fr auto auto; min-width: 0; padding: 13px; border: 1px solid #555861; border-radius: 5px; background: #17181b; }
+.microphone-capture > div { display: grid; grid-template-columns: auto 1fr; align-content: start; gap: 3px 8px; }
+.microphone-capture > div i { grid-row: 1 / 3; margin-top: 2px; color: var(--accent); font-size: 1.2rem; }
+.microphone-capture strong { font-size: 0.78rem; }
+.microphone-capture small { color: var(--muted); font-size: 0.67rem; line-height: 1.4; }
+.microphone-capture .record-state { min-height: 27px; padding: 6px 0 4px; }
+.microphone-capture .record-button { width: 100%; }
+.reference-audio-preview { margin-top: 10px; }
+.reference-audio-preview .wave-stage, #profile-audio-preview .wave-stage { height: 132px; }
+.reference-audio-preview .waveform, #profile-audio-preview .waveform { height: 98px; }
+.reference-audio-preview .wave-empty, #profile-audio-preview .wave-empty { inset: 12px; }
 .settings-details { padding: 14px 16px; border: 1px solid var(--line); border-radius: 5px; background: #151619; }
 .settings-details summary { font-weight: 700; }
 .toggle-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px 22px; margin-top: 12px; }
@@ -405,7 +428,7 @@ pre { margin: 10px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 .voice-save-button { width: 100%; margin-top: 14px; }
 .profile-name-preview { min-height: 1em; }
 .profile-audio-field > span { color: var(--muted); font-size: 0.75rem; font-weight: 700; }
-.profile-audio-drop { position: relative; display: grid; place-items: center; gap: 5px; min-height: 94px; padding: 14px; border: 1px dashed #555861; border-radius: 5px; background: #151619; color: var(--muted); text-align: center; cursor: pointer; transition: border-color 120ms ease, background 120ms ease, color 120ms ease; }
+.profile-audio-drop { position: relative; display: grid; place-items: center; gap: 5px; min-height: 116px; padding: 14px; border: 1px dashed #555861; border-radius: 5px; background: #151619; color: var(--muted); text-align: center; cursor: pointer; transition: border-color 120ms ease, background 120ms ease, color 120ms ease; }
 .profile-audio-drop:hover, .profile-audio-drop:focus-within, .profile-audio-drop.dragging { border-color: var(--accent); background: #1f1814; color: var(--text); }
 .profile-audio-drop.has-file { border-style: solid; border-color: #4b765f; background: #151d19; }
 .profile-audio-drop input { position: absolute; inset: 0; width: 100%; height: 100%; min-height: 0; opacity: 0; cursor: pointer; }
@@ -413,10 +436,7 @@ pre { margin: 10px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 .profile-audio-drop strong { font-size: 0.79rem; }
 .profile-audio-drop small { color: var(--muted); font-size: 0.67rem; }
 #profile-audio-preview { margin-top: 10px; }
-#profile-audio-preview .wave-stage { height: 132px; }
-#profile-audio-preview .waveform { height: 98px; }
-#profile-audio-preview .wave-empty { inset: 12px; }
-#profile-audio-preview .audio-controls { grid-template-columns: minmax(120px, 1fr) auto minmax(120px, 1fr); }
+#profile-audio-preview .audio-controls, .reference-audio-preview .audio-controls { grid-template-columns: minmax(120px, 1fr) auto minmax(120px, 1fr); }
 .profile-save-note { display: flex; align-items: flex-start; gap: 8px; margin-top: 16px; padding: 10px; border-left: 3px solid var(--line); background: #151619; color: var(--muted); font-size: 0.7rem; line-height: 1.45; }
 .profile-save-note i { flex: 0 0 auto; margin-top: 1px; color: var(--green); }
 .profile-save-note[data-tone="warning"] { border-color: var(--accent); color: #ffc59e; }
@@ -538,6 +558,7 @@ pre { margin: 10px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
   .settings-panel .section-title, .settings-panel .status-line, .settings-panel .compact-advanced { grid-column: auto; }
   .compact-advanced .advanced-grid, .compact-advanced .toggle-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .voice-form-grid { grid-template-columns: 1fr; }
+  .reference-source-grid, .profile-audio-sources { grid-template-columns: 1fr; }
   .voice-defaults { padding: 16px 0 0; border-top: 1px solid var(--line); border-left: 0; }
   .content-panel { padding: 22px 12px 40px; }
   .panel-toolbar { align-items: stretch; flex-direction: column; gap: 14px; }
@@ -547,7 +568,7 @@ pre { margin: 10px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
   .audio-label { display: grid; grid-template-columns: auto 1fr; }
   .audio-label small { grid-column: 1 / -1; max-width: 210px; }
   .audio-controls { grid-template-columns: 1fr; gap: 8px; padding: 10px; }
-  #profile-audio-preview .audio-controls { grid-template-columns: 1fr; }
+  #profile-audio-preview .audio-controls, .reference-audio-preview .audio-controls { grid-template-columns: 1fr; }
   .audio-controls-side { justify-content: center; }
   .audio-controls-side.end { justify-content: center; }
   .transport { grid-row: 1; justify-content: center; }

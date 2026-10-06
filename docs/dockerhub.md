@@ -58,7 +58,7 @@ Use versioned `vX.Y.Z` and `vX.Y.Z_tiny` tags for reproducible deployments. Use 
 
 Hear samples before downloading the image:
 
-**[OmniVoiceTTS language examples](https://hangry-labs.github.io/OmniVoiceTTS/examples/)**
+**[OmniVoiceTTS language examples](https://hangry-labs.github.io/OmniVoiceTTS/examples/)** · **[SSML-H conversations](https://hangry-labs.github.io/OmniVoiceTTS/examples/ssml-h.html)**
 
 ## API
 
@@ -123,6 +123,7 @@ OmniVoice supports voice cloning. Do not use this image for unauthorized cloning
 
 - Repository and full documentation: https://github.com/Hangry-Labs/OmniVoiceTTS
 - Language examples: https://hangry-labs.github.io/OmniVoiceTTS/examples/
+- SSML-H conversations: https://hangry-labs.github.io/OmniVoiceTTS/examples/ssml-h.html
 - Hangry Labs: https://hangrylabs.app/
 - SSML-H 1.0: https://hangrylabs.app/ns/ssml-h/1.0
 - Upstream OmniVoice project: https://github.com/k2-fsa/OmniVoice

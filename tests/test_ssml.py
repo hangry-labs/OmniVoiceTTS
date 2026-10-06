@@ -284,6 +284,62 @@ class SSMLExecutionTests(unittest.TestCase):
         self.assertEqual(seeds, [42, 41])
         self.assertEqual(waveform.size, 1500)
 
+    def test_dynamic_voice_turns_reuse_the_voice_definition_seed(self) -> None:
+        document = f"""<speak version="1.1" xmlns="http://www.w3.org/2001/10/synthesis"
+          xmlns:h="{SSML_H_NAMESPACE}" xml:lang="en-US">
+          <metadata><h:extensions version="1.0">
+            <h:voice-definition name="Isabel" age="child" seed="1476293754"/>
+            <h:voice-definition name="Mother" gender="female" seed="998282591"/>
+          </h:extensions></metadata>
+          <voice name="Mother">First turn.</voice>
+          <break time="100ms"/>
+          <voice name="Isabel">Reply.</voice>
+          <break time="100ms"/>
+          <voice name="Mother">Final turn.</voice>
+        </speak>"""
+        plan = compile_ssml(document, "ssml-h", resolve_language=resolve_language)
+        generated: list[tuple[str | None, int]] = []
+
+        def generate(unit, binding, speed, pitch, tempo, volume, seed):
+            del unit, speed, pitch, tempo, volume
+            generated.append((binding.name, seed))
+            return 1000, np.full(1500, 1000, dtype=np.int16)
+
+        with tempfile.TemporaryDirectory() as directory:
+            session = SSMLExecutionSession(
+                plan=plan,
+                default_binding=SSMLVoiceBinding(),
+                request_seed=42,
+                request_speed=1.0,
+                request_pitch_semitones=0.0,
+                request_tempo=1.0,
+                request_volume=1.0,
+                normalize=False,
+                pad_duration=0.0,
+                fade_duration=0.0,
+                staging_parent=Path(directory),
+                resolve_voice=lambda name: SSMLVoiceBinding(name=name),
+                resolve_language=resolve_language,
+                prepare_voice=lambda definition, text, language, seed, staging: SSMLVoiceBinding(
+                    name=definition.name,
+                    generation_seed=seed,
+                ),
+                generate_speech=generate,
+                commit_profiles=lambda items, staging: {},
+            )
+            session.prepare()
+            session.render_array()
+            session.close()
+
+        self.assertEqual(
+            generated,
+            [
+                ("Mother", 998282591),
+                ("Isabel", 1476293754),
+                ("Mother", 998282591),
+            ],
+        )
+
     def test_omitted_voice_sample_uses_fixed_internal_reference(self) -> None:
         document = f"""<speak version="1.1" xmlns="http://www.w3.org/2001/10/synthesis"
           xmlns:h="{SSML_H_NAMESPACE}" xml:lang="en-US">

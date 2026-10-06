@@ -23,7 +23,7 @@ This Hangry Labs fork is made for ease of use. The aim is that anyone should be 
 
 Official images are published to [Docker Hub](https://hub.docker.com/r/hangrylabs/omnivoicetts/tags) and [GitHub Container Registry](https://github.com/Hangry-Labs/OmniVoiceTTS/pkgs/container/omnivoicetts).
 
-**Listen to examples first:** [hangry-labs.github.io/OmniVoiceTTS/examples](https://hangry-labs.github.io/OmniVoiceTTS/examples/).
+**Listen to examples first:** [language and voice examples](https://hangry-labs.github.io/OmniVoiceTTS/examples/) or [multi-character SSML-H conversations](https://hangry-labs.github.io/OmniVoiceTTS/examples/ssml-h.html).
 
 Hangry Labs home: [hangrylabs.app](https://hangrylabs.app/).
 
@@ -199,6 +199,8 @@ curl -X POST "http://localhost:7861/tts/generate" \
 ```
 
 [SSML-H 1.0](https://hangrylabs.app/ns/ssml-h/1.0) extends standard SSML metadata with dynamic voice definitions. Parsing, validation, resource limits, and immutable synthesis plans come from the versioned [`ssml-h-tools`](https://pypi.org/project/ssml-h-tools/) package; OmniVoiceTTS supplies the model-specific language, voice, phoneme, profile, and audio execution adapters. `scope="request"` keeps a generated character in memory only. `scope="profile"` publishes it as a normal reusable voice profile only after synthesis and output encoding succeed.
+
+The public [SSML-H conversation showcase](https://hangry-labs.github.io/OmniVoiceTTS/examples/ssml-h.html) includes generated mother/daughter, model-meeting, and navigation dialogues with their complete source documents. Regenerate the checked-in audio against a local container with `task generate-ssml-h-examples`.
 
 When a dynamic voice omits `<h:sample>`, OmniVoiceTTS designs it from one fixed internal English reference sentence. Dialogue text is never reused as voice-training material. Provide `<h:sample xml:lang="...">...</h:sample>` when a specific reference phrase or language is required.
 
@@ -515,6 +517,8 @@ The snapshot channel is the current Docker `latest` build after the latest tagge
 
 Current snapshot changes after `v0.3.0`:
 
+- Added browser microphone recording for one-off voice cloning and reusable voice profiles, including WAV conversion, elapsed recording state, waveform review, trimming, and normal upload validation.
+- Added a dedicated public SSML-H conversation showcase with three reproducible multi-character examples, generated audio, transcripts, and copyable source documents.
 - Added float-preserving silence processing, configurable gap/edge retention, optional quiet-edge protection and peak limiting, a legacy compatibility switch, corrected duration-token rounding, and empty-output guards across browser, API, client, and CLI paths.
 - Added compact Output mastering controls and a dedicated Advanced Generation reset while retaining the existing output defaults.
 - Added opt-in, previewable English structured-text normalization for numbers, currencies, percentages, ISO dates, phone numbers, email addresses, URLs, and identifiers across the browser, native/OpenAI-compatible APIs, Python/direct-model paths, and CLIs while preserving ambiguous and explicit pronunciation syntax.

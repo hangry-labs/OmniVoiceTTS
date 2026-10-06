@@ -86,6 +86,11 @@
           <label class="range-control"><span class="range-heading"><span data-i18n="generation.tempo">Tempo</span></span><span class="range-input-row"><input id="tempo-slider" type="range" min="0.5" max="2" step="0.05" value="1" data-value-input="tempo"><input id="tempo" class="number-input" type="number" min="0.5" max="2" step="0.05" value="1" data-range-input="tempo-slider"></span></label>
           <label class="range-control"><span class="range-heading"><span data-i18n="generation.volume">Volume</span></span><span class="range-input-row"><input id="volume-slider" type="range" min="0" max="2" step="0.05" value="1" data-value-input="volume"><input id="volume" class="number-input" type="number" min="0" max="2" step="0.05" value="1" data-range-input="volume-slider"></span></label>
         </div>
+        <div class="seed-panel">
+          <label class="compact-field seed-field"><span data-i18n="generation.seed">Seed</span><input id="seed" type="number" min="0" max="4294967295" step="1" value="42"></label>
+          <label class="toggle-field seed-randomize"><span data-i18n="generation.randomSeed">Randomize seed</span><input id="randomize-seed" type="checkbox" checked><span class="toggle-track" aria-hidden="true"></span></label>
+          <div class="seed-result" aria-live="polite"><span data-i18n="generation.lastSeed">Last used seed</span><output id="last-generated-seed">--</output></div>
+        </div>
       </div>
       <label class="toggle-field"><span data-i18n="generation.normalize">Normalize loudness</span><input id="normalize" type="checkbox"><span class="toggle-track" aria-hidden="true"></span></label>
       <label class="toggle-field"><span data-i18n="generation.normalizeText">Speak structured text</span><input id="normalize-text" type="checkbox"><span class="toggle-track" aria-hidden="true"></span></label>
@@ -97,12 +102,10 @@
           <label class="compact-field"><span data-i18n="generation.guidance">Guidance scale</span><input id="guidance-scale" type="number" min="0" max="4" step="0.1" value="2"></label>
           <label class="compact-field"><span data-i18n="generation.padding">Edge padding</span><input id="pad-duration" type="number" min="0" max="5" step="0.05" value="0.1"></label>
           <label class="compact-field"><span data-i18n="generation.fade">Edge fade</span><input id="fade-duration" type="number" min="0" max="5" step="0.05" value="0.1"></label>
-          <label class="compact-field"><span data-i18n="generation.seed">Seed</span><input id="seed" type="number" min="0" max="4294967295" step="1" value="42"></label>
           <label class="compact-field"><span data-i18n="generation.chunkDuration">Long-text chunk duration</span><input id="audio-chunk-duration" type="number" min="0" max="120" step="1" value="15"></label>
           <label class="compact-field"><span data-i18n="generation.chunkThreshold">Long-text threshold</span><input id="audio-chunk-threshold" type="number" min="0" max="300" step="1" value="30"></label>
         </div>
         <div class="toggle-grid">
-          <label class="toggle-field"><span data-i18n="generation.randomSeed">Randomize seed</span><input id="randomize-seed" type="checkbox" checked><span class="toggle-track" aria-hidden="true"></span></label>
           <label class="toggle-field"><span data-i18n="generation.denoise">Denoise</span><input id="denoise" type="checkbox" checked><span class="toggle-track" aria-hidden="true"></span></label>
           <label class="toggle-field"><span data-i18n="generation.preprocess">Clean reference audio</span><input id="preprocess-prompt" type="checkbox" checked><span class="toggle-track" aria-hidden="true"></span></label>
           <label class="toggle-field"><span data-i18n="generation.postprocess">Post-process output</span><input id="postprocess-output" type="checkbox" checked><span class="toggle-track" aria-hidden="true"></span></label>
@@ -154,7 +157,15 @@
 
       <section class="conditioning-panel workflow-only" id="clone-panel" hidden>
         <div class="section-title"><i class="icon-mic"></i><span data-i18n="clone.title">Voice reference</span></div>
-        <div class="file-drop"><input id="reference-audio" type="file" accept="audio/*"><i class="icon-upload"></i><span data-i18n="clone.audio">Reference audio</span><small id="reference-audio-name">WAV, MP3, FLAC, OGG, or M4A</small></div>
+        <div class="reference-source-grid">
+          <div class="file-drop" id="reference-audio-drop"><input id="reference-audio" type="file" accept=".wav,.mp3,.flac,.ogg,.m4a,audio/*"><i class="icon-upload"></i><span data-i18n="clone.chooseAudio">Choose or drop reference audio</span><small id="reference-audio-name">WAV, MP3, FLAC, OGG, or M4A</small></div>
+          <div class="microphone-capture">
+            <div><i class="icon-mic"></i><strong data-i18n="record.microphone">Microphone</strong><small data-i18n="record.help">Record one clear speaker for at least six seconds.</small></div>
+            <span class="record-state" id="reference-record-state" aria-live="polite" data-i18n="record.ready">Ready to record</span>
+            <button class="record-button" id="reference-record-toggle" type="button" aria-pressed="false"><i class="icon-mic"></i><span data-i18n="record.record">Record</span></button>
+          </div>
+        </div>
+        <section class="reference-audio-preview" id="reference-audio-preview" aria-live="polite"></section>
         <label class="field"><span data-i18n="clone.transcript">Reference transcript</span><textarea id="reference-text" rows="3"></textarea><small data-i18n="clone.transcriptHelp">Supplying the exact transcript avoids loading ASR and substantially lowers CPU memory requirements.</small></label>
       </section>
 
@@ -177,7 +188,7 @@
             <div class="voice-form-grid">
               <div class="voice-sample-fields">
                 <label class="field"><span data-i18n="voices.name">Voice name</span><input id="profile-name" type="text" maxlength="48" autocomplete="off" placeholder="my-voice" data-i18n-placeholder="voices.namePlaceholder" aria-describedby="profile-name-preview"><small id="profile-name-preview" class="profile-name-preview" aria-live="polite"></small></label>
-                <div class="field profile-audio-field"><span data-i18n="clone.audio">Reference audio</span><label class="profile-audio-drop" id="profile-audio-drop"><input id="profile-audio" type="file" accept=".wav,.mp3,.flac,.ogg,.m4a,audio/*"><i class="icon-upload"></i><strong data-i18n="voices.chooseAudio">Choose or drop reference audio</strong><small data-i18n="voices.audioHelp">Use one clear speaker with little noise or music.</small></label><section id="profile-audio-preview" aria-live="polite"></section></div>
+                <div class="field profile-audio-field"><span data-i18n="clone.audio">Reference audio</span><div class="profile-audio-sources"><label class="profile-audio-drop" id="profile-audio-drop"><input id="profile-audio" type="file" accept=".wav,.mp3,.flac,.ogg,.m4a,audio/*"><i class="icon-upload"></i><strong data-i18n="voices.chooseAudio">Choose or drop reference audio</strong><small data-i18n="voices.audioHelp">Use one clear speaker with little noise or music.</small></label><div class="microphone-capture compact"><div><i class="icon-mic"></i><strong data-i18n="record.microphone">Microphone</strong><small data-i18n="record.help">Record one clear speaker for at least six seconds.</small></div><span class="record-state" id="profile-record-state" aria-live="polite" data-i18n="record.ready">Ready to record</span><button class="record-button" id="profile-record-toggle" type="button" aria-pressed="false"><i class="icon-mic"></i><span data-i18n="record.record">Record</span></button></div></div><section id="profile-audio-preview" aria-live="polite"></section></div>
                 <label class="field"><span data-i18n="voices.transcript">Reference transcript</span><textarea id="profile-transcript" rows="4" placeholder="Type exactly what is spoken in the sample" data-i18n-placeholder="voices.transcriptPlaceholder"></textarea><small data-i18n="voices.transcriptHelp">Strongly recommended: an exact transcript avoids loading ASR and substantially lowers CPU memory use.</small></label>
               </div>
               <div class="voice-defaults">

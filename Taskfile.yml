@@ -25,6 +25,7 @@ vars:
   API_LANGUAGE: 'English'
   API_VOICE: 'af_heart'
   API_FORMAT: 'mp3'
+  SSML_EXAMPLES_BASE_URL: 'http://127.0.0.1:7861'
   SPEED_BENCHMARK_BASE_URL: 'http://127.0.0.1:7861'
   SPEED_BENCHMARK_RESULTS: 'benchmarks\speed\runs.json'
   SPEED_BENCHMARK_DIR: 'benchmarks\speed'
@@ -254,6 +255,11 @@ tasks:
       - 'cmd /c if not exist {{.TEMP_AUDIO}}.{{.API_FORMAT}} exit /b 1'
       - 'cmd /c python -c "from pathlib import Path; p=Path(r''{{.TEMP_AUDIO}}.{{.API_FORMAT}}''); assert p.exists() and p.stat().st_size > 0, p"'
       - 'cmd /c del /f /q {{.TEMP_AUDIO}}.{{.API_FORMAT}}'
+
+  generate-ssml-h-examples:
+    desc: Regenerate the checked-in public SSML-H conversation audio through the local API
+    cmds:
+      - powershell -NoProfile -ExecutionPolicy Bypass -Command ".\.venv\Scripts\python.exe scripts\generate-ssml-h-examples.py --base-url '{{.SSML_EXAMPLES_BASE_URL}}'"
 
   benchmark-doctor:
     desc: Check the TTS, ASR, and selected GPU expected by manual benchmarks

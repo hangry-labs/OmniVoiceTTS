@@ -1,5 +1,6 @@
 import { browserLanguage, initializeI18n, t } from './i18n.js'
 import { AudioEditor } from './audio-editor.js'
+import { AudioRecorder } from './audio-recorder.js'
 
 await initializeI18n()
 
@@ -21,6 +22,7 @@ const state = {
   gpuHovering: false,
   headerAnimation: null,
   inputType: 'text',
+  inputDrafts: { text: null, ssml: null, 'ssml-h': null },
   normalizationAbort: null,
 }
 
@@ -128,10 +130,39 @@ const profileAudio = new AudioEditor($('#profile-audio-preview'), {
     $('#profile-audio-drop').classList.toggle('has-file', Boolean(file))
   },
 })
+const referenceAudio = new AudioEditor($('#reference-audio-preview'), {
+  label: t('voices.referencePreview', {}, 'Reference preview'),
+  emptyTitle: t('voices.noReference', {}, 'No reference selected'),
+  emptyDescription: t('voices.referenceReady', {}, 'Choose or record a sample to inspect it here'),
+  labels: AUDIO_EDITOR_LABELS,
+  onChange: (file) => {
+    $('#reference-audio-drop').classList.toggle('has-file', Boolean(file))
+    $('#reference-audio-name').textContent = file?.name || 'WAV, MP3, FLAC, OGG, or M4A'
+  },
+})
 
-for (const editor of [generateOutput, streamOutput, profileAudio]) {
+for (const editor of [generateOutput, streamOutput, profileAudio, referenceAudio]) {
   editor.container.addEventListener('audio-error', (event) => showToast(errorMessage(event.detail)))
 }
+
+const RECORDER_LABELS = {
+  record: t('record.record', {}, 'Record'),
+  stop: t('record.stop', {}, 'Stop recording'),
+  ready: t('record.ready', {}, 'Ready to record'),
+  recording: t('record.recording', {}, 'Recording {time}'),
+  processing: t('record.processing', {}, 'Preparing recording'),
+  readyWithTime: t('record.readyWithTime', {}, 'Recording ready · {time}'),
+  unavailable: t('record.unavailable', {}, 'Microphone recording requires a supported browser and secure connection.'),
+}
+
+const referenceRecorder = new AudioRecorder({
+  button: $('#reference-record-toggle'), status: $('#reference-record-state'), labels: RECORDER_LABELS,
+  onFile: (file) => referenceAudio.load(file, file.name), onError: (error) => showToast(errorMessage(error)),
+})
+const profileRecorder = new AudioRecorder({
+  button: $('#profile-record-toggle'), status: $('#profile-record-state'), labels: RECORDER_LABELS,
+  onFile: (file) => profileAudio.load(file, file.name), onError: (error) => showToast(errorMessage(error)),
+})
 
 function errorMessage(error) {
   return error instanceof Error ? error.message : String(error)
@@ -179,6 +210,7 @@ function persistUiSession() {
       headerCollapsed: state.headerCollapsed,
       gpuWindowMs: state.gpuWindowMs,
       inputType: state.inputType,
+      inputDrafts: state.inputDrafts,
     }))
   } catch {}
 }
@@ -197,6 +229,9 @@ function restoreSessionState() {
   if (typeof ui?.headerCollapsed === 'boolean') state.headerCollapsed = ui.headerCollapsed
   if ([60 * 1000, 10 * 60 * 1000].includes(ui?.gpuWindowMs)) state.gpuWindowMs = ui.gpuWindowMs
   if (['text', 'ssml', 'ssml-h'].includes(ui?.inputType)) state.inputType = ui.inputType
+  for (const inputType of ['text', 'ssml', 'ssml-h']) {
+    if (typeof ui?.inputDrafts?.[inputType] === 'string') state.inputDrafts[inputType] = ui.inputDrafts[inputType]
+  }
 
   const cached = readSessionJson(GPU_SESSION_KEY)
   const cutoff = Date.now() - GPU_HISTORY_RETENTION_MS
@@ -242,6 +277,10 @@ function setHeroCollapsed(collapsed, persist = true, animate = true) {
 }
 
 function activateTab(name) {
+  if (state.activeTab !== name) {
+    referenceRecorder.stop()
+    profileRecorder.stop()
+  }
   state.activeTab = name
   $('.workspace').dataset.view = name
   $$('.tab-button').forEach((button) => {
@@ -327,24 +366,27 @@ function samplesForInputType(inputType = state.inputType) {
   return SAMPLE_TEXTS
 }
 
-function setInputType(inputType, { replaceKnownSample = true, persist = true } = {}) {
+function defaultDraftForInputType(inputType) {
+  return inputType === 'text' ? t('composer.defaultText') : samplesForInputType(inputType)[0]
+}
+
+function setInputType(inputType, { persist = true } = {}) {
   if (!['text', 'ssml', 'ssml-h'].includes(inputType)) return
   const editor = $('#text-input')
-  const previousSamples = samplesForInputType(state.inputType)
-  const shouldReplace = replaceKnownSample && (!editor.value.trim()
-    || previousSamples.includes(editor.value)
-    || editor.value === t('composer.defaultText'))
+  const currentType = editor.dataset.inputType
+  if (['text', 'ssml', 'ssml-h'].includes(currentType)) state.inputDrafts[currentType] = editor.value
   state.inputType = inputType
+  if (state.inputDrafts[inputType] === null) state.inputDrafts[inputType] = defaultDraftForInputType(inputType)
+  editor.value = state.inputDrafts[inputType]
   editor.dataset.inputType = inputType
   editor.spellcheck = inputType === 'text'
-  $$('[data-input-type]').forEach((button) => {
+  $$('.input-type-control [data-input-type]').forEach((button) => {
     const active = button.dataset.inputType === inputType
     button.classList.toggle('active', active)
     button.setAttribute('aria-pressed', String(active))
   })
   $('#expression-guide-button').hidden = inputType !== 'text'
   $('#normalize-text').disabled = inputType !== 'text'
-  if (shouldReplace) editor.value = samplesForInputType(inputType)[0]
   updateTextMetrics()
   scheduleNormalizationPreview()
   if (persist) persistUiSession()
@@ -396,6 +438,16 @@ function updateMasteringState() {
   ;['#output-min-silence-ms', '#output-keep-silence-ms', '#output-lead-silence-ms', '#output-trail-silence-ms', '#float-preserving-silence']
     .forEach((selector) => { $(selector).disabled = !postprocess })
   $('#output-preserve-active-edges').disabled = !postprocess || !preserveFloat
+}
+
+function updateSeedState() {
+  $('#seed').disabled = $('#randomize-seed').checked
+}
+
+function setLastGeneratedSeed(seed) {
+  if (seed === null || seed === undefined || seed === '') return
+  $('#last-generated-seed').textContent = seed
+  $('#seed').value = seed
 }
 
 function controlValues() {
@@ -462,6 +514,7 @@ function applyControlValues(values = {}) {
   $('#output-peak-limit').value = settings.output_peak_limit ?? ''
   updateVoiceMode()
   updateMasteringState()
+  updateSeedState()
   scheduleNormalizationPreview()
 }
 
@@ -515,7 +568,7 @@ async function requestPayload(forceFormat = null) {
     payload.voice_profile = controls.voice_profile
   }
   if (controls.voice_mode === 'clone') {
-    const file = $('#reference-audio').files[0]
+    const file = referenceAudio.currentFile()
     if (!file) throw new Error(t('errors.referenceRequired'))
     upload = await uploadAudio(file)
     payload.ref_audio = upload.path
@@ -546,6 +599,7 @@ $('#generate-button').addEventListener('click', async (event) => {
     const extension = request.payload.output_format === 'ogg' ? 'ogg' : request.payload.output_format
     await loadAudioOutput(generateOutput, blob, `omnivoicetts.${extension}`)
     const seed = response.headers.get('X-OmniVoiceTTS-Seed')
+    setLastGeneratedSeed(seed)
     setStatus(`${t('status.complete')} · ${((performance.now() - started) / 1000).toFixed(2)}s${seed ? ` · seed ${seed}` : ''}`, 'success')
   } catch (error) {
     setStatus(t('status.failed'), 'error')
@@ -631,6 +685,8 @@ $('#stream-start').addEventListener('click', async () => {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(request.payload), signal: controller.signal,
     })
     if (!response.ok) throw new Error(await responseError(response))
+    const seed = response.headers.get('X-OmniVoiceTTS-Seed')
+    setLastGeneratedSeed(seed)
     if (!response.body) throw new Error('Streaming response body is unavailable in this browser.')
     const reader = response.body.getReader()
     let totalBytes = 0
@@ -654,7 +710,7 @@ $('#stream-start').addEventListener('click', async () => {
       autoplay: true,
       resumeAt,
     })
-    setStatus(t('status.complete'), 'success')
+    setStatus(`${t('status.complete')}${seed ? ` · seed ${seed}` : ''}`, 'success')
   } catch (error) {
     if (error.name === 'AbortError') {
       if (chunks.length) await loadAudioOutput(streamOutput, new Blob(chunks, { type: 'audio/mpeg' }), 'omnivoicetts-stream-partial.mp3', { autoplay: false })
@@ -706,6 +762,7 @@ function useProfile(profile) {
   if (profile.language) setControlValue($('#language'), profile.language)
   if (profile.seed != null) $('#seed').value = profile.seed
   $('#randomize-seed').checked = profile.randomize_seed
+  updateSeedState()
   updateVoiceMode()
   scheduleNormalizationPreview()
   activateTab('generate')
@@ -837,6 +894,16 @@ async function loadProfileAudio(file) {
   }
 }
 
+async function loadReferenceAudio(file) {
+  if (!file) return
+  try {
+    await referenceAudio.load(file, file.name)
+  } catch (error) {
+    referenceAudio.clear()
+    showToast(errorMessage(error))
+  }
+}
+
 $('#profile-name').addEventListener('input', updateProfileNamePreview)
 $('#profile-filter').addEventListener('input', renderProfileList)
 $('#profile-audio').addEventListener('change', (event) => loadProfileAudio(event.target.files[0]))
@@ -853,6 +920,19 @@ for (const eventName of ['dragleave', 'drop']) {
   })
 }
 $('#profile-audio-drop').addEventListener('drop', (event) => loadProfileAudio(event.dataTransfer.files[0]))
+for (const eventName of ['dragenter', 'dragover']) {
+  $('#reference-audio-drop').addEventListener(eventName, (event) => {
+    event.preventDefault()
+    event.currentTarget.classList.add('dragging')
+  })
+}
+for (const eventName of ['dragleave', 'drop']) {
+  $('#reference-audio-drop').addEventListener(eventName, (event) => {
+    event.preventDefault()
+    event.currentTarget.classList.remove('dragging')
+  })
+}
+$('#reference-audio-drop').addEventListener('drop', (event) => loadReferenceAudio(event.dataTransfer.files[0]))
 
 function closeDeleteProfileDialog() {
   profilePendingDelete = null
@@ -1124,14 +1204,18 @@ async function loadWorkspace() {
   })
   renderProfiles(profiles.data || [])
   applyControlValues(settings.generation_defaults || DEFAULT_CONTROLS)
-  $('#text-input').value = state.inputType === 'text' ? t('composer.defaultText') : samplesForInputType(state.inputType)[0]
-  setInputType(state.inputType, { replaceKnownSample: false, persist: false })
+  setInputType(state.inputType, { persist: false })
   $('#reference-audio-name').textContent = 'WAV, MP3, FLAC, OGG, or M4A'
 }
 
 $('#voice-mode').addEventListener('change', updateVoiceMode)
-$$('[data-input-type]').forEach((button) => button.addEventListener('click', () => setInputType(button.dataset.inputType)))
-$('#text-input').addEventListener('input', () => { updateTextMetrics(); scheduleNormalizationPreview() })
+$$('.input-type-control [data-input-type]').forEach((button) => button.addEventListener('click', () => setInputType(button.dataset.inputType)))
+$('#text-input').addEventListener('input', () => {
+  state.inputDrafts[state.inputType] = $('#text-input').value
+  updateTextMetrics()
+  scheduleNormalizationPreview()
+  persistUiSession()
+})
 $('#language').addEventListener('change', scheduleNormalizationPreview)
 $('#normalize-text').addEventListener('change', scheduleNormalizationPreview)
 $('#sample-button').addEventListener('click', () => {
@@ -1139,14 +1223,17 @@ $('#sample-button').addEventListener('click', () => {
   const samples = samplesForInputType()
   const candidates = samples.filter((sample) => sample !== current)
   $('#text-input').value = candidates[Math.floor(Math.random() * candidates.length)] || samples[0]
+  state.inputDrafts[state.inputType] = $('#text-input').value
   updateTextMetrics()
   scheduleNormalizationPreview()
+  persistUiSession()
 })
-$('#reference-audio').addEventListener('change', (event) => { $('#reference-audio-name').textContent = event.target.files[0]?.name || 'WAV, MP3, FLAC, OGG, or M4A' })
+$('#reference-audio').addEventListener('change', (event) => loadReferenceAudio(event.target.files[0]))
 $('#reset-controls').addEventListener('click', () => applyControlValues(DEFAULT_CONTROLS))
 $('#reset-advanced-controls').addEventListener('click', () => applyControlValues({ ...controlValues(), ...ADVANCED_DEFAULTS }))
 $('#postprocess-output').addEventListener('change', updateMasteringState)
 $('#float-preserving-silence').addEventListener('change', updateMasteringState)
+$('#randomize-seed').addEventListener('change', updateSeedState)
 $('#expression-guide-button').addEventListener('click', () => $('#expression-guide').showModal())
 $('#expression-guide-close').addEventListener('click', () => $('#expression-guide').close())
 $('#expression-guide').addEventListener('click', (event) => { if (event.target === event.currentTarget) event.currentTarget.close() })
@@ -1156,6 +1243,8 @@ document.addEventListener('visibilitychange', () => {
   else if (state.activeTab === 'system') startGpuMonitor()
 })
 window.addEventListener('beforeunload', () => {
+  referenceRecorder.stop()
+  profileRecorder.stop()
   stopGpuMonitor()
   state.normalizationAbort?.abort()
   state.streamAbort?.abort()
@@ -1163,6 +1252,7 @@ window.addEventListener('beforeunload', () => {
   generateOutput.destroy()
   streamOutput.destroy()
   profileAudio.destroy()
+  referenceAudio.destroy()
 })
 
 restoreSessionState()

@@ -39,6 +39,7 @@ class SSMLVoiceBinding:
     language: str | None = None
     cache_voice_prompt: bool = False
     voice_clone_prompt: Any = None
+    generation_seed: int | None = None
 
 
 @dataclass(frozen=True)
@@ -214,7 +215,9 @@ class SSMLExecutionSession:
             raise SSMLValidationError(
                 f"Effective volume for SSML unit {index + 1} is {volume:g}; OmniVoiceTTS supports 0 to 2.0."
             )
-        seed = (self.request_seed + len(self.plan.voice_definitions) + index) % (2**32)
+        seed = binding.generation_seed
+        if seed is None:
+            seed = (self.request_seed + len(self.plan.voice_definitions) + index) % (2**32)
         character_count = sum(character.isalnum() for character in unit.text)
         minimum_seconds = min(
             MAX_EXPECTED_SPEECH_SECONDS,

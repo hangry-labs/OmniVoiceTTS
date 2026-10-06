@@ -1726,6 +1726,7 @@ def create_ssml_execution_session(
             ref_text=sample_text,
             language=language,
             voice_clone_prompt=prompt,
+            generation_seed=seed,
         )
 
     def generate_speech(

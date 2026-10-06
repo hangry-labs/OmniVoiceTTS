@@ -1,0 +1,15 @@
+<speak version="1.1" xmlns="http://www.w3.org/2001/10/synthesis" xmlns:h="https://hangrylabs.app/ns/ssml-h/1.0" xml:lang="en-US">
+  <metadata>
+    <h:extensions version="1.0">
+      <h:voice-definition name="Bob" gender="male" age="elderly" pitch="low" accent="american" scope="request" seed="4242"/>
+      <h:voice-definition name="Elisabeth" gender="female" age="elderly" pitch="moderate" accent="american" scope="request" seed="8241"/>
+    </h:extensions>
+  </metadata>
+  <voice name="Bob">Good morning, Elisabeth. Did you remember to warm up the speech model?</voice>
+  <break time="250ms"/>
+  <voice name="Elisabeth"><prosody rate="slow">I did, but it started talking before I finished my coffee.</prosody></voice>
+  <break time="250ms"/>
+  <voice name="Bob"><prosody pitch="+1st">That sounds less like a bug and more like enthusiasm!</prosody></voice>
+  <break time="250ms"/>
+  <voice name="Elisabeth">Then our synthetic colleague is officially the most productive one here.</voice>
+</speak>

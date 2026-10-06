@@ -1,0 +1,15 @@
+<speak version="1.1" xmlns="http://www.w3.org/2001/10/synthesis" xmlns:h="https://hangrylabs.app/ns/ssml-h/1.0" xml:lang="en-US">
+  <metadata>
+    <h:extensions version="1.0">
+      <h:voice-definition name="Navigator" gender="female" age="young-adult" pitch="high" accent="british" scope="request" seed="2026"/>
+      <h:voice-definition name="Driver" gender="male" age="middle-aged" pitch="low" accent="british" scope="request" seed="5070"/>
+    </h:extensions>
+  </metadata>
+  <voice name="Navigator"><prosody rate="fast" pitch="+2st">Recalculating. In three hundred thousand kilometers, turn left at the moon.</prosody></voice>
+  <break time="200ms"/>
+  <voice name="Driver"><prosody rate="slow" pitch="-2st">There is no road at the moon!</prosody></voice>
+  <break time="200ms"/>
+  <voice name="Navigator"><prosody rate="fast">That explains why traffic is unusually light.</prosody></voice>
+  <break time="200ms"/>
+  <voice name="Driver">Can we please find a route with oxygen?</voice>
+</speak>
