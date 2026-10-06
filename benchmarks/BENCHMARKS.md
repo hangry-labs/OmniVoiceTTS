@@ -1,41 +1,33 @@
-# OmniVoiceTTS Benchmarks
+# OmniVoiceTTS Benchmark Suite
 
-Benchmark category logs are append-only tables. Each row is one benchmark run for one benchmark category.
+Benchmarks are manual release-engineering tools, not unit tests. They append comparable history only when run without `--no-write`, and they never run through `task test`, `task validate`, `task build`, or `task release`.
 
-## Purpose
+| Area | Official task | Services and isolation | Primary signal |
+|---|---|---|---|
+| [Inference speed](speed/BENCHMARKS.md) | `task benchmark-speed` | TTS on `:7861`; idle GPU | Warmed and prewarm latency for random, cached-profile, and direct-reference generation |
+| [CPU memory](memory/cpu/BENCHMARKS.md) | `task benchmark-memory-cpu` | Docker; no TTS/ASR service required | Lowest passing container limit and conservative RAM recommendation |
+| [GPU memory](memory/gpu/BENCHMARKS.md) | `task benchmark-memory-gpu` | GPU TTS on `:7861`; all other GPU work stopped | PyTorch allocation and whole-device VRAM peaks by voice mode |
+| [Speech quality](speech-quality/BENCHMARKS.md) | `task benchmark-speech-quality` | TTS on `:7861`, Qwen3-ASR on `:8000`; idle GPU | Multilingual exactness, similarity, repeat consistency, timing, and VRAM |
+| [SSML-H reliability](ssml/BENCHMARKS.md) | `task benchmark-ssml` | TTS on `:7861`, Qwen3-ASR on `:8000`; idle GPU | Complete deterministic multi-speaker dialogue |
 
-These benchmarks track OmniVoiceTTS runtime performance across versions, refactors, dependency changes, Docker image changes, and future performance work. The goal is not to produce a universal score; it is to catch local improvements and regressions under a repeatable workload.
+## Baseline Procedure
 
-More categories may be added as the product changes; keeping one append-only file per category makes version-to-version comparisons easy to scan.
+Use controlled phases rather than a single `benchmark-all` command. The GPU-memory suite needs Qwen3-ASR and unrelated GPU services stopped, while semantic quality suites require Qwen3-ASR to be running.
 
-Current baseline hardware: NVIDIA GeForce RTX 5060 Ti. AMD ROCm support is not validated because the maintainer does not have AMD hardware; AMD testing would require an AMD GPU donation or a reliable community tester.
+1. Record the image tag or digest, repository revision, driver, runtime settings, and any intended change in each task's comment variable.
+2. Stop unrelated GPU workloads. Start only OmniVoiceTTS and run `task benchmark-memory-gpu`.
+3. Keep the same TTS deployment running and run `task benchmark-speed`.
+4. Start the locked Qwen3-ASR service on port `8000`, then run `task benchmark-speech-quality` and `task benchmark-ssml`.
+5. Run `task benchmark-memory-cpu` separately. It creates and removes its own constrained CPU containers and can take substantially longer.
+6. Review each suite's `BENCHMARKS.md`, `DETAILS.md`, and `runs.json` before committing results.
 
-## Methodology
+Smoke tasks validate harness wiring without changing benchmark history:
 
-- Workload source: `examples/assets/manifest.json`.
-- Selection: first two random samples from each manifest language, repeated deterministically to the configured call count.
-- Default measured calls: 100 per category.
-- Each category is prewarmed immediately before that category is measured, so one stage's cold start or timeout does not distort later stages.
-- Detailed JSON results are stored in `example-generation.json`.
+```powershell
+task benchmark-speed-smoke
+task benchmark-memory-gpu-smoke
+task benchmark-speech-quality-smoke
+task benchmark-ssml-smoke
+```
 
-## Categories
-
-- `warm_random` (`random_voice` in JSON): measured no-reference calls after that stage's warmup. This should usually be fastest because no voice clone prompt is prepared.
-- `warm_predefined` (`predefined_voice` in JSON): measured named built-in or saved OpenAI-compatible voice calls after warmup. This covers voices created in the UI Add Voice tab and the benchmark built-in clone alias. Voice clone prompt preparation is cached after warmup.
-- `warm_direct_reference` (`direct_reference_audio` in JSON): measured direct `ref_audio` calls after warmup. This is the original ad hoc cloning path and intentionally does not use the stored-voice cache.
-- `prewarm_random`: warmup calls for the no-reference path.
-- `prewarm_predefined`: warmup calls for the cached predefined voice path.
-- `prewarm_direct_reference`: warmup calls for the direct `ref_audio` path.
-
-- [warm_random](WARM_RANDOM.md)
-- [warm_predefined](WARM_PREDEFINED.md)
-- [warm_direct_reference](WARM_DIRECT_REFERENCE.md)
-- [prewarm_random](PREWARM_RANDOM.md)
-- [prewarm_predefined](PREWARM_PREDEFINED.md)
-- [prewarm_direct_reference](PREWARM_DIRECT_REFERENCE.md)
-
-Detailed machine-readable run data is stored in `example-generation.json`.
-
-## Reliability
-
-- [SSML-H dialogue completion](SSML_H_RELIABILITY.md) generates the browser's standard two-character SSML-H example with fixed seeds, transcribes every WAV through local Qwen3-ASR, and tracks whether the complete dialogue survives generation. Detailed evidence is stored in `ssml-h-reliability.json`.
+Do not compare official rows collected with different hardware, model assets, decoding parameters, container limits, or concurrent GPU workloads. Qwen3-ASR is a stable comparative judge for semantic regressions; it is not ground truth or a replacement for listening tests.

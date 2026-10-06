@@ -16,12 +16,13 @@ from pathlib import Path
 from typing import Any
 
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_TTS_URL = os.getenv("OMNIVOICE_SSML_H_BENCHMARK_TTS_URL", "http://127.0.0.1:7861")
 DEFAULT_ASR_URL = os.getenv("OMNIVOICE_SSML_H_BENCHMARK_ASR_URL", "http://127.0.0.1:8000")
 DEFAULT_CALLS = int(os.getenv("OMNIVOICE_SSML_H_BENCHMARK_CALLS", "20"))
-DEFAULT_RESULTS = ROOT / "benchmarks" / "ssml-h-reliability.json"
-DEFAULT_MARKDOWN = ROOT / "benchmarks" / "SSML_H_RELIABILITY.md"
+DEFAULT_RESULTS = ROOT / "benchmarks" / "ssml" / "runs.json"
+DEFAULT_MARKDOWN = ROOT / "benchmarks" / "ssml" / "BENCHMARKS.md"
+DEFAULT_DETAILS = ROOT / "benchmarks" / "ssml" / "DETAILS.md"
 EXPECTED_TEXT = "Are we ready? Yes, all preparations are complete."
 EXPECTED_WORDS = ("are", "we", "ready", "yes", "all", "preparations", "are", "complete")
 POLICY_LABEL = "fixed internal sample + stable contiguous prosody turn + bounded retry"
@@ -180,20 +181,32 @@ def seeds_for_calls(calls: int) -> list[int]:
     return [FIXED_SEEDS[index % len(FIXED_SEEDS)] for index in range(calls)]
 
 
-def run_call(tts_url: str, asr_url: str, seed: int) -> dict[str, Any]:
+def generate_call(tts_url: str, seed: int, staging_dir: Path) -> dict[str, Any]:
     audio, headers, tts_seconds = generate_audio(tts_url, seed)
-    transcript, asr_seconds = transcribe_audio(asr_url, audio)
+    staged_audio = staging_dir / f"{seed}.wav"
+    staged_audio.write_bytes(audio)
     return {
         "seed": seed,
-        "passed": is_complete(transcript),
-        "transcript": transcript,
         "tts_seconds": round(tts_seconds, 3),
-        "asr_seconds": round(asr_seconds, 3),
         "audio_seconds": round(wav_duration(audio), 3),
         "bytes": len(audio),
         "sha256": hashlib.sha256(audio).hexdigest(),
         "response_seed": headers.get("x-omnivoicetts-seed"),
+        "staged_audio": str(staged_audio),
     }
+
+
+def transcribe_call(asr_url: str, result: dict[str, Any]) -> dict[str, Any]:
+    transcript, asr_seconds = transcribe_audio(asr_url, Path(result["staged_audio"]).read_bytes())
+    result.update(
+        {
+            "passed": is_complete(transcript),
+            "transcript": transcript,
+            "asr_seconds": round(asr_seconds, 3),
+        }
+    )
+    result.pop("staged_audio", None)
+    return result
 
 
 def append_json(path: Path, run: dict[str, Any]) -> None:
@@ -222,7 +235,7 @@ End-to-end dialogue-completion benchmark for SSML-H dynamic voices. It generates
 
 The workload uses one full TTS-to-ASR warmup followed by deterministic fixed seeds. Seed `2717518076` is retained as the first measured case because it reproducibly omitted Elisabeth's final sentence when an omitted `h:sample` was derived from dialogue text. A pre-fix diagnostic probe completed 7 of 8 calls (87.5%); the separately captured failure artifact ended at `Yes, everything.`. Current behavior uses one fixed internal reference sentence whenever `h:sample` is omitted, so dialogue content never becomes voice-training material. The browser sample keeps Elisabeth's complete reply inside one prosody scope to avoid splitting a short turn into separate model generations.
 
-This is a semantic completion regression benchmark, not a voice-quality score. ASR can occasionally make recognition errors, so every failed row must be inspected using the detailed transcript and audio hash in `ssml-h-reliability.json`.
+This is a semantic completion regression benchmark, not a voice-quality score. ASR can occasionally make recognition errors, so every failed row must be inspected using the detailed transcript and audio hash in `runs.json` and `DETAILS.md`.
 
 | Run | Hardware | Calls | Policy | Passed | Completion | Total seconds | Avg TTS | Avg ASR | Min bytes | Max bytes | ASR model |
 |---|---|---:|---|---:|---:|---:|---:|---:|---:|---:|---|
@@ -240,6 +253,33 @@ This is a semantic completion regression benchmark, not a voice-quality score. A
     path.write_text(existing + "\n" + row, encoding="utf-8")
 
 
+def append_details(path: Path, run: dict[str, Any]) -> None:
+    lines = [
+        "",
+        f"## {markdown_label(run)}",
+        "",
+        f"- Hardware: `{run['hardware']}`",
+        f"- Policy: {run['policy']}",
+        f"- Expected transcript: `{run['expected_text']}`",
+        f"- Warmup transcript: `{run['warmup']['transcript']}`",
+        f"- Comment: {run.get('comment') or 'None'}",
+        "",
+        "| Call | Seed | Result | TTS seconds | ASR seconds | Audio seconds | Bytes | Transcript | SHA-256 |",
+        "|---:|---:|---|---:|---:|---:|---:|---|---|",
+    ]
+    for index, measurement in enumerate(run["measurements"], start=1):
+        transcript = str(measurement["transcript"]).replace("|", "/").replace("\n", " ")
+        lines.append(
+            f"| {index} | {measurement['seed']} | {'pass' if measurement['passed'] else 'FAIL'} | "
+            f"{measurement['tts_seconds']:.3f} | {measurement['asr_seconds']:.3f} | "
+            f"{measurement['audio_seconds']:.3f} | {measurement['bytes']} | {transcript} | "
+            f"`{measurement['sha256']}` |"
+        )
+    path.parent.mkdir(parents=True, exist_ok=True)
+    existing = path.read_text(encoding="utf-8").rstrip("\n") if path.exists() else "# SSML-H Reliability Details"
+    path.write_text(existing + "\n" + "\n".join(lines) + "\n", encoding="utf-8")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Benchmark SSML-H dynamic-dialogue completion through local TTS and ASR.")
     parser.add_argument("--tts-url", default=DEFAULT_TTS_URL)
@@ -247,6 +287,9 @@ def main() -> None:
     parser.add_argument("--calls", type=int, default=DEFAULT_CALLS)
     parser.add_argument("--results", type=Path, default=DEFAULT_RESULTS)
     parser.add_argument("--markdown", type=Path, default=DEFAULT_MARKDOWN)
+    parser.add_argument("--details", type=Path, default=DEFAULT_DETAILS)
+    parser.add_argument("--comment", default="")
+    parser.add_argument("--no-write", action="store_true", help="Run without changing committed benchmark history.")
     args = parser.parse_args()
 
     wait_ready(args.tts_url, args.asr_url)
@@ -257,23 +300,34 @@ def main() -> None:
     ) or "CPU/unknown"
     asr_model = str(asr_models[0].get("id")) if asr_models else "unknown"
 
-    print("Warmup 1/1: complete SSML-H generation and ASR transcription", flush=True)
-    warmup = run_call(args.tts_url, args.asr_url, 4_242_424)
-    print(f"Warmup transcript: {warmup['transcript']}", flush=True)
-
     started_at = now_iso()
     started = time.perf_counter()
-    measurements: list[dict[str, Any]] = []
-    for index, seed in enumerate(seeds_for_calls(args.calls), start=1):
-        result = run_call(args.tts_url, args.asr_url, seed)
-        measurements.append(result)
-        outcome = "PASS" if result["passed"] else "FAIL"
-        print(
-            f"[{index:02d}/{args.calls:02d}] {outcome} seed={seed} "
-            f"tts={result['tts_seconds']:.3f}s asr={result['asr_seconds']:.3f}s "
-            f"bytes={result['bytes']} transcript={result['transcript']!r}",
-            flush=True,
-        )
+    with tempfile.TemporaryDirectory(prefix="omnivoicetts-ssml-") as staging_root:
+        staging_dir = Path(staging_root)
+        print("Phase 1/2: generating warmup and all measured SSML-H WAV files.", flush=True)
+        warmup = generate_call(args.tts_url, 4_242_424, staging_dir)
+        print(f"[TTS warmup] {warmup['tts_seconds']:.3f}s {warmup['bytes']} bytes", flush=True)
+        measurements = []
+        for index, seed in enumerate(seeds_for_calls(args.calls), start=1):
+            result = generate_call(args.tts_url, seed, staging_dir)
+            measurements.append(result)
+            print(
+                f"[TTS {index:02d}/{args.calls:02d}] seed={seed} "
+                f"tts={result['tts_seconds']:.3f}s bytes={result['bytes']}",
+                flush=True,
+            )
+
+        print("Phase 2/2: warming Qwen3-ASR, then transcribing measured WAV files.", flush=True)
+        transcribe_call(args.asr_url, warmup)
+        print(f"[ASR warmup] transcript={warmup['transcript']!r}", flush=True)
+        for index, result in enumerate(measurements, start=1):
+            transcribe_call(args.asr_url, result)
+            outcome = "PASS" if result["passed"] else "FAIL"
+            print(
+                f"[ASR {index:02d}/{args.calls:02d}] {outcome} seed={result['seed']} "
+                f"asr={result['asr_seconds']:.3f}s transcript={result['transcript']!r}",
+                flush=True,
+            )
 
     passed = sum(1 for item in measurements if item["passed"])
     run = {
@@ -285,6 +339,7 @@ def main() -> None:
         "asr_model": asr_model,
         "hardware": hardware,
         "policy": POLICY_LABEL,
+        "comment": args.comment,
         "expected_text": EXPECTED_TEXT,
         "known_pre_fix_failure_seed": KNOWN_PRE_FIX_FAILURE_SEED,
         "warmup": warmup,
@@ -301,8 +356,12 @@ def main() -> None:
         },
         "measurements": measurements,
     }
-    append_json(args.results, run)
-    append_markdown(args.markdown, run)
+    if not args.no_write:
+        append_json(args.results, run)
+        append_markdown(args.markdown, run)
+        append_details(args.details, run)
+    else:
+        print("Benchmark completed without updating official history.", flush=True)
     print(
         f"Completed {passed}/{len(measurements)} calls ({run['summary']['completion_percent']:.1f}%). "
         f"Results: {args.results}; summary: {args.markdown}",

@@ -14,18 +14,19 @@ from pathlib import Path
 from typing import Any
 
 
-ROOT = Path.cwd()
+ROOT = Path(__file__).resolve().parents[2]
 MANIFEST_PATH = ROOT / "examples" / "assets" / "manifest.json"
-RESULTS_PATH = ROOT / "benchmarks" / "example-generation.json"
-MARKDOWN_RESULTS_DIR = ROOT / "benchmarks"
-MARKDOWN_INDEX_PATH = MARKDOWN_RESULTS_DIR / "BENCHMARKS.md"
+RESULTS_PATH = ROOT / "benchmarks" / "speed" / "runs.json"
+MARKDOWN_RESULTS_DIR = ROOT / "benchmarks" / "speed"
+SUMMARY_PATH = MARKDOWN_RESULTS_DIR / "BENCHMARKS.md"
+DETAILS_PATH = MARKDOWN_RESULTS_DIR / "DETAILS.md"
 MARKDOWN_ROUND_FILES = {
-    "random_voice": "WARM_RANDOM.md",
-    "predefined_voice": "WARM_PREDEFINED.md",
-    "direct_reference_audio": "WARM_DIRECT_REFERENCE.md",
-    "prewarm_random": "PREWARM_RANDOM.md",
-    "prewarm_predefined": "PREWARM_PREDEFINED.md",
-    "prewarm_direct_reference": "PREWARM_DIRECT_REFERENCE.md",
+    "random_voice": "categories/WARM_RANDOM.md",
+    "predefined_voice": "categories/WARM_PREDEFINED.md",
+    "direct_reference_audio": "categories/WARM_DIRECT_REFERENCE.md",
+    "prewarm_random": "categories/PREWARM_RANDOM.md",
+    "prewarm_predefined": "categories/PREWARM_PREDEFINED.md",
+    "prewarm_direct_reference": "categories/PREWARM_DIRECT_REFERENCE.md",
 }
 MARKDOWN_ROUND_TITLES = {
     "random_voice": "random_voice",
@@ -35,7 +36,7 @@ MARKDOWN_ROUND_TITLES = {
     "prewarm_predefined": "prewarm_predefined",
     "prewarm_direct_reference": "prewarm_direct_reference",
 }
-DEFAULT_BASE_URL = os.getenv("OMNIVOICE_BENCHMARK_BASE_URL", "http://127.0.0.1:7864")
+DEFAULT_BASE_URL = os.getenv("OMNIVOICE_BENCHMARK_BASE_URL", "http://127.0.0.1:7861")
 DEFAULT_PREDEFINED_VOICE = os.getenv("OMNIVOICE_BENCHMARK_VOICE", "benchmark_original_clone")
 DEFAULT_REFERENCE_AUDIO = os.getenv(
     "OMNIVOICE_BENCHMARK_REF_AUDIO",
@@ -332,53 +333,55 @@ def append_category_markdown(markdown_dir: Path, run: dict[str, Any]) -> None:
             )
 
 
-def write_markdown_index(path: Path) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        "\n".join(
-            [
-                "# OmniVoiceTTS Benchmarks",
-                "",
-                "Benchmark category logs are append-only tables. Each row is one benchmark run for one benchmark category.",
-                "",
-                "## Purpose",
-                "",
-                "These benchmarks track OmniVoiceTTS runtime performance across versions, refactors, dependency changes, Docker image changes, and future performance work. The goal is not to produce a universal score; it is to catch local improvements and regressions under a repeatable workload.",
-                "",
-                "More categories may be added as the product changes; keeping one append-only file per category makes version-to-version comparisons easy to scan.",
-                "",
-                "Current baseline hardware: NVIDIA GeForce RTX 5060 Ti. AMD ROCm support is not validated because the maintainer does not have AMD hardware; AMD testing would require an AMD GPU donation or a reliable community tester.",
-                "",
-                "## Methodology",
-                "",
-                "- Workload source: `examples/assets/manifest.json`.",
-                "- Selection: first two random samples from each manifest language, repeated deterministically to the configured call count.",
-                "- Default measured calls: 100 per category.",
-                "- Each category is prewarmed immediately before that category is measured, so one stage's cold start or timeout does not distort later stages.",
-                "- Detailed JSON results are stored in `example-generation.json`.",
-                "",
-                "## Categories",
-                "",
-                "- `warm_random` (`random_voice` in JSON): measured no-reference calls after that stage's warmup. This should usually be fastest because no voice clone prompt is prepared.",
-                "- `warm_predefined` (`predefined_voice` in JSON): measured named built-in or saved OpenAI-compatible voice calls after warmup. This covers voices created in the UI Add Voice tab and the benchmark built-in clone alias. Voice clone prompt preparation is cached after warmup.",
-                "- `warm_direct_reference` (`direct_reference_audio` in JSON): measured direct `ref_audio` calls after warmup. This is the original ad hoc cloning path and intentionally does not use the stored-voice cache.",
-                "- `prewarm_random`: warmup calls for the no-reference path.",
-                "- `prewarm_predefined`: warmup calls for the cached predefined voice path.",
-                "- `prewarm_direct_reference`: warmup calls for the direct `ref_audio` path.",
-                "",
-                "- [warm_random](WARM_RANDOM.md)",
-                "- [warm_predefined](WARM_PREDEFINED.md)",
-                "- [warm_direct_reference](WARM_DIRECT_REFERENCE.md)",
-                "- [prewarm_random](PREWARM_RANDOM.md)",
-                "- [prewarm_predefined](PREWARM_PREDEFINED.md)",
-                "- [prewarm_direct_reference](PREWARM_DIRECT_REFERENCE.md)",
-                "",
-                "Detailed machine-readable run data is stored in `example-generation.json`.",
-                "",
-            ]
-        ),
-        encoding="utf-8",
+def markdown_hardware(run: dict[str, Any]) -> str:
+    devices = run.get("status_after", {}).get("cuda_memory", [])
+    names = [str(device.get("name")) for device in devices if device.get("name")]
+    return ", ".join(names) or "CPU/unknown"
+
+
+def append_summary_markdown(path: Path, run: dict[str, Any]) -> None:
+    rounds = run["summary"]["by_round"]
+
+    def average(name: str) -> Any:
+        return rounds.get(name, {}).get("seconds_avg", "n/a")
+
+    measured_total = sum(
+        float(rounds.get(name, {}).get("seconds_total", 0))
+        for name in ("random_voice", "predefined_voice", "direct_reference_audio")
     )
+    row = (
+        f"| {markdown_run_label(run)} | {markdown_hardware(run).replace('|', '/')} | "
+        f"{run['workload_items']} | {run['num_step']} | {average('random_voice')} | "
+        f"{average('predefined_voice')} | {average('direct_reference_audio')} | "
+        f"{average('prewarm_random')} | {average('prewarm_predefined')} | "
+        f"{average('prewarm_direct_reference')} | {measured_total:.3f} | "
+        f"{str(run.get('comment') or '').replace('|', '/')} |\n"
+    )
+    with path.open("a", encoding="utf-8") as file:
+        file.write(row)
+
+
+def append_details_markdown(path: Path, run: dict[str, Any]) -> None:
+    lines = [
+        "",
+        f"## {markdown_run_label(run)}",
+        "",
+        f"- Hardware: `{markdown_hardware(run)}`",
+        f"- Workload: `{run['workload_items']}` calls per measured category across `{run['language_count']}` languages",
+        f"- Decode steps / format: `{run['num_step']}` / `{run['format']}`",
+        f"- Comment: {run.get('comment') or 'None'}",
+        "",
+        "| Stage | Calls | Total | Average | Minimum | Maximum | Bytes |",
+        "|---|---:|---:|---:|---:|---:|---:|",
+    ]
+    for name, row in run["summary"]["by_round"].items():
+        lines.append(
+            f"| {name} | {row.get('count', 0)} | {row.get('seconds_total', 0)}s | "
+            f"{row.get('seconds_avg', 0)}s | {row.get('seconds_min', 0)}s | "
+            f"{row.get('seconds_max', 0)}s | {row.get('bytes_total', 0)} |"
+        )
+    existing = path.read_text(encoding="utf-8").rstrip("\n")
+    path.write_text(existing + "\n" + "\n".join(lines) + "\n", encoding="utf-8")
 
 
 def main() -> None:
@@ -387,6 +390,8 @@ def main() -> None:
     parser.add_argument("--manifest", type=Path, default=MANIFEST_PATH)
     parser.add_argument("--results", type=Path, default=RESULTS_PATH)
     parser.add_argument("--markdown-dir", type=Path, default=MARKDOWN_RESULTS_DIR)
+    parser.add_argument("--summary", type=Path, default=SUMMARY_PATH)
+    parser.add_argument("--details", type=Path, default=DETAILS_PATH)
     parser.add_argument("--reference-audio", default=DEFAULT_REFERENCE_AUDIO)
     parser.add_argument("--voice", default=DEFAULT_PREDEFINED_VOICE)
     parser.add_argument("--num-step", type=int, default=DEFAULT_NUM_STEP)
@@ -396,7 +401,9 @@ def main() -> None:
     parser.add_argument("--samples-per-language", type=int, default=DEFAULT_SAMPLES_PER_LANGUAGE)
     parser.add_argument("--random-warmup", type=int, default=DEFAULT_RANDOM_WARMUP)
     parser.add_argument("--reference-warmup", type=int, default=DEFAULT_REFERENCE_WARMUP)
+    parser.add_argument("--comment", default="")
     parser.add_argument("--skip-prewarm", action="store_true")
+    parser.add_argument("--no-write", action="store_true")
     args = parser.parse_args()
 
     wait_ready(args.base_url)
@@ -528,6 +535,7 @@ def main() -> None:
         "samples_per_language": args.samples_per_language,
         "random_warmup": 0 if args.skip_prewarm else args.random_warmup,
         "reference_warmup": 0 if args.skip_prewarm else args.reference_warmup,
+        "comment": args.comment,
         "workload_items": len(workload),
         "language_count": len({item["language_slug"] for item in workload}),
         "seconds_wall": round(finished - started, 3),
@@ -545,11 +553,15 @@ def main() -> None:
         },
         "measurements": measurements,
     }
-    append_results(args.results, run)
-    write_markdown_index(args.markdown_dir / "BENCHMARKS.md")
-    append_category_markdown(args.markdown_dir, run)
-    print(f"Wrote benchmark results to {args.results}")
-    print(f"Appended benchmark category summaries under {args.markdown_dir}")
+    if not args.no_write:
+        append_results(args.results, run)
+        append_summary_markdown(args.summary, run)
+        append_details_markdown(args.details, run)
+        append_category_markdown(args.markdown_dir, run)
+        print(f"Wrote benchmark results to {args.results}")
+        print(f"Appended benchmark summaries under {args.markdown_dir}")
+    else:
+        print("Benchmark completed without updating official history.")
 
 
 if __name__ == "__main__":

@@ -25,27 +25,52 @@ vars:
   API_LANGUAGE: 'English'
   API_VOICE: 'af_heart'
   API_FORMAT: 'mp3'
-  BENCHMARK_BASE_URL: 'http://127.0.0.1:7864'
-  BENCHMARK_RESULTS: 'benchmarks\\example-generation.json'
-  BENCHMARK_MARKDOWN_DIR: 'benchmarks'
-  BENCHMARK_VOICE: 'benchmark_original_clone'
-  BENCHMARK_REF_AUDIO: '/app/omnivoice/runtime_assets/voices/openai_default_voice.mp3'
-  BENCHMARK_NUM_STEP: '24'
-  BENCHMARK_FORMAT: 'mp3'
-  BENCHMARK_LIMIT_LANGUAGES: '0'
-  BENCHMARK_ITEMS: '100'
-  BENCHMARK_SAMPLES_PER_LANGUAGE: '2'
-  BENCHMARK_RANDOM_WARMUP: '10'
-  BENCHMARK_REFERENCE_WARMUP: '10'
-  BENCHMARK_CPU_MEMORY_LIMITS: '1536m,2048m,2560m,3072m,4096m,5120m,6144m,7168m,8192m,10240m,12288m'
-  BENCHMARK_CPU_MEMORY_RESULTS: 'benchmarks\cpu-memory.json'
-  BENCHMARK_CPU_MEMORY_MARKDOWN: 'benchmarks\CPU_MEMORY.md'
-  BENCHMARK_CPU_MEMORY_START_PORT: '7870'
-  SSML_H_BENCHMARK_TTS_URL: 'http://127.0.0.1:7861'
-  SSML_H_BENCHMARK_ASR_URL: 'http://127.0.0.1:8000'
-  SSML_H_BENCHMARK_CALLS: '20'
-  SSML_H_BENCHMARK_RESULTS: 'benchmarks\ssml-h-reliability.json'
-  SSML_H_BENCHMARK_MARKDOWN: 'benchmarks\SSML_H_RELIABILITY.md'
+  SPEED_BENCHMARK_BASE_URL: 'http://127.0.0.1:7861'
+  SPEED_BENCHMARK_RESULTS: 'benchmarks\speed\runs.json'
+  SPEED_BENCHMARK_DIR: 'benchmarks\speed'
+  SPEED_BENCHMARK_SUMMARY: 'benchmarks\speed\BENCHMARKS.md'
+  SPEED_BENCHMARK_DETAILS: 'benchmarks\speed\DETAILS.md'
+  SPEED_BENCHMARK_VOICE: 'benchmark_original_clone'
+  SPEED_BENCHMARK_REF_AUDIO: '/app/omnivoice/runtime_assets/voices/openai_default_voice.mp3'
+  SPEED_BENCHMARK_NUM_STEP: '24'
+  SPEED_BENCHMARK_FORMAT: 'mp3'
+  SPEED_BENCHMARK_LIMIT_LANGUAGES: '0'
+  SPEED_BENCHMARK_ITEMS: '100'
+  SPEED_BENCHMARK_SAMPLES_PER_LANGUAGE: '2'
+  SPEED_BENCHMARK_RANDOM_WARMUP: '10'
+  SPEED_BENCHMARK_REFERENCE_WARMUP: '10'
+  SPEED_BENCHMARK_COMMENT: ''
+  CPU_MEMORY_BENCHMARK_LIMITS: '1536m,2048m,2560m,3072m,4096m,5120m,6144m,7168m,8192m,10240m,12288m'
+  CPU_MEMORY_BENCHMARK_RESULTS: 'benchmarks\memory\cpu\runs.json'
+  CPU_MEMORY_BENCHMARK_SUMMARY: 'benchmarks\memory\cpu\BENCHMARKS.md'
+  CPU_MEMORY_BENCHMARK_DETAILS: 'benchmarks\memory\cpu\DETAILS.md'
+  CPU_MEMORY_BENCHMARK_START_PORT: '7870'
+  CPU_MEMORY_BENCHMARK_COMMENT: ''
+  GPU_MEMORY_BENCHMARK_BASE_URL: 'http://127.0.0.1:7861'
+  GPU_MEMORY_BENCHMARK_RESULTS: 'benchmarks\memory\gpu\runs.json'
+  GPU_MEMORY_BENCHMARK_SUMMARY: 'benchmarks\memory\gpu\BENCHMARKS.md'
+  GPU_MEMORY_BENCHMARK_DETAILS: 'benchmarks\memory\gpu\DETAILS.md'
+  GPU_MEMORY_BENCHMARK_CALLS: '5'
+  GPU_MEMORY_BENCHMARK_WARMUP: '1'
+  GPU_MEMORY_BENCHMARK_SAMPLE_INTERVAL: '0.1'
+  GPU_MEMORY_BENCHMARK_COMMENT: ''
+  SSML_BENCHMARK_TTS_URL: 'http://127.0.0.1:7861'
+  SSML_BENCHMARK_ASR_URL: 'http://127.0.0.1:8000'
+  SSML_BENCHMARK_CALLS: '20'
+  SSML_BENCHMARK_RESULTS: 'benchmarks\ssml\runs.json'
+  SSML_BENCHMARK_SUMMARY: 'benchmarks\ssml\BENCHMARKS.md'
+  SSML_BENCHMARK_DETAILS: 'benchmarks\ssml\DETAILS.md'
+  SSML_BENCHMARK_COMMENT: ''
+  QUALITY_BENCHMARK_TTS_URL: 'http://127.0.0.1:7861'
+  QUALITY_BENCHMARK_ASR_URL: 'http://127.0.0.1:8000'
+  QUALITY_BENCHMARK_RESULTS: 'benchmarks\speech-quality\runs.json'
+  QUALITY_BENCHMARK_SUMMARY: 'benchmarks\speech-quality\BENCHMARKS.md'
+  QUALITY_BENCHMARK_DETAILS: 'benchmarks\speech-quality\DETAILS.md'
+  QUALITY_BENCHMARK_ARTIFACTS: '.ai\benchmark-speech-quality'
+  QUALITY_BENCHMARK_SENTENCES: '2'
+  QUALITY_BENCHMARK_REPEATS: '5'
+  QUALITY_BENCHMARK_NUM_STEP: '32'
+  QUALITY_BENCHMARK_COMMENT: ''
   CODEQL: 'C:\sandbox\tools\codeql\codeql.exe'
   DRY_RUN: '0'
   NEXT_VERSION: ''
@@ -73,7 +98,7 @@ tasks:
   compile:
     desc: Compile Python sources and tests
     cmds:
-      - 'cmd /c ".venv\Scripts\python.exe" -m compileall -q omnivoice scripts tests'
+      - 'cmd /c ".venv\Scripts\python.exe" -m compileall -q omnivoice scripts benchmarks tests'
 
   test:
     desc: Run the lightweight unit and repository-contract test suite
@@ -230,20 +255,65 @@ tasks:
       - 'cmd /c python -c "from pathlib import Path; p=Path(r''{{.TEMP_AUDIO}}.{{.API_FORMAT}}''); assert p.exists() and p.stat().st_size > 0, p"'
       - 'cmd /c del /f /q {{.TEMP_AUDIO}}.{{.API_FORMAT}}'
 
-  benchmark-examples:
-    desc: Benchmark the example-generation workload and append results
+  benchmark-doctor:
+    desc: Check the TTS, ASR, and selected GPU expected by manual benchmarks
     cmds:
-      - powershell -NoProfile -ExecutionPolicy Bypass -Command ".\.venv\Scripts\python.exe scripts\benchmark-example-generation.py --base-url '{{.BENCHMARK_BASE_URL}}' --manifest examples\assets\manifest.json --results '{{.BENCHMARK_RESULTS}}' --markdown-dir '{{.BENCHMARK_MARKDOWN_DIR}}' --voice '{{.BENCHMARK_VOICE}}' --reference-audio '{{.BENCHMARK_REF_AUDIO}}' --num-step '{{.BENCHMARK_NUM_STEP}}' --format '{{.BENCHMARK_FORMAT}}' --limit-languages '{{.BENCHMARK_LIMIT_LANGUAGES}}' --items-per-round '{{.BENCHMARK_ITEMS}}' --samples-per-language '{{.BENCHMARK_SAMPLES_PER_LANGUAGE}}' --random-warmup '{{.BENCHMARK_RANDOM_WARMUP}}' --reference-warmup '{{.BENCHMARK_REFERENCE_WARMUP}}'"
+      - cmd /c nvidia-smi --id={{.GPU_DEVICE}} --query-gpu=index,name,driver_version,memory.total,memory.used --format=csv,noheader
+      - cmd /c curl.exe -fsS {{.QUALITY_BENCHMARK_TTS_URL}}/tts/status
+      - cmd /c curl.exe -fsS {{.QUALITY_BENCHMARK_ASR_URL}}/health/ready
 
-  benchmark-cpu-memory:
-    desc: Benchmark CPU Docker memory limits for common OpenAI speech scenarios
+  benchmark-speed:
+    aliases: [benchmark-examples]
+    desc: Append the fixed warmed and prewarm inference-speed benchmark
     cmds:
-      - powershell -NoProfile -ExecutionPolicy Bypass -Command ".\.venv\Scripts\python.exe scripts\benchmark-cpu-memory.py --image '{{.IMAGE}}' --limits '{{.BENCHMARK_CPU_MEMORY_LIMITS}}' --start-port '{{.BENCHMARK_CPU_MEMORY_START_PORT}}' --results '{{.BENCHMARK_CPU_MEMORY_RESULTS}}' --markdown '{{.BENCHMARK_CPU_MEMORY_MARKDOWN}}'"
+      - powershell -NoProfile -ExecutionPolicy Bypass -Command ".\.venv\Scripts\python.exe benchmarks\speed\run_benchmark.py --base-url '{{.SPEED_BENCHMARK_BASE_URL}}' --manifest examples\assets\manifest.json --results '{{.SPEED_BENCHMARK_RESULTS}}' --markdown-dir '{{.SPEED_BENCHMARK_DIR}}' --summary '{{.SPEED_BENCHMARK_SUMMARY}}' --details '{{.SPEED_BENCHMARK_DETAILS}}' --voice '{{.SPEED_BENCHMARK_VOICE}}' --reference-audio '{{.SPEED_BENCHMARK_REF_AUDIO}}' --num-step '{{.SPEED_BENCHMARK_NUM_STEP}}' --format '{{.SPEED_BENCHMARK_FORMAT}}' --limit-languages '{{.SPEED_BENCHMARK_LIMIT_LANGUAGES}}' --items-per-round '{{.SPEED_BENCHMARK_ITEMS}}' --samples-per-language '{{.SPEED_BENCHMARK_SAMPLES_PER_LANGUAGE}}' --random-warmup '{{.SPEED_BENCHMARK_RANDOM_WARMUP}}' --reference-warmup '{{.SPEED_BENCHMARK_REFERENCE_WARMUP}}' --comment '{{.SPEED_BENCHMARK_COMMENT}}'"
 
-  benchmark-ssml-h-reliability:
-    desc: Benchmark deterministic SSML-H dialogue completion through local TTS and Qwen3-ASR
+  benchmark-speed-smoke:
+    desc: Exercise one language and one call per speed stage without recording history
     cmds:
-      - powershell -NoProfile -ExecutionPolicy Bypass -Command ".\.venv\Scripts\python.exe scripts\benchmark-ssml-h-reliability.py --tts-url '{{.SSML_H_BENCHMARK_TTS_URL}}' --asr-url '{{.SSML_H_BENCHMARK_ASR_URL}}' --calls '{{.SSML_H_BENCHMARK_CALLS}}' --results '{{.SSML_H_BENCHMARK_RESULTS}}' --markdown '{{.SSML_H_BENCHMARK_MARKDOWN}}'"
+      - powershell -NoProfile -ExecutionPolicy Bypass -Command ".\.venv\Scripts\python.exe benchmarks\speed\run_benchmark.py --base-url '{{.SPEED_BENCHMARK_BASE_URL}}' --limit-languages 1 --items-per-round 1 --samples-per-language 1 --random-warmup 1 --reference-warmup 1 --no-write"
+
+  benchmark-memory-cpu:
+    aliases: [benchmark-cpu-memory]
+    desc: Append CPU Docker memory-limit results for all supported voice scenarios
+    cmds:
+      - powershell -NoProfile -ExecutionPolicy Bypass -Command ".\.venv\Scripts\python.exe benchmarks\memory\cpu\run_benchmark.py --image '{{.IMAGE}}' --limits '{{.CPU_MEMORY_BENCHMARK_LIMITS}}' --start-port '{{.CPU_MEMORY_BENCHMARK_START_PORT}}' --results '{{.CPU_MEMORY_BENCHMARK_RESULTS}}' --markdown '{{.CPU_MEMORY_BENCHMARK_SUMMARY}}' --details '{{.CPU_MEMORY_BENCHMARK_DETAILS}}' --comment '{{.CPU_MEMORY_BENCHMARK_COMMENT}}'"
+
+  benchmark-memory-cpu-smoke:
+    desc: Exercise one constrained CPU random-voice case without recording history
+    cmds:
+      - powershell -NoProfile -ExecutionPolicy Bypass -Command ".\.venv\Scripts\python.exe benchmarks\memory\cpu\run_benchmark.py --image '{{.IMAGE}}' --limits 1536m --scenarios RV --passes-after-first 0 --start-port '{{.CPU_MEMORY_BENCHMARK_START_PORT}}' --no-write"
+
+  benchmark-memory-gpu:
+    desc: Append warmed process and whole-device GPU memory results by voice mode
+    cmds:
+      - powershell -NoProfile -ExecutionPolicy Bypass -Command ".\.venv\Scripts\python.exe benchmarks\memory\gpu\run_benchmark.py --base-url '{{.GPU_MEMORY_BENCHMARK_BASE_URL}}' --gpu-index '{{.GPU_DEVICE}}' --calls '{{.GPU_MEMORY_BENCHMARK_CALLS}}' --warmup-calls '{{.GPU_MEMORY_BENCHMARK_WARMUP}}' --sample-interval '{{.GPU_MEMORY_BENCHMARK_SAMPLE_INTERVAL}}' --results '{{.GPU_MEMORY_BENCHMARK_RESULTS}}' --summary '{{.GPU_MEMORY_BENCHMARK_SUMMARY}}' --details '{{.GPU_MEMORY_BENCHMARK_DETAILS}}' --comment '{{.GPU_MEMORY_BENCHMARK_COMMENT}}'"
+
+  benchmark-memory-gpu-smoke:
+    desc: Exercise one GPU-memory scenario and call without recording history
+    cmds:
+      - powershell -NoProfile -ExecutionPolicy Bypass -Command ".\.venv\Scripts\python.exe benchmarks\memory\gpu\run_benchmark.py --base-url '{{.GPU_MEMORY_BENCHMARK_BASE_URL}}' --gpu-index '{{.GPU_DEVICE}}' --calls 1 --warmup-calls 1 --limit-scenarios 1 --no-write"
+
+  benchmark-ssml:
+    aliases: [benchmark-ssml-h-reliability]
+    desc: Append deterministic SSML-H dialogue-completion results through local TTS and Qwen3-ASR
+    cmds:
+      - powershell -NoProfile -ExecutionPolicy Bypass -Command ".\.venv\Scripts\python.exe benchmarks\ssml\run_benchmark.py --tts-url '{{.SSML_BENCHMARK_TTS_URL}}' --asr-url '{{.SSML_BENCHMARK_ASR_URL}}' --calls '{{.SSML_BENCHMARK_CALLS}}' --results '{{.SSML_BENCHMARK_RESULTS}}' --markdown '{{.SSML_BENCHMARK_SUMMARY}}' --details '{{.SSML_BENCHMARK_DETAILS}}' --comment '{{.SSML_BENCHMARK_COMMENT}}'"
+
+  benchmark-ssml-smoke:
+    desc: Exercise the known SSML-H regression seed once without recording history
+    cmds:
+      - powershell -NoProfile -ExecutionPolicy Bypass -Command ".\.venv\Scripts\python.exe benchmarks\ssml\run_benchmark.py --tts-url '{{.SSML_BENCHMARK_TTS_URL}}' --asr-url '{{.SSML_BENCHMARK_ASR_URL}}' --calls 1 --no-write"
+
+  benchmark-speech-quality:
+    desc: Append multilingual TTS-to-Qwen-ASR quality, consistency, timing, and VRAM results
+    cmds:
+      - powershell -NoProfile -ExecutionPolicy Bypass -Command ".\.venv\Scripts\python.exe benchmarks\speech-quality\run_benchmark.py --tts-url '{{.QUALITY_BENCHMARK_TTS_URL}}' --asr-url '{{.QUALITY_BENCHMARK_ASR_URL}}' --manifest examples\assets\manifest.json --results '{{.QUALITY_BENCHMARK_RESULTS}}' --summary '{{.QUALITY_BENCHMARK_SUMMARY}}' --details '{{.QUALITY_BENCHMARK_DETAILS}}' --artifacts-dir '{{.QUALITY_BENCHMARK_ARTIFACTS}}' --sentences '{{.QUALITY_BENCHMARK_SENTENCES}}' --repeats '{{.QUALITY_BENCHMARK_REPEATS}}' --num-step '{{.QUALITY_BENCHMARK_NUM_STEP}}' --gpu-index '{{.GPU_DEVICE}}' --comment '{{.QUALITY_BENCHMARK_COMMENT}}'"
+
+  benchmark-speech-quality-smoke:
+    desc: Exercise one English TTS-to-ASR quality call without recording history
+    cmds:
+      - powershell -NoProfile -ExecutionPolicy Bypass -Command ".\.venv\Scripts\python.exe benchmarks\speech-quality\run_benchmark.py --tts-url '{{.QUALITY_BENCHMARK_TTS_URL}}' --asr-url '{{.QUALITY_BENCHMARK_ASR_URL}}' --languages english --sentences 1 --repeats 1 --num-step '{{.QUALITY_BENCHMARK_NUM_STEP}}' --gpu-index '{{.GPU_DEVICE}}' --no-write"
 
   imagestop:
     desc: Stop running OmniVoiceTTS containers

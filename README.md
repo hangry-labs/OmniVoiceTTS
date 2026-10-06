@@ -53,7 +53,7 @@ CPU mode is supported as a fallback, but it still needs enough system memory. Fo
 
 When running on CPU, `/tts/status` reports container/system memory diagnostics and per-scenario RAM recommendations. If a CPU request appears close to the available memory limit, the container logs a warning and still tries to continue; Docker or the OS may still kill the process if RAM is exhausted.
 
-If a CPU container exits after `Loading weights` during a cloned-voice `/v1/audio/speech` request, it is usually an out-of-memory kill rather than a Python exception. The TTS model already needs significant RAM on CPU, and clone/profile requests without a transcript can lazy-load Whisper ASR to transcribe the reference audio. Recent snapshots reduce the default footprint by keeping eager ASR off on CPU, but no-transcript clone paths still need more memory. To lower RAM use: run `latest` or a current version tag, keep `OMNIVOICE_LOAD_ASR=0`, do not set `OMNIVOICE_ALLOW_CPU_EAGER_ASR=1`, save voice profiles with a reference transcript, include `ref_text` when sending direct `ref_audio`, keep concurrency at the default `OMNIVOICE_MAX_CONCURRENT_GENERATIONS=1`, and prefer GPU mode when available. See `benchmarks/CPU_MEMORY.md` for measured scenario recommendations and run `task benchmark-cpu-memory` on your host if you need local numbers.
+If a CPU container exits after `Loading weights` during a cloned-voice `/v1/audio/speech` request, it is usually an out-of-memory kill rather than a Python exception. The TTS model already needs significant RAM on CPU, and clone/profile requests without a transcript can lazy-load Whisper ASR to transcribe the reference audio. Recent snapshots reduce the default footprint by keeping eager ASR off on CPU, but no-transcript clone paths still need more memory. To lower RAM use: run `latest` or a current version tag, keep `OMNIVOICE_LOAD_ASR=0`, do not set `OMNIVOICE_ALLOW_CPU_EAGER_ASR=1`, save voice profiles with a reference transcript, include `ref_text` when sending direct `ref_audio`, keep concurrency at the default `OMNIVOICE_MAX_CONCURRENT_GENERATIONS=1`, and prefer GPU mode when available. See [`benchmarks/memory/cpu/BENCHMARKS.md`](benchmarks/memory/cpu/BENCHMARKS.md) for measured scenario recommendations and run `task benchmark-memory-cpu` on your host if you need local numbers.
 
 Run on a specific GPU (example: GPU index `1`):
 
@@ -388,31 +388,19 @@ task image-tiny
 task imagerun-tiny
 ```
 
-Run the example-generation benchmark against the active local API:
+The manual benchmark suite is organized by the signal it measures:
 
 ```bash
-task benchmark-examples
+task benchmark-speed
+task benchmark-memory-cpu
+task benchmark-memory-gpu
+task benchmark-speech-quality
+task benchmark-ssml
 ```
 
-The benchmark reuses the public example workload, prewarms the model and benchmark reference voice, then runs no-prompt, predefined cached-reference, and direct reference-audio rounds. Results are appended to per-category Markdown tables under `benchmarks/` for human tracking and `benchmarks/example-generation.json` for detailed machine-readable history. Use `BENCHMARK_ITEMS=1` or `BENCHMARK_LIMIT_LANGUAGES=1` for quick smoke checks.
+Speed tracks independently prewarmed random, cached-profile, and direct-reference inference. CPU memory finds conservative Docker RAM limits across six voice paths. GPU memory records warmed PyTorch allocation and whole-device VRAM. Speech quality generates the first two manifest sentences in every language five times and uses the locked local Qwen3-ASR service as a comparative semantic judge. SSML-H reliability repeatedly verifies the complete deterministic two-speaker dialogue.
 
-By default each measured stage prewarms immediately before it runs: 10 no-prompt warmup calls before `random_voice`, 10 predefined-reference warmup calls before `predefined_voice`, and 10 direct-reference warmup calls before `direct_reference_audio`. It then runs 100 no-prompt measured calls, 100 predefined cached-reference measured calls, and 100 direct `ref_audio` measured calls. The measured set is deterministic: the first two random samples from each language in `examples/assets/manifest.json`, repeated in the same order as needed to reach 100 calls per round.
-
-CPU memory can be checked with:
-
-```bash
-task benchmark-cpu-memory
-```
-
-This starts short-lived CPU containers with increasing Docker memory limits and sends OpenAI speech requests for random voice, design voice, direct clone with/without transcript, and stored voice with/without transcript. The default ladder starts at 1536 MiB and skips obviously unusable sub-GB limits. Results are appended to `benchmarks/CPU_MEMORY.md` as scenario recommendation columns and to `benchmarks/cpu-memory.json` with detailed attempt data.
-
-Run the deterministic SSML-H dialogue-completion benchmark against local OmniVoiceTTS and Qwen3-ASR services:
-
-```bash
-task benchmark-ssml-h-reliability
-```
-
-This generates the exact two-character browser sample with fixed seeds, transcribes each WAV, and appends completion results to `benchmarks/SSML_H_RELIABILITY.md`. Per-call transcripts and audio hashes are retained in `benchmarks/ssml-h-reliability.json` for failed-run diagnosis.
+These are intentionally excluded from `task validate`, CI, and release automation. Their service requirements conflict: GPU-memory measurements require Qwen3-ASR and unrelated GPU work to be stopped, while speech-quality and SSML-H measurements require Qwen3-ASR on port `8000`. See the [benchmark suite guide](benchmarks/BENCHMARKS.md) for the phased baseline procedure, workload details, smoke commands, result locations, and comparison constraints.
 
 Hot-swap local service code into the container without rebuilding:
 
@@ -569,7 +557,7 @@ docker run --name omnivoicetts-tiny --restart unless-stopped -p 7861:7861 --gpus
 - Added CUDA memory/backpressure controls: generation concurrency is serialized by default, `/tts/status` reports CUDA allocator statistics, `/tts/cache/clear` releases unused CUDA allocator memory without unloading models, and `/tts/purge` now performs stronger cleanup.
 - Improved CPU-mode behavior after the cloned-voice CPU crash report: eager ASR is disabled by default on CPU, accidental CPU Whisper preload is guarded, CPU RAM pressure warnings are logged, and `/tts/status` exposes CPU memory diagnostics and scenario recommendations.
 - Added startup support diagnostics in Docker logs, including version/build, Python/Torch/CUDA/cuDNN, detected hardware, memory, offline flags, model/device/ASR/cache config, profile paths, sanitized startup parameters, and a Hangry Labs ASCII banner.
-- Added CPU memory benchmarking with `task benchmark-cpu-memory`, `benchmarks/CPU_MEMORY.md`, and detailed JSON results covering random voice, design voice, direct clone with/without transcript, and stored profile with/without transcript.
+- Added CPU memory benchmarking with `task benchmark-memory-cpu`, `benchmarks/memory/cpu/BENCHMARKS.md`, and detailed JSON results covering random voice, design voice, direct clone with/without transcript, and stored profile with/without transcript.
 - Added the example-generation benchmark suite and per-category benchmark history files for random, predefined cached voice, and direct reference-audio performance tracking.
 - Documented the FlashAttention investigation and exclusion after benchmarks showed slower single-request performance and only marginal batch gains for the current API workload.
 - Hardened file/path handling for reference audio, uploads, generated files, subprocess commands, voice instruction parsing, and GitHub Actions token permissions.

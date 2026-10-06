@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any
 
 
-ROOT = Path.cwd()
+ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_LIMITS = "1536m,2048m,2560m,3072m,4096m,5120m,6144m,7168m,8192m,10240m,12288m"
 DEFAULT_TEXT = (
     "This CPU memory benchmark uses a realistic two-sentence request to estimate "
@@ -24,6 +24,9 @@ DEFAULT_REF_AUDIO = "/app/omnivoice/runtime_assets/voices/openai_default_voice.m
 DEFAULT_REF_TEXT = "Hello from OmniVoice. This Docker image includes a browser UI and an HTTP API."
 PROFILE_WITH_TEXT = "benchmark_cpu_with_text"
 PROFILE_NO_TEXT = "benchmark_cpu_no_text"
+DEFAULT_RESULTS = ROOT / "benchmarks" / "memory" / "cpu" / "runs.json"
+DEFAULT_SUMMARY = ROOT / "benchmarks" / "memory" / "cpu" / "BENCHMARKS.md"
+DEFAULT_DETAILS = ROOT / "benchmarks" / "memory" / "cpu" / "DETAILS.md"
 
 
 @dataclass(frozen=True)
@@ -164,6 +167,50 @@ def remove_container(container: str) -> None:
     run(["docker", "rm", "-f", container], timeout=30)
 
 
+def build_docker_run_command(
+    *,
+    image: str,
+    limit: str,
+    port: int,
+    profile_dir: Path,
+    container: str,
+) -> list[str]:
+    return [
+        "docker",
+        "run",
+        "-d",
+        "--name",
+        container,
+        "-p",
+        f"{port}:7861",
+        "--memory",
+        limit,
+        "--memory-swap",
+        limit,
+        "-e",
+        "OMNIVOICE_DEVICE=cpu",
+        "-e",
+        "OMNIVOICE_LOAD_ASR=0",
+        "-e",
+        "OMNIVOICE_ALLOW_CPU_EAGER_ASR=0",
+        "-e",
+        "OMNIVOICE_OPENAI_VOICE_PROFILE_DIR=/app/persistent/voices/openai",
+        "-e",
+        "PORT=7861",
+        "-e",
+        "UVICORN_RELOAD=0",
+        "-e",
+        "HF_HUB_OFFLINE=1",
+        "-e",
+        "TRANSFORMERS_OFFLINE=1",
+        "-v",
+        f"{profile_dir.resolve()}:/app/persistent/voices/openai",
+        "-v",
+        f"{(ROOT / 'omnivoice').resolve()}:/app/omnivoice",
+        image,
+    ]
+
+
 def docker_stats_mib(container: str) -> float:
     result = run(["docker", "stats", "--no-stream", "--format", "{{.MemUsage}}", container], timeout=20)
     if result.returncode != 0:
@@ -290,7 +337,7 @@ def ensure_markdown(path: Path, scenarios: list[Scenario]) -> None:
                 "",
                 "CPU-only Docker memory-limit benchmark for OpenAI-compatible speech requests.",
                 "",
-                "Each run starts one CPU container per scenario and Docker memory limit, then records the lowest passing limit as a conservative whole-GB RAM recommendation. The detailed pass/fail attempts are stored in `cpu-memory.json`.",
+                "Each run starts one CPU container per scenario and Docker memory limit, then records the lowest passing limit as a conservative whole-GB RAM recommendation. The detailed pass/fail attempts are stored in `runs.json` and summarized in `DETAILS.md`.",
                 "",
                 "The benchmark text is intentionally one realistic short request, around 100-200 characters. Results are not a guarantee for long text, concurrent requests, larger outputs, or different host memory behavior.",
                 "",
@@ -322,6 +369,40 @@ def append_markdown(
         handle.write("| " + " | ".join(cells) + " |\n")
 
 
+def append_details(path: Path, run_data: dict[str, Any]) -> None:
+    lines = [
+        "",
+        f"## {run_data['run']}",
+        "",
+        f"- Image: `{run_data['image']}`",
+        f"- Docker: `{run_data['docker'].get('server_version', 'unknown')}` on "
+        f"`{run_data['docker'].get('operating_system', 'unknown')}`",
+        f"- Benchmark text: {run_data['text']}",
+        f"- Text length: `{run_data['text_chars']}` characters",
+        f"- Comment: {run_data.get('comment') or 'None'}",
+        "",
+        "| Scenario | Limit | Result | Peak MiB | Seconds | OOM killed | Notes |",
+        "|---|---:|---|---:|---:|---|---|",
+    ]
+    for scenario in run_data["scenarios"]:
+        for attempt in scenario["attempts"]:
+            notes = str(attempt.get("notes") or "").replace("|", "/").replace("\n", " ")
+            lines.append(
+                f"| {scenario['code']} | {attempt['limit']} | {attempt.get('result', 'unknown')} | "
+                f"{float(attempt.get('peak_mib') or 0):.1f} | {float(attempt.get('seconds') or 0):.3f} | "
+                f"{attempt.get('oom_killed', False)} | {notes} |"
+            )
+        minimum = scenario.get("minimum_passing_limit")
+        minimum_label = minimum.get("limit") if minimum else "none"
+        lines.append(
+            f"| **{scenario['code']} result** | **{minimum_label}** | **recommend {scenario['recommendation']}** | "
+            " | | | |"
+        )
+    path.parent.mkdir(parents=True, exist_ok=True)
+    existing = path.read_text(encoding="utf-8").rstrip("\n") if path.exists() else "# CPU Memory Benchmark Details"
+    path.write_text(existing + "\n" + "\n".join(lines) + "\n", encoding="utf-8")
+
+
 def run_attempt(
     *,
     image: str,
@@ -335,39 +416,13 @@ def run_attempt(
     container = f"{container_prefix}_{scenario.code.lower().replace('-', '_')}_{limit.replace('.', '_').replace(':', '_')}"
     base_url = f"http://127.0.0.1:{port}"
     remove_container(container)
-    cmd = [
-        "docker",
-        "run",
-        "-d",
-        "--name",
-        container,
-        "-p",
-        f"{port}:7861",
-        "--memory",
-        limit,
-        "--memory-swap",
-        limit,
-        "-e",
-        "OMNIVOICE_DEVICE=cpu",
-        "-e",
-        "OMNIVOICE_LOAD_ASR=0",
-        "-e",
-        "OMNIVOICE_ALLOW_CPU_EAGER_ASR=0",
-        "-e",
-        "PORT=7861",
-        "-e",
-        "UVICORN_RELOAD=0",
-        "-e",
-        "HF_HUB_OFFLINE=1",
-        "-e",
-        "TRANSFORMERS_OFFLINE=1",
-        "-v",
-        f"{profile_dir.resolve()}:/app/openai_voice_profiles",
-        "-v",
-        f"{(ROOT / 'omnivoice').resolve()}:/app/omnivoice",
-        "-v",
-        image,
-    ]
+    cmd = build_docker_run_command(
+        image=image,
+        limit=limit,
+        port=port,
+        profile_dir=profile_dir,
+        container=container,
+    )
     start = run(cmd, timeout=60)
     if start.returncode != 0:
         return {
@@ -507,14 +562,28 @@ def main() -> int:
     parser.add_argument("--text", default=DEFAULT_TEXT)
     parser.add_argument("--timeout", type=int, default=420)
     parser.add_argument("--passes-after-first", type=int, default=1)
-    parser.add_argument("--results", default=str(ROOT / "benchmarks" / "cpu-memory.json"))
-    parser.add_argument("--markdown", default=str(ROOT / "benchmarks" / "CPU_MEMORY.md"))
+    parser.add_argument(
+        "--scenarios",
+        default="",
+        help="Optional comma-separated scenario codes for a smoke run, for example RV,DV.",
+    )
+    parser.add_argument("--results", default=str(DEFAULT_RESULTS))
+    parser.add_argument("--markdown", default=str(DEFAULT_SUMMARY))
+    parser.add_argument("--details", default=str(DEFAULT_DETAILS))
+    parser.add_argument("--comment", default="")
+    parser.add_argument("--no-write", action="store_true", help="Run without changing committed benchmark history.")
     args = parser.parse_args()
 
     limits = [item.strip() for item in args.limits.split(",") if item.strip()]
     version = read_version()
     run_label = f"{now_label()} - {version}"
     scenarios = build_scenarios(args.text)
+    selected_codes = {item.strip().upper() for item in args.scenarios.split(",") if item.strip()}
+    if selected_codes:
+        scenarios = [scenario for scenario in scenarios if scenario.code in selected_codes]
+        missing = selected_codes - {scenario.code for scenario in scenarios}
+        if missing:
+            parser.error(f"Unknown scenario code(s): {', '.join(sorted(missing))}")
     scenario_results: list[dict[str, Any]] = []
 
     with tempfile.TemporaryDirectory(prefix="omnivoicetts-cpu-profiles-") as profile_root:
@@ -544,6 +613,7 @@ def main() -> int:
         "docker": docker_info(),
         "text": args.text,
         "text_chars": len(args.text),
+        "comment": args.comment,
         "methodology": (
             "One CPU-only Docker container per scenario and memory limit; OMNIVOICE_LOAD_ASR=0; "
             "temporary known-good saved profiles with and without ref_text; OpenAI-compatible /v1/audio/speech MP3 requests. "
@@ -552,17 +622,21 @@ def main() -> int:
         "recommendations": recommendations,
         "scenarios": scenario_results,
     }
-    append_json(Path(args.results), run_data)
-    append_markdown(
-        Path(args.markdown),
-        run_label=run_label,
-        version=version,
-        text_chars=len(args.text),
-        scenarios=scenarios,
-        recommendations=recommendations,
-    )
-    print(f"Wrote JSON results to {args.results}")
-    print(f"Appended markdown results to {args.markdown}")
+    if not args.no_write:
+        append_json(Path(args.results), run_data)
+        append_markdown(
+            Path(args.markdown),
+            run_label=run_label,
+            version=version,
+            text_chars=len(args.text),
+            scenarios=scenarios,
+            recommendations=recommendations,
+        )
+        append_details(Path(args.details), run_data)
+        print(f"Wrote JSON results to {args.results}")
+        print(f"Appended summary to {args.markdown} and evidence to {args.details}")
+    else:
+        print("Benchmark completed without updating official history.")
     for result in scenario_results:
         minimum = result.get("minimum_passing_limit")
         if minimum:

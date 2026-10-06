@@ -28,7 +28,7 @@ http://localhost:7861
 
 The named `omnivoicetts_data` volume stores model assets, application settings, and saved voice profiles across container replacement and image updates.
 
-CPU mode is a fallback path and requires substantial system RAM. Include a reference transcript when cloning (`ref_text`) and save transcripts with voice profiles to avoid loading ASR solely to transcribe the reference. Keep `OMNIVOICE_LOAD_ASR=0` and the default `OMNIVOICE_MAX_CONCURRENT_GENERATIONS=1` for the lowest practical CPU footprint. Measured scenario guidance is maintained in [`benchmarks/CPU_MEMORY.md`](https://github.com/Hangry-Labs/OmniVoiceTTS/blob/master/benchmarks/CPU_MEMORY.md).
+CPU mode is a fallback path and requires substantial system RAM. Include a reference transcript when cloning (`ref_text`) and save transcripts with voice profiles to avoid loading ASR solely to transcribe the reference. Keep `OMNIVOICE_LOAD_ASR=0` and the default `OMNIVOICE_MAX_CONCURRENT_GENERATIONS=1` for the lowest practical CPU footprint. Measured scenario guidance is maintained in [`benchmarks/memory/cpu/BENCHMARKS.md`](https://github.com/Hangry-Labs/OmniVoiceTTS/blob/master/benchmarks/memory/cpu/BENCHMARKS.md).
 
 The smaller `latest_tiny` image downloads model assets on first use and keeps them in the same persistent volume:
 
