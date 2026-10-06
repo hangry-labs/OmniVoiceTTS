@@ -48,6 +48,7 @@ Use versioned `vX.Y.Z` and `vX.Y.Z_tiny` tags for reproducible deployments. Use 
 
 - Generate and progressive Stream workspaces with local waveform playback, seeking, speed, volume, trimming, download, and sharing
 - No-prompt voices, voice design, direct cloning, and reusable saved voice profiles
+- Reference-audio diagnostics and automatic safe edge-silence repair during default clone preprocessing
 - Explicit plain text, SSML, and SSML-H modes, including dynamic multi-character dialogue
 - Multilingual browser UI and 600+ model languages
 - WAV, MP3, FLAC, and OGG output

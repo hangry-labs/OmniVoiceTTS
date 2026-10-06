@@ -46,6 +46,7 @@ from omnivoice.service.schemas import (
     CacheClearRequest,
     OpenAISpeechRequest,
     PurgeRequest,
+    ReferenceAudioAnalyzeRequest,
     TTSRequest,
     TextNormalizationRequest,
     UIGenerationDefaults,
@@ -77,7 +78,7 @@ from omnivoice.service.voice_profiles import (
 from omnivoice.settings import RuntimeSettingsStore
 from omnivoice.standalone_ui.gpu import GPU_MONITOR
 from omnivoice.standalone_ui.server import ASSET_DIR, attach_ui
-from omnivoice.utils.audio import get_resample_backend
+from omnivoice.utils.audio import analyze_reference_audio_file, get_resample_backend
 from omnivoice.utils.common import fix_random_seed
 from omnivoice.utils.lang_map import LANG_IDS, LANG_NAMES, LANG_NAME_TO_ID, lang_display_name
 from omnivoice.utils.text import validate_synthesis_text
@@ -2149,8 +2150,25 @@ def openai_audio_speech(payload: OpenAISpeechRequest = Body(...)) -> StreamingRe
     return stream_audio_response(tts_payload, "/v1/audio/speech")
 
 
+def reference_audio_analysis(audio_path: str | Path) -> dict[str, Any]:
+    try:
+        return analyze_reference_audio_file(audio_path)
+    except (OSError, RuntimeError, ValueError) as exc:
+        raise ValueError(f"Reference audio could not be decoded: {exc}") from exc
+
+
+@api.post("/tts/reference-audio/analyze", tags=["Voices"])
+def analyze_reference_audio_endpoint(payload: ReferenceAudioAnalyzeRequest) -> dict[str, Any]:
+    try:
+        safe_audio = validate_ref_audio_path(payload.ref_audio)
+        assert safe_audio is not None
+        return reference_audio_analysis(safe_audio)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @api.post("/ui/reference-audio", include_in_schema=False)
-async def upload_ui_reference_audio(audio: UploadFile = File(...)) -> dict[str, str]:
+async def upload_ui_reference_audio(audio: UploadFile = File(...)) -> dict[str, Any]:
     suffix = Path(audio.filename or "").suffix.lower()
     if suffix not in AUDIO_EXTENSIONS:
         supported = ", ".join(sorted(AUDIO_EXTENSIONS))
@@ -2177,9 +2195,19 @@ async def upload_ui_reference_audio(audio: UploadFile = File(...)) -> dict[str, 
     if total == 0:
         upload_path.unlink(missing_ok=True)
         raise HTTPException(status_code=400, detail="Reference audio is empty.")
+    try:
+        analysis = reference_audio_analysis(upload_path)
+    except ValueError as exc:
+        upload_path.unlink(missing_ok=True)
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     with UI_UPLOADS_LOCK:
         UI_UPLOADS[token] = upload_path
-    return {"token": token, "path": str(upload_path), "name": Path(audio.filename or upload_path.name).name}
+    return {
+        "token": token,
+        "path": str(upload_path),
+        "name": Path(audio.filename or upload_path.name).name,
+        "analysis": analysis,
+    }
 
 
 @api.delete("/ui/reference-audio/{upload_token}", include_in_schema=False)
@@ -2197,6 +2225,7 @@ def voice_profiles() -> dict[str, Any]:
 def create_voice_profile(payload: VoiceProfileCreateRequest) -> dict[str, Any]:
     try:
         upload_path = resolve_ui_upload(payload.upload_token)
+        analysis = reference_audio_analysis(upload_path)
         profile_name = save_openai_voice_profile(
             payload.name,
             str(upload_path),
@@ -2211,6 +2240,7 @@ def create_voice_profile(payload: VoiceProfileCreateRequest) -> dict[str, Any]:
         discard_ui_upload(payload.upload_token)
     clear_voice_clone_prompt_cache()
     profile = next(item for item in voice_profile_payloads() if item["id"] == profile_name)
+    profile["reference_audio"] = analysis
     return profile
 
 

@@ -58,6 +58,9 @@ from transformers.modeling_outputs import ModelOutput
 from transformers.models.auto import CONFIG_MAPPING, AutoConfig
 
 from omnivoice.utils.audio import (
+    REFERENCE_LEAD_SILENCE_MS,
+    REFERENCE_TRAIL_SILENCE_MS,
+    ensure_reference_edge_silence,
     cross_fade_chunks,
     fade_and_pad_audio,
     limit_audio_peak,
@@ -858,6 +861,18 @@ class OmniVoice(PreTrainedModel):
                     "Reference audio is empty after silence removal. "
                     "Try setting preprocess_prompt=False."
                 )
+            ref_wav, added_leading_ms, added_trailing_ms = ensure_reference_edge_silence(
+                ref_wav,
+                self.sampling_rate,
+                lead_silence_ms=REFERENCE_LEAD_SILENCE_MS,
+                trail_silence_ms=REFERENCE_TRAIL_SILENCE_MS,
+            )
+            if added_leading_ms or added_trailing_ms:
+                logger.info(
+                    "Added clone-reference edge silence (leading=%dms, trailing=%dms).",
+                    added_leading_ms,
+                    added_trailing_ms,
+                )
 
         ref_duration = ref_wav.shape[-1] / self.sampling_rate
         if ref_duration > 20.0:
@@ -877,8 +892,13 @@ class OmniVoice(PreTrainedModel):
             logger.debug("Auto-transcribed ref_text: %s", ref_text)
 
         chunk_size = self.audio_tokenizer.config.hop_length
-        clip_size = int(ref_wav.shape[-1] % chunk_size)
-        ref_wav = ref_wav[:, :-clip_size] if clip_size > 0 else ref_wav
+        remainder = int(ref_wav.shape[-1] % chunk_size)
+        if remainder > 0:
+            ref_wav = np.pad(
+                ref_wav,
+                ((0, 0), (0, chunk_size - remainder)),
+                mode="constant",
+            )
         # numpy → torch at tokenizer boundary
         ref_wav_tensor = torch.from_numpy(ref_wav).to(self.audio_tokenizer.device)
         ref_audio_tokens = self.audio_tokenizer.encode(

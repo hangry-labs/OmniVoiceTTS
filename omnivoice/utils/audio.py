@@ -29,6 +29,8 @@ import importlib
 import logging
 import os
 from functools import lru_cache
+from pathlib import Path
+from typing import Any
 
 import numpy as np
 import soundfile as sf
@@ -40,6 +42,10 @@ logger = logging.getLogger(__name__)
 RESAMPLE_BACKEND = os.getenv("OMNIVOICE_RESAMPLE_BACKEND", "auto").strip().lower()
 _LIBROSA_BACKENDS = {"librosa", "fallback", "no-torchaudio"}
 _VALID_RESAMPLE_BACKENDS = {"auto", "torchaudio", *_LIBROSA_BACKENDS}
+REFERENCE_LEAD_SILENCE_MS = 100
+REFERENCE_TRAIL_SILENCE_MS = 200
+REFERENCE_SILENCE_THRESHOLD_DB = -50.0
+REFERENCE_EDGE_WARNING_MS = 40
 
 if RESAMPLE_BACKEND not in _VALID_RESAMPLE_BACKENDS:
     choices = ", ".join(sorted(_VALID_RESAMPLE_BACKENDS))
@@ -189,6 +195,163 @@ def audiosegment_to_numpy(aseg: AudioSegment) -> np.ndarray:
     return data.reshape(-1, aseg.channels).T
 
 
+def edge_silence_durations(
+    audio: np.ndarray,
+    sampling_rate: int,
+    *,
+    silence_threshold_db: float = REFERENCE_SILENCE_THRESHOLD_DB,
+) -> tuple[int, int]:
+    """Measure contiguous leading and trailing silence in milliseconds."""
+    if audio.ndim != 2:
+        raise ValueError("audio must have shape (channels, samples)")
+    if sampling_rate <= 0:
+        raise ValueError("sampling_rate must be positive")
+    if audio.shape[-1] == 0:
+        return 0, 0
+    proxy = numpy_to_audiosegment(audio, sampling_rate)
+    leading_ms = detect_leading_silence(
+        proxy,
+        silence_threshold=silence_threshold_db,
+        chunk_size=10,
+    )
+    trailing_ms = detect_leading_silence(
+        proxy.reverse(),
+        silence_threshold=silence_threshold_db,
+        chunk_size=10,
+    )
+    return int(leading_ms), int(trailing_ms)
+
+
+def ensure_reference_edge_silence(
+    audio: np.ndarray,
+    sampling_rate: int,
+    *,
+    lead_silence_ms: int = REFERENCE_LEAD_SILENCE_MS,
+    trail_silence_ms: int = REFERENCE_TRAIL_SILENCE_MS,
+) -> tuple[np.ndarray, int, int]:
+    """Pad a clone reference to the minimum safe edge-silence durations.
+
+    The original float samples are retained exactly. Returned padding values
+    are the number of milliseconds requested at each edge.
+    """
+    if audio.ndim != 2:
+        raise ValueError("audio must have shape (channels, samples)")
+    if sampling_rate <= 0:
+        raise ValueError("sampling_rate must be positive")
+    for name, value in (
+        ("lead_silence_ms", lead_silence_ms),
+        ("trail_silence_ms", trail_silence_ms),
+    ):
+        if isinstance(value, bool) or not isinstance(value, (int, np.integer)) or value < 0:
+            raise ValueError(f"{name} must be a non-negative integer")
+    if audio.shape[-1] == 0:
+        return audio, 0, 0
+
+    leading_ms, trailing_ms = edge_silence_durations(audio, sampling_rate)
+    add_leading_ms = max(0, int(lead_silence_ms) - leading_ms)
+    add_trailing_ms = max(0, int(trail_silence_ms) - trailing_ms)
+    if add_leading_ms == 0 and add_trailing_ms == 0:
+        return audio, 0, 0
+
+    leading_samples = int(np.ceil(add_leading_ms * sampling_rate / 1000.0))
+    trailing_samples = int(np.ceil(add_trailing_ms * sampling_rate / 1000.0))
+    padded = np.pad(
+        audio,
+        ((0, 0), (leading_samples, trailing_samples)),
+        mode="constant",
+    )
+    return padded.astype(audio.dtype, copy=False), add_leading_ms, add_trailing_ms
+
+
+def analyze_reference_audio(
+    audio: np.ndarray,
+    sampling_rate: int,
+) -> dict[str, Any]:
+    """Return stable diagnostics for uploaded or saved clone references."""
+    if audio.ndim != 2:
+        raise ValueError("audio must have shape (channels, samples)")
+    if sampling_rate <= 0:
+        raise ValueError("sampling_rate must be positive")
+    if audio.shape[-1] == 0:
+        raise ValueError("Reference audio contains no samples.")
+    if not np.isfinite(audio).all():
+        raise ValueError("Reference audio contains non-finite samples.")
+
+    leading_ms, trailing_ms = edge_silence_durations(audio, sampling_rate)
+    peak = float(np.max(np.abs(audio)))
+    rms = float(np.sqrt(np.mean(np.square(audio, dtype=np.float64))))
+    clipped_fraction = float(np.mean(np.abs(audio) >= 0.999))
+    duration_seconds = audio.shape[-1] / sampling_rate
+    warnings: list[dict[str, str]] = []
+
+    if duration_seconds < 3.0:
+        warnings.append(
+            {
+                "code": "reference_too_short",
+                "message": "Reference audio is under 3 seconds; 3-10 seconds of clear speech is recommended.",
+            }
+        )
+    elif duration_seconds > 20.0:
+        warnings.append(
+            {
+                "code": "reference_too_long",
+                "message": "Reference audio exceeds 20 seconds and may increase memory use or reduce clone quality.",
+            }
+        )
+    if leading_ms < REFERENCE_EDGE_WARNING_MS:
+        warnings.append(
+            {
+                "code": "reference_starts_on_speech",
+                "message": "Reference audio starts without a clean silence boundary; prompt preprocessing can add one.",
+            }
+        )
+    if trailing_ms < REFERENCE_EDGE_WARNING_MS:
+        warnings.append(
+            {
+                "code": "reference_ends_on_speech",
+                "message": "Reference audio ends without a clean silence boundary; prompt preprocessing can add one.",
+            }
+        )
+    if rms < 0.0001:
+        warnings.append(
+            {
+                "code": "reference_appears_silent",
+                "message": "Reference audio appears silent or too quiet to clone reliably.",
+            }
+        )
+    if peak >= 0.999 and clipped_fraction >= 0.0001:
+        warnings.append(
+            {
+                "code": "reference_may_clip",
+                "message": "Reference audio reaches digital full scale and may be clipped.",
+            }
+        )
+
+    return {
+        "duration_seconds": round(duration_seconds, 3),
+        "sample_rate": int(sampling_rate),
+        "channels": int(audio.shape[0]),
+        "peak": round(peak, 6),
+        "rms": round(rms, 6),
+        "clipped_fraction": round(clipped_fraction, 6),
+        "leading_silence_ms": leading_ms,
+        "trailing_silence_ms": trailing_ms,
+        "recommended_leading_silence_ms": REFERENCE_LEAD_SILENCE_MS,
+        "recommended_trailing_silence_ms": REFERENCE_TRAIL_SILENCE_MS,
+        "prompt_padding": {
+            "leading_ms": max(0, REFERENCE_LEAD_SILENCE_MS - leading_ms),
+            "trailing_ms": max(0, REFERENCE_TRAIL_SILENCE_MS - trailing_ms),
+        },
+        "warnings": warnings,
+    }
+
+
+def analyze_reference_audio_file(audio_path: str | os.PathLike[str]) -> dict[str, Any]:
+    """Decode and analyze a clone-reference file without resampling it."""
+    data, sampling_rate = load_waveform(str(Path(audio_path)))
+    return analyze_reference_audio(np.asarray(data, dtype=np.float32), int(sampling_rate))
+
+
 def remove_silence(
     audio: np.ndarray,
     sampling_rate: int,
@@ -257,7 +420,7 @@ def remove_silence(
                 keep_silence=keep_mid_sil // 2,
                 seek_step=10,
             )
-            wave = AudioSegment.silent(duration=0)
+            wave = AudioSegment.silent(duration=0, frame_rate=sampling_rate)
             for seg in non_silent_segs:
                 wave += seg
 

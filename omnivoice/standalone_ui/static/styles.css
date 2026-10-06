@@ -378,6 +378,12 @@ pre { margin: 10px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 .microphone-capture .record-state { min-height: 27px; padding: 6px 0 4px; }
 .microphone-capture .record-button { width: 100%; }
 .reference-audio-preview { margin-top: 10px; }
+.reference-diagnostics { display: flex; align-items: flex-start; gap: 8px; margin-top: 8px; padding: 9px 10px; border-left: 3px solid var(--green); background: #151b18; color: #bcebd2; font-size: 0.72rem; line-height: 1.45; overflow-wrap: anywhere; }
+.reference-diagnostics[hidden] { display: none; }
+.reference-diagnostics i { flex: 0 0 auto; margin-top: 2px; }
+.reference-diagnostics[data-tone="warning"] { border-color: var(--accent); background: #211912; color: #ffc59e; }
+.reference-diagnostics ul { margin: 0; padding-left: 18px; }
+.reference-diagnostics strong { color: inherit; }
 .reference-audio-preview .wave-stage, #profile-audio-preview .wave-stage { height: 132px; }
 .reference-audio-preview .waveform, #profile-audio-preview .waveform { height: 98px; }
 .reference-audio-preview .wave-empty, #profile-audio-preview .wave-empty { inset: 12px; }

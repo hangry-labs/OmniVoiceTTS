@@ -6,6 +6,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import numpy as np
+import soundfile as sf
 from fastapi.testclient import TestClient
 
 import omnivoice.app as app_module
@@ -24,6 +25,35 @@ class _FakeModel:
 
 
 class SSMLApiTests(unittest.TestCase):
+    def test_reference_audio_upload_and_public_analysis_report_abrupt_edges(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            upload_dir = Path(directory) / "uploads"
+            source = Path(directory) / "abrupt.wav"
+            sf.write(source, np.full(96_000, 0.25, dtype=np.float32), 24_000)
+            with patch.object(app_module, "UI_UPLOAD_DIR", upload_dir):
+                app_module.UI_UPLOADS.clear()
+                with TestClient(app_module.api) as client:
+                    with source.open("rb") as stream:
+                        uploaded = client.post(
+                            "/ui/reference-audio",
+                            files={"audio": ("abrupt.wav", stream, "audio/wav")},
+                        )
+                    payload = uploaded.json()
+                    analyzed = client.post(
+                        "/tts/reference-audio/analyze",
+                        json={"ref_audio": payload["path"]},
+                    )
+                    deleted = client.delete(f"/ui/reference-audio/{payload['token']}")
+                app_module.UI_UPLOADS.clear()
+
+        self.assertEqual(uploaded.status_code, 200, uploaded.text)
+        self.assertEqual(analyzed.status_code, 200, analyzed.text)
+        self.assertEqual(deleted.status_code, 200, deleted.text)
+        warning_codes = {item["code"] for item in payload["analysis"]["warnings"]}
+        self.assertIn("reference_starts_on_speech", warning_codes)
+        self.assertIn("reference_ends_on_speech", warning_codes)
+        self.assertEqual(payload["analysis"], analyzed.json())
+
     def test_builtin_clone_asset_is_inside_reference_audio_allowlist(self) -> None:
         self.assertIn(
             app_module.OPENAI_DEFAULT_CLONE_AUDIO.parent,

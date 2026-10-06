@@ -137,6 +137,8 @@ curl -X POST "http://localhost:7861/tts/generate" \
   -o cloned.mp3
 ```
 
+Reference uploads are analyzed for duration, level, clipping, and clean leading/trailing silence. The browser shows these diagnostics before one-off cloning or profile creation, and API users can inspect an allowed container-local path through `POST /tts/reference-audio/analyze` with `{"ref_audio":"/data/ref.wav"}`. With the default `preprocess_prompt=true`, clone preparation preserves the original speech samples while adding any missing silence up to a 100 ms leading and 200 ms trailing floor. Audio-tokenizer alignment pads the protected ending instead of discarding a partial final frame. This specifically protects very short cloned output from references that start or end directly on speech; disabling prompt preprocessing retains the caller's explicit raw-reference behavior.
+
 Kokoro-shaped compatibility fields are accepted where they can be translated cleanly. Existing callers may send `voice`, `use_gpu`, or `response_format`. The `voice` field can name a saved local voice profile or an OpenAI-style alias such as `nova`; unknown Kokoro speaker ids are accepted for compatibility but ignored because OmniVoice uses no-prompt generation, voice design, or reference-audio cloning rather than fixed speaker ids.
 
 Output format can be sent as `output_format`, `format`, or Kokoro/OpenAI-style `response_format`.
@@ -517,6 +519,7 @@ The snapshot channel is the current Docker `latest` build after the latest tagge
 
 Current snapshot changes after `v0.3.0`:
 
+- Added clone-reference quality diagnostics in the browser and API plus conservative in-memory edge repair: prompt preprocessing now supplies missing 100 ms leading and 200 ms trailing silence, preserves stored files and original speech samples, and pads tokenizer alignment instead of truncating the final partial frame. The three short Chinese reproductions from upstream issue #265 were validated against an intentionally edge-stripped trusted reference and independently transcribed with the intended words intact.
 - Added opt-in Vietnamese structured-text normalization for unambiguous numbers, decimals, currencies, percentages, units, ISO dates, and times, with source-relative preview and conservative protection for phones, identifiers, slash forms, and ambiguous punctuation.
 - Added opt-in Malayalam structured-text normalization for numbers, decimals, currencies, percentages, units, times, fractions, ordinals, and uppercase acronyms, with browser/API preview, source-relative change reporting, and conservative ambiguity handling.
 - Added browser microphone recording for one-off voice cloning and reusable voice profiles, including WAV conversion, elapsed recording state, waveform review, trimming, and normal upload validation.

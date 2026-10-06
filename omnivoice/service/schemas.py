@@ -226,6 +226,14 @@ class VoiceProfileCreateRequest(BaseModel):
     randomize_seed: bool = False
 
 
+class ReferenceAudioAnalyzeRequest(BaseModel):
+    ref_audio: str = Field(
+        ...,
+        min_length=1,
+        description="Reference audio path under an allowed upload, profile, data, or runtime asset directory.",
+    )
+
+
 class OpenAISpeechRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 

@@ -24,6 +24,7 @@ const state = {
   inputType: 'text',
   inputDrafts: { text: null, ssml: null, 'ssml-h': null },
   normalizationAbort: null,
+  referenceInspection: { clone: 0, profile: 0 },
 }
 
 const UI_SESSION_KEY = 'omnivoicetts-ui-state-v1'
@@ -128,6 +129,7 @@ const profileAudio = new AudioEditor($('#profile-audio-preview'), {
   labels: AUDIO_EDITOR_LABELS,
   onChange: (file) => {
     $('#profile-audio-drop').classList.toggle('has-file', Boolean(file))
+    inspectReferenceAudio(file, '#profile-audio-diagnostics', 'profile')
   },
 })
 const referenceAudio = new AudioEditor($('#reference-audio-preview'), {
@@ -138,6 +140,7 @@ const referenceAudio = new AudioEditor($('#reference-audio-preview'), {
   onChange: (file) => {
     $('#reference-audio-drop').classList.toggle('has-file', Boolean(file))
     $('#reference-audio-name').textContent = file?.name || 'WAV, MP3, FLAC, OGG, or M4A'
+    inspectReferenceAudio(file, '#reference-audio-diagnostics', 'clone')
   },
 })
 
@@ -528,6 +531,75 @@ async function uploadAudio(file) {
   return fetchJson('/ui/reference-audio', { method: 'POST', body: form })
 }
 
+function renderReferenceDiagnostics(selector, analysis) {
+  const container = $(selector)
+  if (!analysis) {
+    container.hidden = true
+    container.replaceChildren()
+    return
+  }
+  const warnings = analysis.warnings || []
+  container.hidden = false
+  container.dataset.tone = warnings.length ? 'warning' : 'healthy'
+  const icon = document.createElement('i')
+  icon.className = warnings.length ? 'icon-triangle-alert' : 'icon-circle-check'
+  const content = document.createElement('div')
+  if (warnings.length) {
+    const title = document.createElement('strong')
+    title.textContent = t('clone.referenceWarning', {}, 'Reference quality notice')
+    const list = document.createElement('ul')
+    warnings.forEach((warning) => {
+      const item = document.createElement('li')
+      item.textContent = warning.message
+      list.append(item)
+    })
+    content.append(title, list)
+  } else {
+    content.textContent = t('clone.referenceHealthy', {
+      duration: Number(analysis.duration_seconds).toFixed(1),
+      leading: analysis.leading_silence_ms,
+      trailing: analysis.trailing_silence_ms,
+    }, `Reference boundaries look healthy · ${analysis.duration_seconds}s · ${analysis.leading_silence_ms}ms start / ${analysis.trailing_silence_ms}ms end silence`)
+  }
+  container.replaceChildren(icon, content)
+}
+
+async function inspectReferenceAudio(file, selector, inspectionKey) {
+  const inspection = ++state.referenceInspection[inspectionKey]
+  const container = $(selector)
+  if (!file) {
+    renderReferenceDiagnostics(selector, null)
+    return
+  }
+  container.hidden = false
+  container.dataset.tone = 'healthy'
+  container.replaceChildren()
+  const icon = document.createElement('i')
+  icon.className = 'icon-loader-circle'
+  const checking = document.createElement('span')
+  checking.textContent = t('clone.checkingReference', {}, 'Checking reference audio…')
+  container.append(icon, checking)
+  let upload = null
+  try {
+    upload = await uploadAudio(file)
+    if (inspection === state.referenceInspection[inspectionKey]) {
+      renderReferenceDiagnostics(selector, upload.analysis)
+    }
+  } catch (error) {
+    if (inspection === state.referenceInspection[inspectionKey]) {
+      container.dataset.tone = 'warning'
+      container.replaceChildren()
+      const errorIcon = document.createElement('i')
+      errorIcon.className = 'icon-triangle-alert'
+      const message = document.createElement('span')
+      message.textContent = errorMessage(error)
+      container.append(errorIcon, message)
+    }
+  } finally {
+    await releaseUpload(upload?.token)
+  }
+}
+
 async function releaseUpload(token) {
   if (!token) return
   await fetch(`/ui/reference-audio/${encodeURIComponent(token)}`, { method: 'DELETE' }).catch(() => {})
@@ -571,6 +643,7 @@ async function requestPayload(forceFormat = null) {
     const file = referenceAudio.currentFile()
     if (!file) throw new Error(t('errors.referenceRequired'))
     upload = await uploadAudio(file)
+    renderReferenceDiagnostics('#reference-audio-diagnostics', upload.analysis)
     payload.ref_audio = upload.path
     payload.ref_text = $('#reference-text').value.trim() || null
   }
@@ -861,6 +934,7 @@ $('#voice-form').addEventListener('submit', async (event) => {
   let upload = null
   try {
     upload = await uploadAudio(file)
+    renderReferenceDiagnostics('#profile-audio-diagnostics', upload.analysis)
     const payload = await fetchJson('/tts/voice-profiles', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
