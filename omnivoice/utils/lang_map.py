@@ -476,7 +476,7 @@ LANG_NAME_TO_ID = {
     "oromo": "om",
     "pahari-potwari": "phr",
     "paiwan": "pwn",
-    "panjabi": "pa",
+    "punjabi": "pa",
     "papuan malay": "pmy",
     "parkari koli": "kvx",
     "pedi": "nso",
@@ -651,7 +651,7 @@ LANG_NAME_TO_ID = {
     "western maninkakan": "mlq",
     "western mari": "mrj",
     "western niger fulfulde": "fuh",
-    "western panjabi": "pnb",
+    "western punjabi": "pnb",
     "wolof": "wo",
     "wuzlam": "udl",
     "xanaguía zapotec": "ztg",
@@ -675,7 +675,15 @@ LANG_NAME_TO_ID = {
     "ömie": "aom",
 }
 
-LANG_NAMES = set(LANG_NAME_TO_ID.keys())
+LANG_NAME_ALIASES = {
+    "panjabi": "punjabi",
+    "western panjabi": "western punjabi",
+}
+
+for alias, canonical_name in LANG_NAME_ALIASES.items():
+    LANG_NAME_TO_ID[alias] = LANG_NAME_TO_ID[canonical_name]
+
+LANG_NAMES = set(LANG_NAME_TO_ID.keys()) - set(LANG_NAME_ALIASES)
 LANG_IDS = set(LANG_NAME_TO_ID.values())
 
 # Exceptions where .title() doesn't match the canonical casing from the TSV.

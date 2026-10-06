@@ -523,6 +523,7 @@ Current snapshot changes after `v0.3.0`:
 - Added shared Unicode-aware synthesis validation that rejects empty or symbol-only input before model inference across native, OpenAI-compatible, direct-model, and batch paths.
 - Added conservative terminal `?`/`!` spacing before model inference to avoid an observed final-syllable truncation caused by the attached-punctuation tokenizer form.
 - Made `torchaudio` an optional package extra and added lazy automatic fallback to the existing Librosa resampler, while retaining the validated CUDA wheel in official Docker images.
+- Canonicalized the discoverable English language names to `Punjabi` and `Western Punjabi` while retaining the established `Panjabi` spellings as compatibility aliases and preserving model IDs `pa` and `pnb`.
 - Added edge audio controls for generated clips: `pad_duration` adds configurable silence before and after output audio, and `fade_duration` fades the clip edges to reduce clicks.
 - Exposed the new edge controls in the browser UI under Generation Settings.
 - Exposed the same controls through the native API, OpenAI-compatible `/v1/audio/speech` extension fields, CLI commands, and the Python client.

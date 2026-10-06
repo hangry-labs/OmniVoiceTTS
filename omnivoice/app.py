@@ -2225,8 +2225,8 @@ def formats() -> dict:
 def languages() -> dict:
     language_options = sorted(
         (
-            {"id": language_id, "name": lang_display_name(name)}
-            for name, language_id in LANG_NAME_TO_ID.items()
+            {"id": LANG_NAME_TO_ID[name], "name": lang_display_name(name)}
+            for name in LANG_NAMES
         ),
         key=lambda language: language["name"].casefold(),
     )
