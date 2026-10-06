@@ -36,6 +36,7 @@ dependencies = [
     "huggingface-hub==1.14.0",
     "librosa==0.11.0",
     "numpy==2.4.4",
+    "num2words==0.5.14",
     "pydub==0.25.1",
     "pydantic==2.13.4",
     "python-multipart==0.0.28",

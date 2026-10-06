@@ -6,6 +6,7 @@ from typing import Literal
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from omnivoice.utils.text import validate_synthesis_text
+from omnivoice.utils.text_normalization import MAX_NORMALIZATION_CHARACTERS
 
 
 MAX_RANDOM_SEED = 2**32 - 1
@@ -67,6 +68,13 @@ class TTSRequest(BaseModel):
     class_temperature: float = Field(0.0, ge=0.0, le=5.0, description="Temperature for token sampling.")
     seed: int | None = Field(None, ge=0, le=MAX_RANDOM_SEED, description="Optional random seed for reproducible generation.")
     randomize_seed: bool = Field(False, description="Generate and use a random seed for this request.")
+    normalize_text: bool = Field(
+        False,
+        description=(
+            "Convert supported English structured text such as numbers, email addresses, URLs, ISO dates, "
+            "phone numbers, and identifiers to a spoken form before synthesis. Plain-text input only."
+        ),
+    )
     audio_chunk_duration: float = Field(15.0, ge=0.0, le=120.0, description="Target chunk duration for long text.")
     audio_chunk_threshold: float = Field(30.0, ge=0.0, le=300.0, description="Estimated duration threshold before long-text chunking activates.")
     pitch_semitones: float = Field(0.0, ge=-12.0, le=12.0, description="Post-synthesis pitch shift.")
@@ -91,6 +99,8 @@ class TTSRequest(BaseModel):
             validate_synthesis_text(self.text)
         elif not self.text.strip():
             raise ValueError("SSML input must not be empty.")
+        if self.normalize_text and self.input_type != "text":
+            raise ValueError("normalize_text is available only when input_type='text'.")
         return self
 
 
@@ -105,6 +115,19 @@ class CacheClearRequest(BaseModel):
     )
 
 
+class TextNormalizationRequest(BaseModel):
+    text: str = Field(..., min_length=1, max_length=MAX_NORMALIZATION_CHARACTERS)
+    language: str | None = Field(
+        None,
+        description="Language name or id. Structured normalization currently supports English.",
+    )
+
+    @field_validator("text")
+    @classmethod
+    def validate_text_content(cls, value: str) -> str:
+        return validate_synthesis_text(value)
+
+
 class UIGenerationDefaults(BaseModel):
     voice_mode: Literal["random", "design", "clone", "profile"] = "random"
     language: str = ""
@@ -116,6 +139,7 @@ class UIGenerationDefaults(BaseModel):
     tempo: float = Field(1.0, ge=0.5, le=2.0)
     volume: float = Field(1.0, ge=0.0, le=2.0)
     normalize: bool = False
+    normalize_text: bool = False
     num_step: int = Field(32, ge=4, le=64)
     guidance_scale: float = Field(2.0, ge=0.0, le=4.0)
     pad_duration: float = Field(0.1, ge=0.0, le=5.0)
@@ -155,6 +179,10 @@ class OpenAISpeechRequest(BaseModel):
     language: str | None = Field(None, description="Optional OmniVoice extension: language name or id.")
     seed: int | None = Field(None, ge=0, le=MAX_RANDOM_SEED, description="Optional OmniVoice extension: fixed generation seed.")
     randomize_seed: bool = Field(False, description="Optional OmniVoice extension: generate a random seed.")
+    normalize_text: bool = Field(
+        False,
+        description="Optional OmniVoice extension: normalize supported English structured text before synthesis.",
+    )
     device: str = Field(DEFAULT_DEVICE, description="Optional OmniVoice extension: auto, cpu, mps, or cuda:N.")
     num_step: int = Field(32, ge=4, le=64, description="Optional OmniVoice extension: diffusion decoding steps.")
     pad_duration: float = Field(0.1, ge=0.0, le=5.0, description="Optional OmniVoice extension: silence padding duration per side in seconds.")

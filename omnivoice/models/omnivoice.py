@@ -72,6 +72,7 @@ from omnivoice.utils.text import (
     normalize_terminal_punctuation_spacing,
     validate_synthesis_texts,
 )
+from omnivoice.utils.text_normalization import normalize_structured_text
 from omnivoice.utils.voice_design import (
     _INSTRUCT_ALL_VALID,
     _INSTRUCT_EN_TO_ZH,
@@ -518,6 +519,7 @@ class OmniVoice(PreTrainedModel):
         instruct: Union[str, list[str], None] = None,
         duration: Union[float, list[Optional[float]], None] = None,
         speed: Union[float, list[Optional[float]], None] = None,
+        normalize_text: bool = False,
         generation_config: Optional[OmniVoiceGenerationConfig] = None,
         **kwargs,
     ) -> list[np.ndarray]:
@@ -550,6 +552,9 @@ class OmniVoice(PreTrainedModel):
             speed: Speaking speed factor. ``> 1.0`` for faster, ``< 1.0`` for
                 slower. If a list, one value per item. ``None`` (default) uses
                 the model's default estimation.
+            normalize_text: Convert supported English structured tokens such as
+                numbers, email addresses, URLs, ISO dates, and identifiers to
+                an inspectable spoken form. The default is ``False``.
             generation_config: Explicit config object. If provided, takes
                 precedence over ``**kwargs``.
             **kwargs: Generation config or its fields:
@@ -600,6 +605,7 @@ class OmniVoice(PreTrainedModel):
             preprocess_prompt=gen_config.preprocess_prompt,
             speed=speed,
             duration=duration,
+            normalize_text=normalize_text,
         )
 
         short_idx, long_idx = full_task.get_indices(
@@ -642,6 +648,7 @@ class OmniVoice(PreTrainedModel):
         instruct: Optional[str] = None,
         duration: Optional[float] = None,
         speed: Optional[float] = None,
+        normalize_text: bool = False,
         generation_config: Optional[OmniVoiceGenerationConfig] = None,
         **kwargs,
     ) -> Iterator[np.ndarray]:
@@ -673,6 +680,7 @@ class OmniVoice(PreTrainedModel):
             preprocess_prompt=gen_config.preprocess_prompt,
             speed=speed,
             duration=duration,
+            normalize_text=normalize_text,
         )
         short_idx, long_idx = full_task.get_indices(
             gen_config, self.audio_tokenizer.config.frame_rate
@@ -1084,21 +1092,26 @@ class OmniVoice(PreTrainedModel):
         preprocess_prompt: bool = True,
         speed: Union[float, list[Optional[float]], None] = None,
         duration: Union[float, list[Optional[float]], None] = None,
+        normalize_text: bool = False,
     ) -> GenerationTask:
         validate_synthesis_texts(text)
         if isinstance(text, str):
-            text_list = [normalize_terminal_punctuation_spacing(text)]
+            text_list = [text]
         else:
             assert isinstance(
                 text, list
             ), "text should be a string or a list of strings"
-            text_list = [
-                normalize_terminal_punctuation_spacing(item) for item in text
-            ]
+            text_list = list(text)
         batch_size = len(text_list)
 
         language_list = self._ensure_list(language, batch_size)
         language_list = [_resolve_language(lang) for lang in language_list]
+        if normalize_text:
+            text_list = [
+                normalize_structured_text(item, lang).normalized
+                for item, lang in zip(text_list, language_list)
+            ]
+        text_list = [normalize_terminal_punctuation_spacing(item) for item in text_list]
         instruct_list = self._ensure_list(instruct, batch_size)
         for i, s in enumerate(instruct_list):
             if s is None:

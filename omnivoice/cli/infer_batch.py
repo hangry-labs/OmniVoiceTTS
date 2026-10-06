@@ -207,6 +207,12 @@ def get_parser():
         help="Whether to add <|denoise|> token in the reference.",
     )
     parser.add_argument(
+        "--normalize_text",
+        type=str2bool,
+        default=False,
+        help="Normalize supported English structured text before synthesis.",
+    )
+    parser.add_argument(
         "--lang_id",
         type=str,
         default=None,

@@ -47,6 +47,7 @@ from omnivoice.service.schemas import (
     OpenAISpeechRequest,
     PurgeRequest,
     TTSRequest,
+    TextNormalizationRequest,
     UIGenerationDefaults,
     VoiceProfileCreateRequest,
 )
@@ -80,6 +81,10 @@ from omnivoice.utils.audio import get_resample_backend
 from omnivoice.utils.common import fix_random_seed
 from omnivoice.utils.lang_map import LANG_IDS, LANG_NAMES, LANG_NAME_TO_ID, lang_display_name
 from omnivoice.utils.text import validate_synthesis_text
+from omnivoice.utils.text_normalization import (
+    SUPPORTED_NORMALIZATION_LANGUAGES,
+    normalize_structured_text,
+)
 
 
 def env_bool(name: str, default: bool) -> bool:
@@ -404,7 +409,7 @@ def resolve_requested_device(device: str, use_gpu: Optional[bool] = None) -> str
 def ref_audio_allowed_roots() -> list[Path]:
     defaults = [
         OPENAI_VOICE_PROFILE_DIR,
-        PACKAGE_DIR / "assets",
+        OPENAI_DEFAULT_CLONE_AUDIO.parent,
         Path("/data"),
         UI_UPLOAD_DIR,
         *default_upload_roots(),
@@ -901,6 +906,7 @@ def synthesize_array(
     tempo: float = 1.0,
     volume: float = 1.0,
     normalize: bool = False,
+    normalize_text: bool = False,
     cache_voice_prompt: bool = False,
     voice_clone_prompt: Any = None,
 ) -> tuple[int, np.ndarray]:
@@ -931,6 +937,7 @@ def synthesize_array(
             instruct=instruct or None,
             duration=duration if duration and duration > 0 else None,
             speed=speed,
+            normalize_text=normalize_text,
             generation_config=generation_config,
         )
         sample_rate = int(model.sampling_rate or SAMPLE_RATE)
@@ -959,6 +966,7 @@ def synthesize_chunks(
     tempo: float = 1.0,
     volume: float = 1.0,
     normalize: bool = False,
+    normalize_text: bool = False,
     cache_voice_prompt: bool = False,
 ) -> tuple[int, Iterator[np.ndarray]]:
     validate_synthesis_text(text)
@@ -990,6 +998,7 @@ def synthesize_chunks(
                 instruct=instruct or None,
                 duration=duration if duration and duration > 0 else None,
                 speed=speed,
+                normalize_text=normalize_text,
                 generation_config=generation_config,
             ):
                 yield apply_audio_effects(
@@ -1381,6 +1390,7 @@ def openai_speech_to_tts_request(payload: OpenAISpeechRequest) -> TTSRequest:
         output_format=output_format,
         seed=seed,
         randomize_seed=randomize_seed,
+        normalize_text=payload.normalize_text,
         cache_voice_prompt=profile_source.startswith(("profile:", "voice-profile:", "builtin-clone")),
     )
 
@@ -1396,6 +1406,7 @@ def tts_request_to_openai_speech_request(payload: TTSRequest) -> OpenAISpeechReq
         "num_step": payload.num_step,
         "pad_duration": payload.pad_duration,
         "fade_duration": payload.fade_duration,
+        "normalize_text": payload.normalize_text,
         "instructions": payload.instruct,
         "ref_audio": payload.ref_audio,
         "ref_text": payload.ref_text,
@@ -1439,6 +1450,7 @@ def log_openai_speech_request(payload: OpenAISpeechRequest, tts_payload: TTSRequ
         f"language={tts_payload.language!r} "
         f"seed={tts_payload.seed!r} "
         f"randomize_seed={tts_payload.randomize_seed!r} "
+        f"normalize_text={tts_payload.normalize_text!r} "
         f"instructions_present={bool((payload.instructions or '').strip())} "
         f"profile={profile_source!r} "
         f"ref_audio_present={bool(tts_payload.ref_audio)} "
@@ -1900,6 +1912,7 @@ def synthesize_payload(payload: TTSRequest) -> tuple[str, int, np.ndarray, int]:
             tempo=payload.tempo,
             volume=payload.volume,
             normalize=payload.normalize,
+            normalize_text=payload.normalize_text,
             cache_voice_prompt=payload.cache_voice_prompt,
         )
     except ValueError as exc:
@@ -1948,6 +1961,7 @@ def synthesize_payload_chunks(payload: TTSRequest) -> tuple[str, int, Iterator[n
             tempo=payload.tempo,
             volume=payload.volume,
             normalize=payload.normalize,
+            normalize_text=payload.normalize_text,
             cache_voice_prompt=payload.cache_voice_prompt,
         )
     except ValueError as exc:
@@ -2197,6 +2211,7 @@ def defaults() -> dict:
         "speed": 1.0,
         "num_step": 32,
         "guidance_scale": 2.0,
+        "normalize_text": False,
         "output_formats": {"default": "wav", "available": get_supported_output_formats()},
     }
 
@@ -2287,6 +2302,14 @@ def get_ssml_capabilities() -> dict:
     return capabilities
 
 
+@api.post("/tts/text/normalize", tags=["Text"])
+def preview_text_normalization(payload: TextNormalizationRequest = Body(...)) -> dict[str, object]:
+    result = normalize_structured_text(payload.text, payload.language)
+    response = result.model_dump()
+    response["supported_languages"] = list(SUPPORTED_NORMALIZATION_LANGUAGES)
+    return response
+
+
 @api.post("/tts/metrics")
 def metrics(payload: TTSRequest = Body(...)) -> dict:
     text = payload.text or ""
@@ -2313,13 +2336,17 @@ def metrics(payload: TTSRequest = Body(...)) -> dict:
                 "languages": list(plan.languages),
             },
         }
+    normalization = normalize_structured_text(text, payload.language) if payload.normalize_text else None
+    spoken_text = normalization.normalized if normalization is not None else text
     return {
         "voice": payload.voice or "auto",
         "language": payload.language,
         "input_type": payload.input_type,
+        "text_normalization": normalization.model_dump() if normalization is not None else None,
         "metrics": {
             "characters": len(text),
-            "words": len(text.split()),
+            "spoken_characters": len(spoken_text),
+            "words": len(spoken_text.split()),
         },
     }
 

@@ -24,6 +24,58 @@ class _FakeModel:
 
 
 class SSMLApiTests(unittest.TestCase):
+    def test_builtin_clone_asset_is_inside_reference_audio_allowlist(self) -> None:
+        self.assertIn(
+            app_module.OPENAI_DEFAULT_CLONE_AUDIO.parent,
+            app_module.ref_audio_allowed_roots(),
+        )
+        self.assertEqual(
+            Path(app_module.validate_ref_audio_path(str(app_module.OPENAI_DEFAULT_CLONE_AUDIO))),
+            app_module.OPENAI_DEFAULT_CLONE_AUDIO.resolve(),
+        )
+
+    def test_structured_text_preview_and_metrics_do_not_load_a_model(self) -> None:
+        with patch.object(app_module, "get_model") as get_model:
+            with TestClient(app_module.api) as client:
+                preview = client.post(
+                    "/tts/text/normalize",
+                    json={"text": "Email ops@example.com about invoice 42.", "language": "English"},
+                )
+                metrics = client.post(
+                    "/tts/metrics",
+                    json={"text": "Invoice 42.", "language": "English", "normalize_text": True},
+                )
+
+        self.assertEqual(preview.status_code, 200)
+        self.assertEqual(preview.json()["supported_languages"], ["en"])
+        self.assertIn("ops at example dot com", preview.json()["normalized"])
+        self.assertEqual(metrics.status_code, 200)
+        self.assertEqual(metrics.json()["text_normalization"]["normalized"], "Invoice forty two.")
+        get_model.assert_not_called()
+
+    def test_plain_text_generation_forwards_normalization_flag(self) -> None:
+        calls: list[dict] = []
+
+        def synthesize(**kwargs):
+            calls.append(kwargs)
+            return 24_000, np.full(2_400, 1000, dtype=np.int16)
+
+        with patch.object(app_module, "synthesize_array", side_effect=synthesize):
+            with TestClient(app_module.api) as client:
+                response = client.post(
+                    "/tts/generate",
+                    json={
+                        "text": "Invoice 42.",
+                        "language": "English",
+                        "normalize_text": True,
+                        "device": "cpu",
+                        "output_format": "wav",
+                    },
+                )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertTrue(calls[0]["normalize_text"])
+
     def test_dynamic_voice_rejects_incompatible_accent_and_dialect(self) -> None:
         document = """<speak version="1.1"
           xmlns="http://www.w3.org/2001/10/synthesis"

@@ -316,6 +316,7 @@ def append_openai_call_log(payload, tts_payload, profile_source: str) -> None:
         "language": tts_payload.language or "auto",
         "seed": "" if tts_payload.seed is None else str(tts_payload.seed),
         "randomize": str(bool(tts_payload.randomize_seed)).lower(),
+        "normalize_text": str(bool(tts_payload.normalize_text)).lower(),
         "ref_audio": "yes" if tts_payload.ref_audio else "no",
         "instructions": "yes" if (payload.instructions or "").strip() else "no",
     }

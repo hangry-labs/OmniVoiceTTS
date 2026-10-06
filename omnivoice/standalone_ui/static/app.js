@@ -21,6 +21,7 @@ const state = {
   gpuHovering: false,
   headerAnimation: null,
   inputType: 'text',
+  normalizationAbort: null,
 }
 
 const UI_SESSION_KEY = 'omnivoicetts-ui-state-v1'
@@ -62,7 +63,7 @@ const SSML_H_SAMPLES = [
 ]
 const DEFAULT_CONTROLS = {
   voice_mode: 'random', language: '', voice_profile: '', device: 'auto', output_format: 'mp3',
-  speed: 1, pitch_semitones: 0, tempo: 1, volume: 1, normalize: false, num_step: 32,
+  speed: 1, pitch_semitones: 0, tempo: 1, volume: 1, normalize: false, normalize_text: false, num_step: 32,
   guidance_scale: 2, pad_duration: 0.1, fade_duration: 0.1, seed: 42,
   randomize_seed: true, denoise: true, preprocess_prompt: true, postprocess_output: true,
   audio_chunk_duration: 15, audio_chunk_threshold: 30,
@@ -264,6 +265,51 @@ function updateTextMetrics() {
   $('#text-metrics').textContent = t('composer.characters', { count: $('#text-input').value.length })
 }
 
+function hideNormalizationPreview() {
+  state.normalizationAbort?.abort()
+  state.normalizationAbort = null
+  $('#normalization-preview').hidden = true
+}
+
+async function refreshNormalizationPreview() {
+  clearTimeout(refreshNormalizationPreview.timer)
+  state.normalizationAbort?.abort()
+  const enabled = $('#normalize-text').checked && state.inputType === 'text'
+  const text = $('#text-input').value.trim()
+  if (!enabled || !text) {
+    hideNormalizationPreview()
+    return
+  }
+
+  const controller = new AbortController()
+  state.normalizationAbort = controller
+  try {
+    const payload = await fetchJson('/tts/text/normalize', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, language: $('#language').value || null }),
+      signal: controller.signal,
+    })
+    if (state.normalizationAbort !== controller) return
+    const warnings = [...(payload.warnings || [])]
+    if (!payload.supported && !warnings.length) warnings.push(t('composer.normalizationUnsupported'))
+    $('#normalization-output').textContent = payload.normalized
+    $('#normalization-change-count').textContent = t('composer.normalizationChanges', { count: payload.changes?.length || 0 })
+    $('#normalization-warnings').textContent = warnings.join(' ')
+    $('#normalization-warnings').hidden = !warnings.length
+    $('#normalization-preview').hidden = false
+  } catch (error) {
+    if (error.name !== 'AbortError') hideNormalizationPreview()
+  } finally {
+    if (state.normalizationAbort === controller) state.normalizationAbort = null
+  }
+}
+
+function scheduleNormalizationPreview() {
+  clearTimeout(refreshNormalizationPreview.timer)
+  refreshNormalizationPreview.timer = setTimeout(refreshNormalizationPreview, 300)
+}
+
 function samplesForInputType(inputType = state.inputType) {
   if (inputType === 'ssml') return SSML_SAMPLES
   if (inputType === 'ssml-h') return SSML_H_SAMPLES
@@ -286,8 +332,10 @@ function setInputType(inputType, { replaceKnownSample = true, persist = true } =
     button.setAttribute('aria-pressed', String(active))
   })
   $('#expression-guide-button').hidden = inputType !== 'text'
+  $('#normalize-text').disabled = inputType !== 'text'
   if (shouldReplace) editor.value = samplesForInputType(inputType)[0]
   updateTextMetrics()
+  scheduleNormalizationPreview()
   if (persist) persistUiSession()
 }
 
@@ -343,6 +391,7 @@ function controlValues() {
     tempo: Number($('#tempo').value),
     volume: Number($('#volume').value),
     normalize: $('#normalize').checked,
+    normalize_text: $('#normalize-text').checked,
     num_step: Number($('#num-step').value),
     guidance_scale: Number($('#guidance-scale').value),
     pad_duration: Number($('#pad-duration').value),
@@ -373,11 +422,13 @@ function applyControlValues(values = {}) {
     if (input && value !== undefined && value !== null) setControlValue(input, value)
   })
   $('#normalize').checked = settings.normalize === true
+  $('#normalize-text').checked = settings.normalize_text === true
   $('#randomize-seed').checked = settings.randomize_seed === true
   $('#denoise').checked = settings.denoise !== false
   $('#preprocess-prompt').checked = settings.preprocess_prompt !== false
   $('#postprocess-output').checked = settings.postprocess_output !== false
   updateVoiceMode()
+  scheduleNormalizationPreview()
 }
 
 function voiceDesignInstruction() {
@@ -410,6 +461,7 @@ async function requestPayload(forceFormat = null) {
     tempo: controls.tempo,
     volume: controls.volume,
     normalize: controls.normalize,
+    normalize_text: controls.normalize_text && state.inputType === 'text',
     num_step: controls.num_step,
     guidance_scale: controls.guidance_scale,
     pad_duration: controls.pad_duration,
@@ -621,6 +673,7 @@ function useProfile(profile) {
   if (profile.seed != null) $('#seed').value = profile.seed
   $('#randomize-seed').checked = profile.randomize_seed
   updateVoiceMode()
+  scheduleNormalizationPreview()
   activateTab('generate')
   setStatus(t('voices.selected', { name: profile.id }, `Voice ${profile.id} selected.`), 'success')
 }
@@ -1044,13 +1097,16 @@ async function loadWorkspace() {
 
 $('#voice-mode').addEventListener('change', updateVoiceMode)
 $$('[data-input-type]').forEach((button) => button.addEventListener('click', () => setInputType(button.dataset.inputType)))
-$('#text-input').addEventListener('input', updateTextMetrics)
+$('#text-input').addEventListener('input', () => { updateTextMetrics(); scheduleNormalizationPreview() })
+$('#language').addEventListener('change', scheduleNormalizationPreview)
+$('#normalize-text').addEventListener('change', scheduleNormalizationPreview)
 $('#sample-button').addEventListener('click', () => {
   const current = $('#text-input').value
   const samples = samplesForInputType()
   const candidates = samples.filter((sample) => sample !== current)
   $('#text-input').value = candidates[Math.floor(Math.random() * candidates.length)] || samples[0]
   updateTextMetrics()
+  scheduleNormalizationPreview()
 })
 $('#reference-audio').addEventListener('change', (event) => { $('#reference-audio-name').textContent = event.target.files[0]?.name || 'WAV, MP3, FLAC, OGG, or M4A' })
 $('#reset-controls').addEventListener('click', () => applyControlValues(DEFAULT_CONTROLS))
@@ -1064,6 +1120,7 @@ document.addEventListener('visibilitychange', () => {
 })
 window.addEventListener('beforeunload', () => {
   stopGpuMonitor()
+  state.normalizationAbort?.abort()
   state.streamAbort?.abort()
   state.streamPlayback?.stop()
   generateOutput.destroy()

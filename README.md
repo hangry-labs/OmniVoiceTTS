@@ -152,7 +152,7 @@ curl -X POST "http://localhost:7861/v1/audio/speech" \
 
 Model discovery through `/v1/models` reports the local `omnivoice` model. For client compatibility, speech requests also accept `omnivoicetts`, `tts-1`, `tts-1-hd`, and `gpt-4o-mini-tts` as aliases; all of them map to the same local OmniVoice model. OpenAI-style voice names such as `alloy`, `echo`, `fable`, `onyx`, `nova`, and `shimmer` are accepted as local compatibility aliases.
 
-For OpenAI-compatible TTS, standard voice aliases use a local built-in clone reference by default so sentence-by-sentence playback stays closer to the same speaker identity. Advanced clients may also pass OmniVoice extensions such as `language`, `seed`, `randomize_seed`, `voice_profile`, `ref_audio`, and `ref_text` in the request body.
+For OpenAI-compatible TTS, standard voice aliases use a local built-in clone reference by default so sentence-by-sentence playback stays closer to the same speaker identity. Advanced clients may also pass OmniVoice extensions such as `language`, `seed`, `randomize_seed`, `normalize_text`, `voice_profile`, `ref_audio`, and `ref_text` in the request body.
 
 The browser UI includes a **Voices** tab where you can upload or drop a reference sample, inspect or trim its waveform, and save it as a named local voice profile. The workflow previews the normalized profile id, warns before an existing id is replaced, identifies profiles that need on-demand ASR, and provides search, use, and guarded delete actions. The profile stores its default language, seed, seed-randomization behavior, copied reference audio, and optional transcript. In OpenWebUI, set the TTS voice to the saved profile name, for example `my-voice`.
 
@@ -170,6 +170,20 @@ OpenAI-compatible clients can also select or override that profile through addit
 Voice profiles are stored under `/app/persistent/voices/openai` inside the unified product volume, so profiles survive container replacement.
 
 The same saved profiles and built-in aliases are available on native `/tts/generate`, `/tts/convert`, `/tts/stream`, and `/tts/stream-chunks` requests through either `voice` or `voice_profile`. Explicit `ref_audio` still takes precedence when provided.
+
+### Structured Text
+
+Plain English requests can opt into conservative structured-text normalization with `"normalize_text": true`. The normalizer expands integers, decimals, percentages, currencies, ISO dates (`YYYY-MM-DD`), phone numbers, email addresses, URLs, and explicit alphanumeric identifiers before duration estimation and synthesis. The same flag is available in the browser, native APIs, the OpenAI-compatible endpoint, Python client, direct model calls, and both inference CLIs.
+
+The browser shows the exact spoken form before generation. API clients can inspect it without loading the model:
+
+```bash
+curl -X POST "http://localhost:7861/tts/text/normalize" \
+  -H "Content-Type: application/json" \
+  -d '{"text":"Email ops@example.com about invoice 42 due on 2026-08-12.","language":"English"}'
+```
+
+Normalization is off by default and applies only to plain text. SSML, SSML-H, voice-clone reference transcripts, bracket controls, and ARPABET controls are never rewritten. Ambiguous slash dates and version/IP-like dotted values are preserved and reported as warnings instead of being guessed. English is the initial supported language; unsupported explicit languages are returned unchanged.
 
 ### SSML And SSML-H
 
@@ -218,6 +232,7 @@ Useful endpoints:
 - `DELETE /tts/voice-profiles/{name}`
 - `GET /tts/voice-design/options`
 - `GET /tts/ssml/capabilities`
+- `POST /tts/text/normalize`
 - `GET /tts/openai-calls`
 - `POST /tts/generate`
 - `POST /tts/convert`
@@ -250,8 +265,9 @@ from omnivoice import OmniVoiceTTSClient
 tts = OmniVoiceTTSClient("http://localhost:7861")
 
 audio = tts.generate(
-    text="Hello from my Python app.",
+    text="Invoice 42 is due on 2026-08-12.",
     language="English",
+    normalize_text=True,
     instruct="female, low pitch, british accent",
     output_format="mp3",
 )
@@ -283,6 +299,7 @@ audio.save("openai-speech.mp3")
 - GPU acceleration when available
 - Stored OpenAI voice profiles reuse cached clone prompts after the first request
 - Tune generated clip edge silence and fade with `pad_duration` and `fade_duration`
+- Preview and opt into conservative English structured-text speech normalization
 - Serialized GPU generation by default to avoid concurrent VRAM spikes
 - CUDA allocator diagnostics and cache clearing without unloading model weights
 - Automatic Librosa resampling fallback when optional `torchaudio` is unavailable; force either backend with `OMNIVOICE_RESAMPLE_BACKEND`
@@ -503,6 +520,8 @@ The snapshot channel is the current Docker `latest` build after the latest tagge
 
 Current snapshot changes after `v0.3.0`:
 
+- Added opt-in, previewable English structured-text normalization for numbers, currencies, percentages, ISO dates, phone numbers, email addresses, URLs, and identifiers across the browser, native/OpenAI-compatible APIs, Python/direct-model paths, and CLIs while preserving ambiguous and explicit pronunciation syntax.
+- Fixed the built-in OpenAI-style clone aliases after runtime assets moved by deriving the reference-audio allowlist from the authoritative packaged voice path.
 - Implemented [SSML-H 1.0](https://hangrylabs.app/ns/ssml-h/1.0), the Hangry Labs SSML extension standard for portable dynamic voice definitions, temporary characters, multi-speaker turns, and atomically persisted voice profiles.
 - Integrated the published [`ssml-h-tools`](https://pypi.org/project/ssml-h-tools/) parser, validator, builder data model, and bounded resource contract while retaining OmniVoice-specific execution and profile transactions locally.
 - Added hardened, explicit SSML and SSML-H modes across complete generation, progressive streaming, metrics, the Python client, capability discovery, and the browser UI, while preserving plain text as the default and keeping OpenAI compatibility routes unchanged.

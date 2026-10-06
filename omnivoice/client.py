@@ -62,6 +62,14 @@ class OmniVoiceTTSClient:
     def languages(self) -> dict[str, Any]:
         return self._json("GET", "/tts/languages")
 
+    def normalize_text(self, text: str, language: str | None = None) -> dict[str, Any]:
+        """Preview the spoken form produced by opt-in structured-text normalization."""
+        return self._json(
+            "POST",
+            "/tts/text/normalize",
+            {"text": text, "language": language},
+        )
+
     def purge(self, device: str | None = None) -> dict[str, Any]:
         payload = {} if device is None else {"device": device}
         return self._json("POST", "/tts/purge", payload)
@@ -83,6 +91,7 @@ class OmniVoiceTTSClient:
         guidance_scale: float = 2.0,
         pad_duration: float = 0.1,
         fade_duration: float = 0.1,
+        normalize_text: bool = False,
     ) -> AudioResponse:
         return self._audio(
             "/tts/generate",
@@ -102,6 +111,7 @@ class OmniVoiceTTSClient:
                 "guidance_scale": guidance_scale,
                 "pad_duration": pad_duration,
                 "fade_duration": fade_duration,
+                "normalize_text": normalize_text,
             },
         )
 

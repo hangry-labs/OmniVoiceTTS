@@ -5,6 +5,8 @@ import unittest
 from pydantic import ValidationError
 
 from omnivoice.service.schemas import OpenAISpeechRequest, TTSRequest
+from omnivoice.cli.infer import get_parser as get_infer_parser
+from omnivoice.cli.infer_batch import get_parser as get_batch_parser
 from omnivoice.utils.text import (
     normalize_terminal_punctuation_spacing,
     validate_synthesis_text,
@@ -45,6 +47,27 @@ class SynthesisTextValidationTests(unittest.TestCase):
             TTSRequest(text="____")
         with self.assertRaises(ValidationError):
             OpenAISpeechRequest(input="____")
+
+    def test_structured_normalization_is_plain_text_only(self) -> None:
+        with self.assertRaisesRegex(ValidationError, "plain-text|input_type='text'"):
+            TTSRequest(
+                text='<speak version="1.1">Item 12.</speak>',
+                input_type="ssml",
+                normalize_text=True,
+            )
+
+        self.assertTrue(TTSRequest(text="Item 12.", normalize_text=True).normalize_text)
+
+    def test_inference_clis_expose_opt_in_normalization(self) -> None:
+        single = get_infer_parser().parse_args(
+            ["--text", "Item 12.", "--output", "out.wav", "--normalize_text", "true"]
+        )
+        batch = get_batch_parser().parse_args(
+            ["--test_list", "items.jsonl", "--res_dir", "results", "--normalize_text", "true"]
+        )
+
+        self.assertTrue(single.normalize_text)
+        self.assertTrue(batch.normalize_text)
 
     def test_spaces_attached_terminal_question_and_exclamation_marks(self) -> None:
         cases = {

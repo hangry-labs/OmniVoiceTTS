@@ -93,6 +93,12 @@ def get_parser() -> argparse.ArgumentParser:
     parser.add_argument("--guidance_scale", type=float, default=2.0)
     parser.add_argument("--speed", type=float, default=1.0)
     parser.add_argument(
+        "--normalize_text",
+        type=str2bool,
+        default=False,
+        help="Normalize supported English structured text before synthesis.",
+    )
+    parser.add_argument(
         "--duration",
         type=float,
         default=None,
@@ -154,6 +160,7 @@ def main():
         num_step=args.num_step,
         guidance_scale=args.guidance_scale,
         speed=args.speed,
+        normalize_text=args.normalize_text,
         t_shift=args.t_shift,
         denoise=args.denoise,
         postprocess_output=args.postprocess_output,

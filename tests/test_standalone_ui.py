@@ -68,6 +68,8 @@ class StandaloneUiTests(unittest.TestCase):
         self.assertIn('id="profile-audio-preview"', index.text)
         self.assertIn('id="delete-profile-dialog"', index.text)
         self.assertIn('id="advanced-generation"', index.text)
+        self.assertIn('id="normalize-text"', index.text)
+        self.assertIn('id="normalization-preview"', index.text)
         self.assertIn('data-input-type="ssml"', index.text)
         self.assertIn('data-input-type="ssml-h"', index.text)
         self.assertLess(index.text.index('id="advanced-generation"'), index.text.index('<section class="content-panel">'))
@@ -120,6 +122,8 @@ class StandaloneUiTests(unittest.TestCase):
         self.assertIn("function nativeLanguageLabel(id, fallback)", script)
         self.assertIn("input_type: state.inputType", script)
         self.assertIn("/tts/ssml/capabilities", script)
+        self.assertIn("/tts/text/normalize", script)
+        self.assertIn("normalize_text: controls.normalize_text && state.inputType === 'text'", script)
         self.assertIn(
             '<voice name="Elisabeth"><prosody rate="slow">Yes, all preparations are complete.</prosody></voice>',
             script,
