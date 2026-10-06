@@ -4,6 +4,7 @@ import unittest
 
 from omnivoice.utils.malayalam_normalization import number_to_malayalam
 from omnivoice.utils.text_normalization import normalize_structured_text
+from omnivoice.utils.vietnamese_normalization import number_to_vietnamese
 
 
 class StructuredTextNormalizationTests(unittest.TestCase):
@@ -162,6 +163,104 @@ class StructuredTextNormalizationTests(unittest.TestCase):
         for source, expected in cases.items():
             with self.subTest(source=source):
                 self.assertEqual(normalize_structured_text(source, "ml").normalized, expected)
+
+    def test_issue_238_vietnamese_structured_values_are_verbalized(self) -> None:
+        text = (
+            "Tôi có 25 quyển sách, giá 250.000đ, giảm 12,5%, "
+            "nặng 2kg lúc 08:30 ngày 2026-07-29."
+        )
+        result = normalize_structured_text(text, "Vietnamese")
+
+        self.assertTrue(result.supported)
+        self.assertEqual(result.language, "vi")
+        self.assertEqual(
+            result.normalized,
+            "Tôi có hai mươi lăm quyển sách, giá hai trăm năm mươi nghìn đồng, "
+            "giảm mười hai phẩy năm phần trăm, nặng hai ki lô gam lúc "
+            "tám giờ ba mươi phút ngày hai mươi chín tháng bảy năm "
+            "hai nghìn không trăm hai mươi sáu.",
+        )
+        self.assertEqual(
+            [change.kind for change in result.changes],
+            ["integer", "currency", "percentage", "unit", "time", "date"],
+        )
+        for change in result.changes:
+            self.assertEqual(text[change.start : change.end], change.original)
+
+    def test_vietnamese_number_vocabulary_matches_contributed_rules(self) -> None:
+        cases = {
+            0: "không",
+            1: "một",
+            10: "mười",
+            15: "mười lăm",
+            21: "hai mươi mốt",
+            24: "hai mươi tư",
+            25: "hai mươi lăm",
+            101: "một trăm linh một",
+            105: "một trăm linh năm",
+            1_000: "một nghìn",
+            1_005: "một nghìn không trăm linh năm",
+            1_234: "một nghìn hai trăm ba mươi tư",
+            1_000_000: "một triệu",
+            -42: "âm bốn mươi hai",
+        }
+
+        for value, expected in cases.items():
+            with self.subTest(value=value):
+                self.assertEqual(number_to_vietnamese(value), expected)
+        with self.assertRaises(ValueError):
+            number_to_vietnamese("1234567890123456789")
+
+    def test_vietnamese_currency_units_decimals_and_seconds(self) -> None:
+        result = normalize_structured_text(
+            "Giá $19.99, 2 triệu VND, 1.234,56 EUR; nhiệt độ 25°C lúc 23:59:08.",
+            "vi-VN",
+        )
+
+        self.assertEqual(
+            result.normalized,
+            "Giá mười chín phẩy chín chín đô la Mỹ, hai triệu đồng, "
+            "một nghìn hai trăm ba mươi tư phẩy năm sáu euro; nhiệt độ "
+            "hai mươi lăm độ xê lúc hai mươi ba giờ năm mươi chín phút tám giây.",
+        )
+        self.assertEqual(
+            [change.kind for change in result.changes],
+            ["currency", "currency", "currency", "unit", "time"],
+        )
+
+    def test_vietnamese_ambiguous_identifiers_and_malformed_values_are_preserved(self) -> None:
+        text = (
+            "Giữ 1.234, 1,234, mã 007, phòng 105, 1/2, 08/12/2026, 25:70, "
+            "1,2,3, 090 123 4567, IP 192.168.1.5 và v1.2.3."
+        )
+        result = normalize_structured_text(text, "vi")
+
+        self.assertEqual(result.normalized, text)
+        self.assertEqual(result.changes, ())
+        self.assertIn("Invalid time-like values were preserved.", result.warnings)
+        self.assertTrue(
+            any("dotted values" in warning for warning in result.warnings),
+            result.warnings,
+        )
+        self.assertTrue(
+            any("identifiers" in warning for warning in result.warnings),
+            result.warnings,
+        )
+        self.assertTrue(
+            any("numeric punctuation" in warning for warning in result.warnings),
+            result.warnings,
+        )
+
+    def test_vietnamese_invalid_iso_date_is_not_partially_rewritten(self) -> None:
+        text = "Ngày 2026-02-30 không hợp lệ, nhưng ngày 2024-02-29 hợp lệ."
+        result = normalize_structured_text(text, "vi")
+
+        self.assertEqual(
+            result.normalized,
+            "Ngày 2026-02-30 không hợp lệ, nhưng ngày hai mươi chín tháng hai "
+            "năm hai nghìn không trăm hai mươi tư hợp lệ.",
+        )
+        self.assertIn("Invalid ISO dates were preserved.", result.warnings)
 
 
 if __name__ == "__main__":

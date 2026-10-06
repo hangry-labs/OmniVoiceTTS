@@ -173,7 +173,7 @@ The same saved profiles and built-in aliases are available on native `/tts/gener
 
 ### Structured Text
 
-Plain English and Malayalam requests can opt into conservative structured-text normalization with `"normalize_text": true`. English normalization expands integers, decimals, percentages, currencies, ISO dates (`YYYY-MM-DD`), phone numbers, email addresses, URLs, and explicit alphanumeric identifiers. Malayalam normalization expands integers up to 99 lakh, decimals, percentages, currencies, common measurement units, times, common fractions, English-style ordinals, and uppercase acronyms. Normalization runs before duration estimation and synthesis. The same flag is available in the browser, native APIs, the OpenAI-compatible endpoint, Python client, direct model calls, and both inference CLIs.
+Plain English, Malayalam, and Vietnamese requests can opt into conservative structured-text normalization with `"normalize_text": true`. English normalization expands integers, decimals, percentages, currencies, ISO dates (`YYYY-MM-DD`), phone numbers, email addresses, URLs, and explicit alphanumeric identifiers. Malayalam normalization expands integers up to 99 lakh, decimals, percentages, currencies, common measurement units, times, common fractions, English-style ordinals, and uppercase acronyms. Vietnamese normalization expands unambiguous integers, decimals, percentages, marked currencies, common measurement units, ISO dates, and times. Normalization runs before duration estimation and synthesis. The same flag is available in the browser, native APIs, the OpenAI-compatible endpoint, Python client, direct model calls, and both inference CLIs.
 
 The browser shows the exact spoken form before generation. API clients can inspect it without loading the model:
 
@@ -183,7 +183,7 @@ curl -X POST "http://localhost:7861/tts/text/normalize" \
   -d '{"text":"Email ops@example.com about invoice 42 due on 2026-08-12.","language":"English"}'
 ```
 
-Normalization is off by default and applies only to plain text. SSML, SSML-H, voice-clone reference transcripts, bracket controls, and ARPABET controls are never rewritten. Ambiguous values are preserved and reported as warnings instead of being guessed. English and Malayalam are supported; Malayalam script can be detected automatically, while an explicit language remains recommended. Unsupported explicit languages are returned unchanged.
+Normalization is off by default and applies only to plain text. SSML, SSML-H, voice-clone reference transcripts, bracket controls, and ARPABET controls are never rewritten. Ambiguous values are preserved and reported as warnings instead of being guessed. English, Malayalam, and Vietnamese are supported; Malayalam script can be detected automatically, while an explicit language is recommended for Vietnamese. Vietnamese phone numbers, identifiers, slash forms, lone dotted values, and malformed dates or times remain unchanged unless their meaning is made explicit by a supported marker. Unsupported explicit languages are returned unchanged.
 
 ### SSML And SSML-H
 
@@ -305,7 +305,7 @@ audio.save("openai-speech.mp3")
 - GPU acceleration when available
 - Stored OpenAI voice profiles reuse cached clone prompts after the first request
 - Tune generated clip edge silence and fade with `pad_duration` and `fade_duration`
-- Preview and opt into conservative English and Malayalam structured-text speech normalization
+- Preview and opt into conservative English, Malayalam, and Vietnamese structured-text speech normalization
 - Serialized GPU generation by default to avoid concurrent VRAM spikes
 - CUDA allocator diagnostics and cache clearing without unloading model weights
 - Automatic Librosa resampling fallback when optional `torchaudio` is unavailable; force either backend with `OMNIVOICE_RESAMPLE_BACKEND`
@@ -517,6 +517,7 @@ The snapshot channel is the current Docker `latest` build after the latest tagge
 
 Current snapshot changes after `v0.3.0`:
 
+- Added opt-in Vietnamese structured-text normalization for unambiguous numbers, decimals, currencies, percentages, units, ISO dates, and times, with source-relative preview and conservative protection for phones, identifiers, slash forms, and ambiguous punctuation.
 - Added opt-in Malayalam structured-text normalization for numbers, decimals, currencies, percentages, units, times, fractions, ordinals, and uppercase acronyms, with browser/API preview, source-relative change reporting, and conservative ambiguity handling.
 - Added browser microphone recording for one-off voice cloning and reusable voice profiles, including WAV conversion, elapsed recording state, waveform review, trimming, and normal upload validation.
 - Added a dedicated public SSML-H conversation showcase with three reproducible multi-character examples, generated audio, transcripts, and copyable source documents.

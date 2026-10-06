@@ -104,7 +104,10 @@ def get_parser() -> argparse.ArgumentParser:
         "--normalize_text",
         type=str2bool,
         default=False,
-        help="Normalize supported English or Malayalam structured text before synthesis.",
+        help=(
+            "Normalize supported English, Malayalam, or Vietnamese structured text "
+            "before synthesis."
+        ),
     )
     parser.add_argument(
         "--duration",

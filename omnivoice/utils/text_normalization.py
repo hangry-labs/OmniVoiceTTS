@@ -13,10 +13,11 @@ from num2words import num2words
 
 from omnivoice.utils.lang_map import LANG_NAME_TO_ID
 from omnivoice.utils.malayalam_normalization import collect_malayalam_candidates
+from omnivoice.utils.vietnamese_normalization import collect_vietnamese_candidates
 
 
 MAX_NORMALIZATION_CHARACTERS = 20_000
-SUPPORTED_NORMALIZATION_LANGUAGES = ("en", "ml")
+SUPPORTED_NORMALIZATION_LANGUAGES = ("en", "ml", "vi")
 
 _BRACKET_CONTROL_RE = re.compile(r"\[[^\[\]]*\]")
 _AMBIGUOUS_SLASH_DATE_RE = re.compile(r"(?<!\w)\d{1,2}/\d{1,2}/\d{2,4}(?!\w)")
@@ -250,7 +251,7 @@ def normalize_structured_text(text: str, language: str | None = None) -> TextNor
             supported=False,
             changes=(),
             warnings=(
-                "Structured-text normalization currently supports English and Malayalam plain text.",
+                "Structured-text normalization currently supports English, Malayalam, and Vietnamese plain text.",
             ),
         )
 
@@ -295,6 +296,13 @@ def normalize_structured_text(text: str, language: str | None = None) -> TextNor
             for item in malayalam.candidates
         )
         warnings.extend(malayalam.warnings)
+    elif resolved_language == "vi":
+        vietnamese = collect_vietnamese_candidates(text, occupied)
+        candidates.extend(
+            _Candidate(item.kind, item.start, item.end, item.spoken)
+            for item in vietnamese.candidates
+        )
+        warnings.extend(vietnamese.warnings)
     else:
         collect(_EMAIL_RE, "email", _verbalize_email)
 

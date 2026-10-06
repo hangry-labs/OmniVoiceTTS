@@ -124,7 +124,8 @@ class TTSRequest(BaseModel):
     normalize_text: bool = Field(
         False,
         description=(
-            "Convert supported English or Malayalam structured text to a spoken form before synthesis. "
+            "Convert supported English, Malayalam, or Vietnamese structured text to a "
+            "spoken form before synthesis. "
             "Plain-text input only; use /tts/text/normalize to preview the exact result."
         ),
     )
@@ -172,7 +173,10 @@ class TextNormalizationRequest(BaseModel):
     text: str = Field(..., min_length=1, max_length=MAX_NORMALIZATION_CHARACTERS)
     language: str | None = Field(
         None,
-        description="Language name or id. Structured normalization supports English and Malayalam.",
+        description=(
+            "Language name or id. Structured normalization supports English, Malayalam, "
+            "and Vietnamese."
+        ),
     )
 
     @field_validator("text")
@@ -242,8 +246,8 @@ class OpenAISpeechRequest(BaseModel):
     normalize_text: bool = Field(
         False,
         description=(
-            "Optional OmniVoice extension: normalize supported English or Malayalam structured text "
-            "before synthesis."
+            "Optional OmniVoice extension: normalize supported English, Malayalam, or Vietnamese "
+            "structured text before synthesis."
         ),
     )
     device: str = Field(DEFAULT_DEVICE, description="Optional OmniVoice extension: auto, cpu, mps, or cuda:N.")
