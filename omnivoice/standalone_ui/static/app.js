@@ -66,6 +66,17 @@ const DEFAULT_CONTROLS = {
   speed: 1, pitch_semitones: 0, tempo: 1, volume: 1, normalize: false, normalize_text: false, num_step: 32,
   guidance_scale: 2, pad_duration: 0.1, fade_duration: 0.1, seed: 42,
   randomize_seed: true, denoise: true, preprocess_prompt: true, postprocess_output: true,
+  float_preserving_silence: true, output_min_silence_ms: 500, output_keep_silence_ms: 1000,
+  output_lead_silence_ms: 100, output_trail_silence_ms: 100,
+  output_preserve_active_edges: false, output_peak_limit: null,
+  audio_chunk_duration: 15, audio_chunk_threshold: 30,
+}
+const ADVANCED_DEFAULTS = {
+  num_step: 32, guidance_scale: 2, pad_duration: 0.1, fade_duration: 0.1, seed: 42,
+  randomize_seed: true, denoise: true, preprocess_prompt: true, postprocess_output: true,
+  float_preserving_silence: true, output_min_silence_ms: 500, output_keep_silence_ms: 1000,
+  output_lead_silence_ms: 100, output_trail_silence_ms: 100,
+  output_preserve_active_edges: false, output_peak_limit: null,
   audio_chunk_duration: 15, audio_chunk_threshold: 30,
 }
 const GPU_METRICS = [
@@ -379,6 +390,14 @@ function updateVoiceMode() {
   $('#profile-field').hidden = mode !== 'profile'
 }
 
+function updateMasteringState() {
+  const postprocess = $('#postprocess-output').checked
+  const preserveFloat = $('#float-preserving-silence').checked
+  ;['#output-min-silence-ms', '#output-keep-silence-ms', '#output-lead-silence-ms', '#output-trail-silence-ms', '#float-preserving-silence']
+    .forEach((selector) => { $(selector).disabled = !postprocess })
+  $('#output-preserve-active-edges').disabled = !postprocess || !preserveFloat
+}
+
 function controlValues() {
   return {
     voice_mode: $('#voice-mode').value,
@@ -396,6 +415,13 @@ function controlValues() {
     guidance_scale: Number($('#guidance-scale').value),
     pad_duration: Number($('#pad-duration').value),
     fade_duration: Number($('#fade-duration').value),
+    float_preserving_silence: $('#float-preserving-silence').checked,
+    output_min_silence_ms: Number($('#output-min-silence-ms').value),
+    output_keep_silence_ms: Number($('#output-keep-silence-ms').value),
+    output_lead_silence_ms: Number($('#output-lead-silence-ms').value),
+    output_trail_silence_ms: Number($('#output-trail-silence-ms').value),
+    output_preserve_active_edges: $('#output-preserve-active-edges').checked,
+    output_peak_limit: $('#output-peak-limit').value.trim() === '' ? null : Number($('#output-peak-limit').value),
     seed: Number($('#seed').value),
     randomize_seed: $('#randomize-seed').checked,
     denoise: $('#denoise').checked,
@@ -415,6 +441,10 @@ function applyControlValues(values = {}) {
     '#tempo': settings.tempo, '#tempo-slider': settings.tempo, '#volume': settings.volume,
     '#volume-slider': settings.volume, '#num-step': settings.num_step, '#guidance-scale': settings.guidance_scale,
     '#pad-duration': settings.pad_duration, '#fade-duration': settings.fade_duration, '#seed': settings.seed,
+    '#output-min-silence-ms': settings.output_min_silence_ms,
+    '#output-keep-silence-ms': settings.output_keep_silence_ms,
+    '#output-lead-silence-ms': settings.output_lead_silence_ms,
+    '#output-trail-silence-ms': settings.output_trail_silence_ms,
     '#audio-chunk-duration': settings.audio_chunk_duration, '#audio-chunk-threshold': settings.audio_chunk_threshold,
   }
   Object.entries(direct).forEach(([selector, value]) => {
@@ -427,7 +457,11 @@ function applyControlValues(values = {}) {
   $('#denoise').checked = settings.denoise !== false
   $('#preprocess-prompt').checked = settings.preprocess_prompt !== false
   $('#postprocess-output').checked = settings.postprocess_output !== false
+  $('#float-preserving-silence').checked = settings.float_preserving_silence !== false
+  $('#output-preserve-active-edges').checked = settings.output_preserve_active_edges === true
+  $('#output-peak-limit').value = settings.output_peak_limit ?? ''
   updateVoiceMode()
+  updateMasteringState()
   scheduleNormalizationPreview()
 }
 
@@ -1110,6 +1144,9 @@ $('#sample-button').addEventListener('click', () => {
 })
 $('#reference-audio').addEventListener('change', (event) => { $('#reference-audio-name').textContent = event.target.files[0]?.name || 'WAV, MP3, FLAC, OGG, or M4A' })
 $('#reset-controls').addEventListener('click', () => applyControlValues(DEFAULT_CONTROLS))
+$('#reset-advanced-controls').addEventListener('click', () => applyControlValues({ ...controlValues(), ...ADVANCED_DEFAULTS }))
+$('#postprocess-output').addEventListener('change', updateMasteringState)
+$('#float-preserving-silence').addEventListener('change', updateMasteringState)
 $('#expression-guide-button').addEventListener('click', () => $('#expression-guide').showModal())
 $('#expression-guide-close').addEventListener('click', () => $('#expression-guide').close())
 $('#expression-guide').addEventListener('click', (event) => { if (event.target === event.currentTarget) event.currentTarget.close() })

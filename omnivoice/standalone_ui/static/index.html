@@ -91,6 +91,7 @@
       <label class="toggle-field"><span data-i18n="generation.normalizeText">Speak structured text</span><input id="normalize-text" type="checkbox"><span class="toggle-track" aria-hidden="true"></span></label>
       <details class="settings-details workflow-only compact-advanced" id="advanced-generation">
         <summary data-i18n="generation.advanced">Advanced generation</summary>
+        <div class="advanced-toolbar"><span data-i18n="generation.modelControls">Model</span><button class="icon-button reset-controls" id="reset-advanced-controls" type="button" title="Reset advanced controls" aria-label="Reset advanced controls" data-i18n-title="generation.resetAdvanced" data-i18n-aria-label="generation.resetAdvanced"><i class="icon-rotate-ccw"></i></button></div>
         <div class="advanced-grid">
           <label class="compact-field"><span data-i18n="generation.steps">Inference steps</span><input id="num-step" type="number" min="4" max="64" step="1" value="32"></label>
           <label class="compact-field"><span data-i18n="generation.guidance">Guidance scale</span><input id="guidance-scale" type="number" min="0" max="4" step="0.1" value="2"></label>
@@ -106,6 +107,20 @@
           <label class="toggle-field"><span data-i18n="generation.preprocess">Clean reference audio</span><input id="preprocess-prompt" type="checkbox" checked><span class="toggle-track" aria-hidden="true"></span></label>
           <label class="toggle-field"><span data-i18n="generation.postprocess">Post-process output</span><input id="postprocess-output" type="checkbox" checked><span class="toggle-track" aria-hidden="true"></span></label>
         </div>
+        <details class="mastering-details">
+          <summary data-i18n="generation.mastering">Output mastering</summary>
+          <div class="advanced-grid mastering-grid">
+            <label class="compact-field"><span data-i18n="generation.silenceThreshold">Long silence trigger (ms)</span><input id="output-min-silence-ms" type="number" min="0" max="10000" step="10" value="500"></label>
+            <label class="compact-field"><span data-i18n="generation.retainedGap">Retained gap (ms)</span><input id="output-keep-silence-ms" type="number" min="0" max="10000" step="10" value="1000"></label>
+            <label class="compact-field"><span data-i18n="generation.leadingSilence">Leading silence (ms)</span><input id="output-lead-silence-ms" type="number" min="0" max="10000" step="10" value="100"></label>
+            <label class="compact-field"><span data-i18n="generation.trailingSilence">Trailing silence (ms)</span><input id="output-trail-silence-ms" type="number" min="0" max="10000" step="10" value="100"></label>
+            <label class="compact-field mastering-wide"><span data-i18n="generation.peakLimit">Peak limit (off when empty)</span><input id="output-peak-limit" type="number" min="0.01" max="1" step="0.01" placeholder="Off" data-i18n-placeholder="common.off"></label>
+          </div>
+          <div class="toggle-grid mastering-toggles">
+            <label class="toggle-field"><span data-i18n="generation.floatPreserving">Preserve float quality</span><input id="float-preserving-silence" type="checkbox" checked><span class="toggle-track" aria-hidden="true"></span></label>
+            <label class="toggle-field"><span data-i18n="generation.preserveActiveEdges">Preserve quiet active edges</span><input id="output-preserve-active-edges" type="checkbox"><span class="toggle-track" aria-hidden="true"></span></label>
+          </div>
+        </details>
       </details>
       <div class="status-line" id="global-status" data-tone="neutral" data-i18n="status.connecting">Connecting to inference</div>
     </aside>

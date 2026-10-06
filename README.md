@@ -249,6 +249,10 @@ Useful endpoints:
 
 Generated audio edge handling can be tuned with `pad_duration` and `fade_duration` on `/tts/generate`, `/tts/convert`, `/tts/stream`, `/tts/stream-chunks`, and `/v1/audio/speech`. `pad_duration` adds silence before and after the clip; `fade_duration` fades the clip in and out to reduce clicks. Both default to `0.1` seconds and can be set to `0` to disable.
 
+Advanced output mastering keeps the established sound and timing defaults while making the individual stages configurable. Silence cleanup now uses `float_preserving_silence=true` by default so Pydub detects ranges without rebuilding retained speech through PCM16; set it to `false` for the legacy path when comparing an unusual output. `output_min_silence_ms`, `output_keep_silence_ms`, `output_lead_silence_ms`, and `output_trail_silence_ms` control long-gap shortening and retained edges. `output_preserve_active_edges` optionally protects quiet nonzero attacks/releases, and `output_peak_limit` applies a duration-preserving peak ceiling when set. The browser exposes these under **Advanced generation > Output mastering** with a dedicated reset-to-defaults action. The same fields are available through native and OpenAI-compatible APIs, the Python client, and both inference CLIs.
+
+The optional `duration` field is an audio-token budget expressed in seconds, not an exact physical waveform length. It overrides `speed` for model generation, while codec decoding and output processing can still produce a slightly different final duration.
+
 Before inference, attached ASCII question and exclamation marks at sentence boundaries are automatically separated from the preceding word. This maps inputs such as `Jesteśmy gotowi do ofiary?` to the model-compatible token form `Jesteśmy gotowi do ofiary ?`, which avoids an observed final-syllable truncation case. This is text-token normalization, not audio silence padding; compact CJK punctuation is left unchanged.
 
 Docker images default to `OMNIVOICE_MAX_CONCURRENT_GENERATIONS=1`, so concurrent API callers queue on each resolved device instead of overlapping GPU-heavy generation. `/tts/status` reports CUDA `allocated`, `reserved`, and peak allocator counters. `POST /tts/cache/clear` releases unused PyTorch CUDA allocator blocks without unloading model weights or saved voice-prompt cache entries; `POST /tts/purge` unloads cached models and then performs the stronger CUDA allocator cleanup. `OMNIVOICE_EMPTY_CUDA_CACHE_AFTER_REQUEST=1` can force allocator cleanup after every request, but it is off by default because it may reduce throughput.
@@ -511,6 +515,8 @@ The snapshot channel is the current Docker `latest` build after the latest tagge
 
 Current snapshot changes after `v0.3.0`:
 
+- Added float-preserving silence processing, configurable gap/edge retention, optional quiet-edge protection and peak limiting, a legacy compatibility switch, corrected duration-token rounding, and empty-output guards across browser, API, client, and CLI paths.
+- Added compact Output mastering controls and a dedicated Advanced Generation reset while retaining the existing output defaults.
 - Added opt-in, previewable English structured-text normalization for numbers, currencies, percentages, ISO dates, phone numbers, email addresses, URLs, and identifiers across the browser, native/OpenAI-compatible APIs, Python/direct-model paths, and CLIs while preserving ambiguous and explicit pronunciation syntax.
 - Fixed the built-in OpenAI-style clone aliases after runtime assets moved by deriving the reference-audio allowlist from the authoritative packaged voice path.
 - Implemented [SSML-H 1.0](https://hangrylabs.app/ns/ssml-h/1.0), the Hangry Labs SSML extension standard for portable dynamic voice definitions, temporary characters, multi-speaker turns, and atomically persisted voice profiles.

@@ -195,36 +195,173 @@ def remove_silence(
     mid_sil: int = 300,
     lead_sil: int = 100,
     trail_sil: int = 300,
+    keep_mid_sil: int | None = None,
+    *,
+    preserve_active_edges: bool = False,
+    preserve_float: bool = True,
 ) -> np.ndarray:
-    """Remove middle silences longer than *mid_sil* ms and trim edge silences.
+    """Shorten long middle silences and trim edge silences.
 
     Parameters:
         audio: numpy array with shape (C, T).
         sampling_rate: sampling rate of the audio.
-        mid_sil: middle-silence threshold in ms (0 to skip).
+        mid_sil: minimum middle-silence duration in ms (0 to skip).
         lead_sil: kept leading silence in ms.
         trail_sil: kept trailing silence in ms.
+        keep_mid_sil: maximum total duration kept from each detected middle
+            silence. ``None`` preserves the historical two-sided behavior.
+        preserve_active_edges: keep nonzero outer-edge samples even when they
+            fall below the silence detector threshold.
+        preserve_float: slice the original float waveform instead of rebuilding
+            it through PCM16. Set to ``False`` for legacy compatibility.
 
     Returns:
         Numpy array with shape (C, T').
     """
-    wave = numpy_to_audiosegment(audio, sampling_rate)
+    for name, value in (
+        ("mid_sil", mid_sil),
+        ("lead_sil", lead_sil),
+        ("trail_sil", trail_sil),
+    ):
+        if (
+            isinstance(value, bool)
+            or not isinstance(value, (int, np.integer))
+            or value < 0
+        ):
+            raise ValueError(f"{name} must be a non-negative integer")
+    if keep_mid_sil is None:
+        keep_mid_sil = 2 * mid_sil
+    elif (
+        isinstance(keep_mid_sil, bool)
+        or not isinstance(keep_mid_sil, (int, np.integer))
+        or keep_mid_sil < 0
+    ):
+        raise ValueError("keep_mid_sil must be a non-negative integer")
+    if not isinstance(preserve_active_edges, bool):
+        raise TypeError("preserve_active_edges must be a bool")
+    if not isinstance(preserve_float, bool):
+        raise TypeError("preserve_float must be a bool")
+    if audio.ndim != 2:
+        raise ValueError("audio must have shape (channels, samples)")
+    if audio.shape[-1] == 0:
+        return audio
+
+    if not preserve_float:
+        wave = numpy_to_audiosegment(audio, sampling_rate)
+
+        if mid_sil > 0:
+            non_silent_segs = split_on_silence(
+                wave,
+                min_silence_len=mid_sil,
+                silence_thresh=-50,
+                keep_silence=keep_mid_sil // 2,
+                seek_step=10,
+            )
+            wave = AudioSegment.silent(duration=0)
+            for seg in non_silent_segs:
+                wave += seg
+
+        wave = remove_silence_edges(wave, lead_sil, trail_sil, -50)
+        return audiosegment_to_numpy(wave)
+
+    # Pydub detects millisecond ranges, but retained samples come directly from
+    # the original float waveform so voiced audio is never quantized to PCM16.
+    detection_proxy = numpy_to_audiosegment(audio, sampling_rate)
 
     if mid_sil > 0:
-        non_silent_segs = split_on_silence(
-            wave,
-            min_silence_len=mid_sil,
-            silence_thresh=-50,
-            keep_silence=mid_sil,
-            seek_step=10,
-        )
-        wave = AudioSegment.silent(duration=0)
-        for seg in non_silent_segs:
-            wave += seg
+        keep_per_side = keep_mid_sil // 2
+        output_ranges = [
+            [start - keep_per_side, end + keep_per_side]
+            for start, end in detect_nonsilent(
+                detection_proxy,
+                min_silence_len=mid_sil,
+                silence_thresh=-50,
+                seek_step=10,
+            )
+        ]
+        for current, following in zip(output_ranges, output_ranges[1:]):
+            if following[0] < current[1]:
+                midpoint = (current[1] + following[0]) // 2
+                current[1] = midpoint
+                following[0] = midpoint
 
-    wave = remove_silence_edges(wave, lead_sil, trail_sil, -50)
+        sample_ranges = [
+            (
+                max(0, int(start * sampling_rate / 1000.0)),
+                audio.shape[-1]
+                if end >= len(detection_proxy)
+                else min(audio.shape[-1], int(end * sampling_rate / 1000.0)),
+            )
+            for start, end in output_ranges
+        ]
+        if preserve_active_edges:
+            first_active = _find_exact_active_edge(audio, from_end=False)
+            last_active = _find_exact_active_edge(audio, from_end=True)
+            if first_active is not None and last_active is not None:
+                if sample_ranges:
+                    sample_ranges[0] = (
+                        min(sample_ranges[0][0], first_active),
+                        sample_ranges[0][1],
+                    )
+                    sample_ranges[-1] = (
+                        sample_ranges[-1][0],
+                        max(sample_ranges[-1][1], last_active + 1),
+                    )
+                else:
+                    sample_ranges = [(0, audio.shape[-1])]
+        chunks = [
+            audio[..., start:end] for start, end in sample_ranges if end > start
+        ]
+        processed = np.concatenate(chunks, axis=-1) if chunks else audio[..., :0]
+    else:
+        processed = audio
 
-    return audiosegment_to_numpy(wave)
+    if processed.shape[-1] == 0:
+        return processed
+
+    edge_proxy = numpy_to_audiosegment(processed, sampling_rate)
+    leading_silence = detect_leading_silence(edge_proxy, silence_threshold=-50)
+    trailing_silence = detect_leading_silence(
+        edge_proxy.reverse(), silence_threshold=-50
+    )
+    start_sample = int(max(0, leading_silence - lead_sil) * sampling_rate / 1000.0)
+    trim_trailing = int(max(0, trailing_silence - trail_sil) * sampling_rate / 1000.0)
+    end_sample = max(0, processed.shape[-1] - trim_trailing)
+    if preserve_active_edges:
+        first_active = _find_exact_active_edge(processed, from_end=False)
+        last_active = _find_exact_active_edge(processed, from_end=True)
+        if first_active is not None and last_active is not None:
+            start_sample = min(start_sample, first_active)
+            end_sample = max(end_sample, last_active + 1)
+    return processed[..., start_sample:end_sample]
+
+
+def _find_exact_active_edge(audio: np.ndarray, *, from_end: bool) -> int | None:
+    """Return the first sample index containing any exact nonzero channel."""
+    active = np.any(audio != 0, axis=0)
+    indices = np.flatnonzero(active)
+    if indices.size == 0:
+        return None
+    return int(indices[-1] if from_end else indices[0])
+
+
+def limit_audio_peak(audio: np.ndarray, peak_limit: float | None) -> np.ndarray:
+    """Scale audio only when its absolute peak exceeds *peak_limit*."""
+    if peak_limit is None:
+        return audio
+    if isinstance(peak_limit, bool) or not isinstance(
+        peak_limit, (int, float, np.number)
+    ):
+        raise TypeError("peak_limit must be a real number or None")
+    peak_limit = float(peak_limit)
+    if not np.isfinite(peak_limit) or not 0 < peak_limit <= 1:
+        raise ValueError("peak_limit must be finite and in the range (0, 1]")
+    if audio.size == 0:
+        return audio
+    peak = float(np.max(np.abs(audio)))
+    if peak <= peak_limit or peak <= 1e-12:
+        return audio
+    return audio * (peak_limit / peak)
 
 
 def remove_silence_edges(

@@ -364,6 +364,10 @@ pre { margin: 10px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 .settings-panel > .toggle-field { margin-top: 10px; }
 .compact-advanced { margin-top: 14px; padding: 10px 11px; }
 .compact-advanced summary { font-size: 0.74rem; }
+.advanced-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 28px; margin-top: 7px; color: var(--muted); font-size: 0.64rem; font-weight: 750; text-transform: uppercase; }
+.advanced-toolbar .icon-button { width: 30px; min-height: 30px; }
+.mastering-details { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--line-soft); }
+.compact-advanced .mastering-details > summary { color: var(--muted); font-size: 0.65rem; text-transform: uppercase; }
 .compact-advanced .advanced-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }
 .compact-advanced .compact-field { min-width: 0; gap: 4px; }
 .compact-advanced .compact-field > span { font-size: 0.65rem; line-height: 1.25; }
@@ -373,6 +377,11 @@ pre { margin: 10px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 .compact-advanced .toggle-track { flex-basis: 36px; width: 36px; height: 20px; }
 .compact-advanced .toggle-track::after { top: 3px; left: 3px; width: 12px; height: 12px; }
 .compact-advanced .toggle-field input:checked + .toggle-track::after { transform: translateX(16px); }
+.compact-advanced .mastering-grid { margin-top: 4px; }
+.compact-advanced .mastering-wide { grid-column: 1 / -1; }
+.compact-advanced .mastering-toggles { margin-top: 5px; }
+.compact-advanced input:disabled + .toggle-track { opacity: 0.45; cursor: not-allowed; }
+.compact-advanced .toggle-field:has(input:disabled) { color: #777a82; cursor: not-allowed; }
 
 .generate-action-row, .command-row { display: flex; justify-content: flex-end; gap: 9px; margin-top: 18px; }
 .generate-action-row, .generate-action-row .primary-button { width: 100%; }

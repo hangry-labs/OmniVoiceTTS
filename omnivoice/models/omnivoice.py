@@ -32,6 +32,7 @@ import os
 import re
 from dataclasses import dataclass, fields
 from functools import partial
+from numbers import Real
 from typing import Any, Iterator, List, Optional, Union
 
 import numpy as np
@@ -59,6 +60,7 @@ from transformers.models.auto import CONFIG_MAPPING, AutoConfig
 from omnivoice.utils.audio import (
     cross_fade_chunks,
     fade_and_pad_audio,
+    limit_audio_peak,
     load_audio,
     remove_silence,
     resample_audio,
@@ -84,6 +86,62 @@ from omnivoice.utils.voice_design import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _validate_positive_finite_real(name: str, value: Any) -> float:
+    if isinstance(value, bool) or not isinstance(value, Real):
+        raise TypeError(f"{name} must be a real number, got {type(value).__name__}")
+    try:
+        value = float(value)
+    except (OverflowError, ValueError) as exc:
+        raise ValueError(f"{name} must be finite and greater than zero") from exc
+    if not math.isfinite(value) or value <= 0:
+        raise ValueError(f"{name} must be finite and greater than zero")
+    return value
+
+
+def _duration_to_target_tokens(duration: Any, frame_rate: Any) -> int:
+    """Convert seconds to tokens without losing exact decimal boundaries."""
+    duration = _validate_positive_finite_real("duration", duration)
+    frame_rate = _validate_positive_finite_real("frame_rate", frame_rate)
+    scaled_tokens = duration * frame_rate
+    if not math.isfinite(scaled_tokens):
+        raise ValueError("duration * frame_rate must be finite")
+    nearest_integer = round(scaled_tokens)
+    if scaled_tokens < nearest_integer and nearest_integer - scaled_tokens <= math.ulp(
+        scaled_tokens
+    ):
+        scaled_tokens = float(nearest_integer)
+    return max(1, math.floor(scaled_tokens))
+
+
+def _normalize_duration_values(
+    duration: Union[float, list[Optional[float]], None], batch_size: int
+) -> Optional[List[Optional[float]]]:
+    if duration is None:
+        return None
+    if isinstance(duration, bool):
+        raise TypeError("duration must be a real number or a per-item iterable")
+    if isinstance(duration, Real):
+        values = [duration] * batch_size
+    else:
+        if isinstance(duration, (str, bytes)):
+            raise TypeError("duration must be a real number or a per-item iterable")
+        try:
+            values = list(duration)
+        except TypeError as exc:
+            raise TypeError("duration must be a real number or a per-item iterable") from exc
+        if len(values) != batch_size:
+            raise ValueError(
+                "duration must contain exactly one value per text item, "
+                f"got {len(values)} values for a batch of {batch_size}"
+            )
+    return [
+        None
+        if value is None
+        else _validate_positive_finite_real(f"duration[{index}]", value)
+        for index, value in enumerate(values)
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -113,7 +171,37 @@ class OmniVoiceGenerationConfig:
     audio_chunk_threshold: float = 30.0
     pad_duration: float = 0.1
     fade_duration: float = 0.1
+    float_preserving_silence: bool = True
+    output_min_silence_ms: int = 500
+    output_keep_silence_ms: int = 1000
+    output_lead_silence_ms: int = 100
+    output_trail_silence_ms: int = 100
+    output_preserve_active_edges: bool = False
+    output_peak_limit: Optional[float] = None
     cancel_event: Optional[Any] = None
+
+    def __post_init__(self):
+        for name in ("float_preserving_silence", "output_preserve_active_edges"):
+            if not isinstance(getattr(self, name), bool):
+                raise TypeError(f"{name} must be a bool")
+        for name in (
+            "output_min_silence_ms",
+            "output_keep_silence_ms",
+            "output_lead_silence_ms",
+            "output_trail_silence_ms",
+        ):
+            value = getattr(self, name)
+            if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+                raise ValueError(f"{name} must be a non-negative integer")
+        if self.output_peak_limit is not None:
+            if isinstance(self.output_peak_limit, bool) or not isinstance(
+                self.output_peak_limit, Real
+            ):
+                raise TypeError("output_peak_limit must be a real number or None")
+            value = float(self.output_peak_limit)
+            if not math.isfinite(value) or not 0 < value <= 1:
+                raise ValueError("output_peak_limit must be in the range (0, 1]")
+            self.output_peak_limit = value
 
     @classmethod
     def from_dict(cls, kwargs_dict):
@@ -763,6 +851,7 @@ class OmniVoice(PreTrainedModel):
                 mid_sil=200,
                 lead_sil=100,
                 trail_sil=200,
+                preserve_float=False,
             )
             if ref_wav.shape[-1] == 0:
                 raise ValueError(
@@ -866,17 +955,25 @@ class OmniVoice(PreTrainedModel):
             generated_audio = remove_silence(
                 generated_audio,
                 self.sampling_rate,
-                mid_sil=500,
-                lead_sil=100,
-                trail_sil=100,
+                mid_sil=gen_config.output_min_silence_ms,
+                lead_sil=gen_config.output_lead_silence_ms,
+                trail_sil=gen_config.output_trail_silence_ms,
+                keep_mid_sil=gen_config.output_keep_silence_ms,
+                preserve_active_edges=gen_config.output_preserve_active_edges,
+                preserve_float=gen_config.float_preserving_silence,
             )
 
         if ref_rms is not None and ref_rms < 0.1:
             generated_audio = generated_audio * ref_rms / 0.1
-        elif ref_rms is None:
+        elif ref_rms is None and generated_audio.size:
             peak = np.abs(generated_audio).max()
             if peak > 1e-6:
                 generated_audio = generated_audio / peak * 0.5
+
+        generated_audio = limit_audio_peak(
+            generated_audio,
+            gen_config.output_peak_limit,
+        )
 
         generated_audio = fade_and_pad_audio(
             generated_audio,
@@ -1163,13 +1260,7 @@ class OmniVoice(PreTrainedModel):
         else:
             user_speed = None
 
-        if duration is not None:
-            if isinstance(duration, (int, float)):
-                durations = [float(duration)] * batch_size
-            else:
-                durations = list(duration)
-        else:
-            durations = None
+        durations = _normalize_duration_values(duration, batch_size)
 
         num_target_tokens_list = []
         for i in range(batch_size):
@@ -1195,7 +1286,7 @@ class OmniVoice(PreTrainedModel):
             speed_list = []
             for i in range(batch_size):
                 if durations[i] is not None:
-                    target_tokens = max(1, int(durations[i] * frame_rate))
+                    target_tokens = _duration_to_target_tokens(durations[i], frame_rate)
                     est = num_target_tokens_list[i]
                     speed_list.append(est / target_tokens if target_tokens > 0 else 1.0)
                     num_target_tokens_list[i] = target_tokens

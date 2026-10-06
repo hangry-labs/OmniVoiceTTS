@@ -64,6 +64,40 @@ class CliAudioOutputTests(unittest.TestCase):
             self.assertEqual(single.output_format, output_format)
             self.assertEqual(batch.output_format, output_format)
 
+    def test_both_cli_parsers_expose_output_mastering_controls(self) -> None:
+        single = infer.get_parser().parse_args(
+            [
+                "--text",
+                "Hello",
+                "--output",
+                "speech.wav",
+                "--float_preserving_silence",
+                "false",
+                "--output_keep_silence_ms",
+                "240",
+                "--output_peak_limit",
+                "0.8",
+            ]
+        )
+        batch = infer_batch.get_parser().parse_args(
+            [
+                "--test_list",
+                "samples.jsonl",
+                "--res_dir",
+                "results",
+                "--output_preserve_active_edges",
+                "true",
+                "--output_trail_silence_ms",
+                "180",
+            ]
+        )
+
+        self.assertFalse(single.float_preserving_silence)
+        self.assertEqual(single.output_keep_silence_ms, 240)
+        self.assertEqual(single.output_peak_limit, 0.8)
+        self.assertTrue(batch.output_preserve_active_edges)
+        self.assertEqual(batch.output_trail_silence_ms, 180)
+
     def test_wav_encoder_interleaves_channel_first_audio(self) -> None:
         audio = np.array(
             [[0.5, 0.25, 0.0], [-0.5, -0.25, 0.0]],

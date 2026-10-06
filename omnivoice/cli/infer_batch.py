@@ -93,7 +93,7 @@ def get_parser():
         '"ref_text" (str): transcript of the reference audio; '
         '"instruct" (str): instruction for voice design (used when ref_audio is absent); '
         '"language_id" (str): language code, e.g. "en"; '
-        '"duration" (float): target duration in seconds; '
+        '"duration" (float): audio-token budget expressed in seconds; '
         '"speed" (float): speaking speed multiplier. '
         "Only id and text are required; all other fields are optional.",
     )
@@ -195,6 +195,18 @@ def get_parser():
         type=float,
         default=0.1,
         help="Fade-in/out curve duration in seconds. Set to 0 to disable.",
+    )
+    parser.add_argument("--float_preserving_silence", type=str2bool, default=True)
+    parser.add_argument("--output_min_silence_ms", type=int, default=500)
+    parser.add_argument("--output_keep_silence_ms", type=int, default=1000)
+    parser.add_argument("--output_lead_silence_ms", type=int, default=100)
+    parser.add_argument("--output_trail_silence_ms", type=int, default=100)
+    parser.add_argument("--output_preserve_active_edges", type=str2bool, default=False)
+    parser.add_argument(
+        "--output_peak_limit",
+        type=float,
+        default=None,
+        help="Optional absolute peak ceiling in the range (0, 1].",
     )
     parser.add_argument(
         "--layer_penalty_factor",

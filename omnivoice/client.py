@@ -91,6 +91,13 @@ class OmniVoiceTTSClient:
         guidance_scale: float = 2.0,
         pad_duration: float = 0.1,
         fade_duration: float = 0.1,
+        float_preserving_silence: bool = True,
+        output_min_silence_ms: int = 500,
+        output_keep_silence_ms: int = 1000,
+        output_lead_silence_ms: int = 100,
+        output_trail_silence_ms: int = 100,
+        output_preserve_active_edges: bool = False,
+        output_peak_limit: float | None = None,
         normalize_text: bool = False,
     ) -> AudioResponse:
         return self._audio(
@@ -111,6 +118,13 @@ class OmniVoiceTTSClient:
                 "guidance_scale": guidance_scale,
                 "pad_duration": pad_duration,
                 "fade_duration": fade_duration,
+                "float_preserving_silence": float_preserving_silence,
+                "output_min_silence_ms": output_min_silence_ms,
+                "output_keep_silence_ms": output_keep_silence_ms,
+                "output_lead_silence_ms": output_lead_silence_ms,
+                "output_trail_silence_ms": output_trail_silence_ms,
+                "output_preserve_active_edges": output_preserve_active_edges,
+                "output_peak_limit": output_peak_limit,
                 "normalize_text": normalize_text,
             },
         )

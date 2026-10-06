@@ -52,7 +52,14 @@ class TTSRequest(BaseModel):
         ),
     )
     speed: float | None = Field(1.0, ge=0.5, le=1.5, description="Speech speed multiplier.")
-    duration: float | None = Field(None, gt=0.0, description="Fixed output duration in seconds. Overrides speed.")
+    duration: float | None = Field(
+        None,
+        gt=0.0,
+        description=(
+            "Audio-token budget expressed in seconds. Overrides speed; final "
+            "waveform length may vary."
+        ),
+    )
     device: str = Field(DEFAULT_DEVICE, description="auto, cpu, mps, or cuda:N.")
     use_gpu: bool | None = Field(None, description="Kokoro-compatible legacy switch. Prefer device.")
     num_step: int = Field(32, ge=4, le=64, description="Diffusion decoding steps.")
@@ -62,6 +69,52 @@ class TTSRequest(BaseModel):
     postprocess_output: bool = Field(True, description="Remove long silences and fade/pad generated audio.")
     pad_duration: float = Field(0.1, ge=0.0, le=5.0, description="Silence padding duration per side in seconds. Set to 0 to disable.")
     fade_duration: float = Field(0.1, ge=0.0, le=5.0, description="Fade-in/out curve duration in seconds. Set to 0 to disable.")
+    float_preserving_silence: bool = Field(
+        True,
+        description=(
+            "Preserve original float samples while detecting/removing silence. "
+            "Disable for legacy PCM16 behavior."
+        ),
+    )
+    output_min_silence_ms: int = Field(
+        500,
+        ge=0,
+        le=10_000,
+        description="Minimum internal silence duration to shorten, in milliseconds.",
+    )
+    output_keep_silence_ms: int = Field(
+        1000,
+        ge=0,
+        le=10_000,
+        description=(
+            "Maximum total silence retained around each shortened internal gap, "
+            "in milliseconds."
+        ),
+    )
+    output_lead_silence_ms: int = Field(
+        100,
+        ge=0,
+        le=10_000,
+        description="Leading silence retained during output cleanup, in milliseconds.",
+    )
+    output_trail_silence_ms: int = Field(
+        100,
+        ge=0,
+        le=10_000,
+        description="Trailing silence retained during output cleanup, in milliseconds.",
+    )
+    output_preserve_active_edges: bool = Field(
+        False,
+        description=(
+            "Preserve nonzero outer-edge samples below the silence detector threshold."
+        ),
+    )
+    output_peak_limit: float | None = Field(
+        None,
+        gt=0.0,
+        le=1.0,
+        description="Optional absolute peak ceiling. Omit to disable limiting.",
+    )
     t_shift: float = Field(0.1, gt=0.0, le=1.0, description="Time-step shift for the noise schedule.")
     layer_penalty_factor: float = Field(5.0, ge=0.0, le=20.0, description="Penalty encouraging lower codebook layers to unmask first.")
     position_temperature: float = Field(5.0, ge=0.0, le=20.0, description="Temperature for mask-position selection.")
@@ -144,6 +197,13 @@ class UIGenerationDefaults(BaseModel):
     guidance_scale: float = Field(2.0, ge=0.0, le=4.0)
     pad_duration: float = Field(0.1, ge=0.0, le=5.0)
     fade_duration: float = Field(0.1, ge=0.0, le=5.0)
+    float_preserving_silence: bool = True
+    output_min_silence_ms: int = Field(500, ge=0, le=10_000)
+    output_keep_silence_ms: int = Field(1000, ge=0, le=10_000)
+    output_lead_silence_ms: int = Field(100, ge=0, le=10_000)
+    output_trail_silence_ms: int = Field(100, ge=0, le=10_000)
+    output_preserve_active_edges: bool = False
+    output_peak_limit: float | None = Field(None, gt=0.0, le=1.0)
     seed: int = Field(42, ge=0, le=MAX_RANDOM_SEED)
     randomize_seed: bool = True
     denoise: bool = True
@@ -187,6 +247,46 @@ class OpenAISpeechRequest(BaseModel):
     num_step: int = Field(32, ge=4, le=64, description="Optional OmniVoice extension: diffusion decoding steps.")
     pad_duration: float = Field(0.1, ge=0.0, le=5.0, description="Optional OmniVoice extension: silence padding duration per side in seconds.")
     fade_duration: float = Field(0.1, ge=0.0, le=5.0, description="Optional OmniVoice extension: fade-in/out curve duration in seconds.")
+    float_preserving_silence: bool = Field(
+        True,
+        description=(
+            "Optional OmniVoice extension: preserve float samples during silence cleanup."
+        ),
+    )
+    output_min_silence_ms: int = Field(
+        500,
+        ge=0,
+        le=10_000,
+        description="Optional OmniVoice extension: silence trigger in milliseconds.",
+    )
+    output_keep_silence_ms: int = Field(
+        1000,
+        ge=0,
+        le=10_000,
+        description="Optional OmniVoice extension: retained internal gap in milliseconds.",
+    )
+    output_lead_silence_ms: int = Field(
+        100,
+        ge=0,
+        le=10_000,
+        description="Optional OmniVoice extension: retained leading silence in milliseconds.",
+    )
+    output_trail_silence_ms: int = Field(
+        100,
+        ge=0,
+        le=10_000,
+        description="Optional OmniVoice extension: retained trailing silence in milliseconds.",
+    )
+    output_preserve_active_edges: bool = Field(
+        False,
+        description="Optional OmniVoice extension: preserve quiet active outer edges.",
+    )
+    output_peak_limit: float | None = Field(
+        None,
+        gt=0.0,
+        le=1.0,
+        description="Optional OmniVoice extension: absolute peak ceiling.",
+    )
     instructions: str | None = Field(None, description="Optional OmniVoice extension: explicit voice-design instruction.")
     ref_audio: str | None = Field(
         None,

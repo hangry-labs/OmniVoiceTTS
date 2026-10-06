@@ -110,9 +110,8 @@ def get_parser() -> argparse.ArgumentParser:
         "--duration",
         type=float,
         default=None,
-        help="Fixed output duration in seconds. If set, overrides the "
-        "model's duration estimation. The speed factor is automatically "
-        "adjusted to match while preserving language-aware pacing.",
+        help="Audio-token budget expressed in seconds. Overrides speed, but "
+        "the decoded waveform length may vary slightly.",
     )
     parser.add_argument("--t_shift", type=float, default=0.1)
     parser.add_argument("--denoise", type=str2bool, default=True)
@@ -132,6 +131,18 @@ def get_parser() -> argparse.ArgumentParser:
         type=float,
         default=0.1,
         help="Fade-in/out curve duration in seconds. Set to 0 to disable.",
+    )
+    parser.add_argument("--float_preserving_silence", type=str2bool, default=True)
+    parser.add_argument("--output_min_silence_ms", type=int, default=500)
+    parser.add_argument("--output_keep_silence_ms", type=int, default=1000)
+    parser.add_argument("--output_lead_silence_ms", type=int, default=100)
+    parser.add_argument("--output_trail_silence_ms", type=int, default=100)
+    parser.add_argument("--output_preserve_active_edges", type=str2bool, default=False)
+    parser.add_argument(
+        "--output_peak_limit",
+        type=float,
+        default=None,
+        help="Optional absolute peak ceiling in the range (0, 1].",
     )
     parser.add_argument("--layer_penalty_factor", type=float, default=5.0)
     parser.add_argument("--position_temperature", type=float, default=5.0)
@@ -174,6 +185,13 @@ def main():
         postprocess_output=args.postprocess_output,
         pad_duration=args.pad_duration,
         fade_duration=args.fade_duration,
+        float_preserving_silence=args.float_preserving_silence,
+        output_min_silence_ms=args.output_min_silence_ms,
+        output_keep_silence_ms=args.output_keep_silence_ms,
+        output_lead_silence_ms=args.output_lead_silence_ms,
+        output_trail_silence_ms=args.output_trail_silence_ms,
+        output_preserve_active_edges=args.output_preserve_active_edges,
+        output_peak_limit=args.output_peak_limit,
         layer_penalty_factor=args.layer_penalty_factor,
         position_temperature=args.position_temperature,
         class_temperature=args.class_temperature,
