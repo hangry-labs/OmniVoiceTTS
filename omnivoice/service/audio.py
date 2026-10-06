@@ -3,10 +3,12 @@ from __future__ import annotations
 import io
 import logging
 import math
+import os
 import subprocess
 import tempfile
 import wave
 from collections.abc import Iterator
+from pathlib import Path
 
 import numpy as np
 
@@ -113,15 +115,34 @@ def to_int16_audio(audio: np.ndarray) -> np.ndarray:
     return (np.clip(audio, -1.0, 1.0) * 32767).astype(np.int16)
 
 
+def channel_first_audio(audio: np.ndarray) -> np.ndarray:
+    """Return validated audio as ``(channels, frames)``."""
+    array = np.asarray(audio)
+    if array.ndim == 1:
+        array = array[np.newaxis, :]
+    elif array.ndim != 2:
+        raise ValueError("Audio must have shape (frames,) or (channels, frames).")
+    if array.shape[0] < 1 or array.shape[0] > 32:
+        raise ValueError("Audio must contain between 1 and 32 channels.")
+    if array.shape[1] < 1:
+        raise ValueError("Audio must contain at least one frame.")
+    if not np.issubdtype(array.dtype, np.number) or np.issubdtype(
+        array.dtype, np.complexfloating
+    ):
+        raise ValueError("Audio samples must use a real numeric dtype.")
+    return array
+
+
 def audio_to_wav_bytes(audio: np.ndarray, sample_rate: int = SAMPLE_RATE) -> bytes:
     sample_rate = validate_sample_rate(sample_rate)
-    audio_int16 = to_int16_audio(audio)
+    audio_int16 = to_int16_audio(channel_first_audio(audio))
+    interleaved = np.ascontiguousarray(audio_int16.T)
     buffer = io.BytesIO()
     with wave.open(buffer, "wb") as wav_file:
-        wav_file.setnchannels(1)
+        wav_file.setnchannels(audio_int16.shape[0])
         wav_file.setsampwidth(2)
         wav_file.setframerate(sample_rate)
-        wav_file.writeframes(audio_int16.tobytes())
+        wav_file.writeframes(interleaved.tobytes())
     return buffer.getvalue()
 
 
@@ -258,6 +279,43 @@ def encode_audio_bytes(audio: np.ndarray, output_format: str = "wav", sample_rat
         stderr = exc.stderr.decode("utf-8", errors="replace").strip()
         raise RuntimeError(f"ffmpeg failed to encode {normalized_format}: {stderr}") from exc
     return result.stdout
+
+
+def write_audio_bytes_atomic(output_path: str | Path, audio_bytes: bytes) -> Path:
+    """Atomically replace an output file with already encoded audio bytes."""
+    destination = Path(output_path).expanduser()
+    parent = destination.parent
+    if not parent.is_dir():
+        raise ValueError(f"Output directory does not exist: {parent}")
+
+    file_descriptor, temporary_name = tempfile.mkstemp(
+        dir=parent,
+        prefix=f".{destination.name}.",
+        suffix=".tmp",
+    )
+    temporary_path = Path(temporary_name)
+    try:
+        with os.fdopen(file_descriptor, "wb") as output_file:
+            output_file.write(audio_bytes)
+            output_file.flush()
+            os.fsync(output_file.fileno())
+        os.replace(temporary_path, destination)
+    except BaseException:
+        temporary_path.unlink(missing_ok=True)
+        raise
+    return destination
+
+
+def write_encoded_audio_file(
+    audio: np.ndarray,
+    output_path: str | Path,
+    output_format: str = "wav",
+    sample_rate: int = SAMPLE_RATE,
+) -> Path:
+    """Encode audio with the shared runtime codec path and write it atomically."""
+    normalized_format = normalize_audio_format(output_format)
+    encoded = encode_audio_bytes(audio, normalized_format, sample_rate)
+    return write_audio_bytes_atomic(output_path, encoded)
 
 
 def encode_audio_stream(

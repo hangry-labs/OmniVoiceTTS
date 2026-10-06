@@ -46,6 +46,12 @@ import torch
 from tqdm import tqdm
 
 from omnivoice.models.omnivoice import OmniVoice
+from omnivoice.service.audio import (
+    OUTPUT_FORMATS,
+    encode_audio_bytes,
+    normalize_audio_format,
+    write_audio_bytes_atomic,
+)
 from omnivoice.service.paths import safe_output_file_path
 from omnivoice.utils.audio import load_audio
 from omnivoice.utils.common import str2bool
@@ -96,6 +102,14 @@ def get_parser():
         type=str,
         required=True,
         help="Directory to save the generated audio files.",
+    )
+    parser.add_argument(
+        "--format",
+        "--output_format",
+        dest="output_format",
+        choices=sorted(OUTPUT_FORMATS),
+        default="wav",
+        help="Output format used for every generated file.",
     )
     parser.add_argument(
         "--num_step",
@@ -385,6 +399,7 @@ def cluster_samples_by_batch_size(
 def run_inference_batch(
     batch_samples: List[Tuple],
     res_dir: str,
+    output_format: str = "wav",
     **gen_kwargs,
 ) -> List[Tuple]:
     global worker_model
@@ -422,10 +437,21 @@ def run_inference_batch(
     )
     batch_synth_time = time.time() - start_time
 
-    results = []
+    normalized_format = normalize_audio_format(output_format)
+    suffix = f".{OUTPUT_FORMATS[normalized_format]['extension']}"
+    staged_outputs = []
     for save_name, audio in zip(save_names, audios):
-        save_path = safe_output_file_path(res_dir, save_name, suffix=".wav")
-        sf.write(save_path, audio, worker_model.sampling_rate)
+        save_path = safe_output_file_path(res_dir, save_name, suffix=suffix)
+        encoded = encode_audio_bytes(
+            audio,
+            normalized_format,
+            worker_model.sampling_rate,
+        )
+        staged_outputs.append((save_name, save_path, encoded, audio))
+
+    results = []
+    for save_name, save_path, encoded, audio in staged_outputs:
+        write_audio_bytes_atomic(save_path, encoded)
         audio_duration = audio.shape[-1] / worker_model.sampling_rate
         results.append(
             (
@@ -437,6 +463,13 @@ def run_inference_batch(
         )
 
     return results
+
+
+def _raise_for_failed_batches(failed_batches: int, total_batches: int) -> None:
+    if failed_batches:
+        raise RuntimeError(
+            f"{failed_batches} of {total_batches} inference batches failed"
+        )
 
 
 def main():
@@ -483,6 +516,8 @@ def main():
 
     total_synthesis_time = []
     total_audio_duration = []
+    failed_batches = 0
+    total_batches = 0
 
     try:
         with ProcessPoolExecutor(
@@ -527,6 +562,7 @@ def main():
                         run_inference_batch, batch_samples=batch, **args_dict
                     )
                 )
+            total_batches = len(futures)
 
             for future in tqdm(
                 as_completed(futures), total=len(futures), desc="Processing samples"
@@ -542,6 +578,7 @@ def main():
                             f"Synthesis Time={synth_time:.2f}s, RTF={rtf:.4f}"
                         )
                 except Exception as e:
+                    failed_batches += 1
                     logging.error(f"Failed to process sample: {e}")
                     detailed_error = traceback.format_exc()
                     logging.error(f"Detailed error: {detailed_error}")
@@ -565,6 +602,7 @@ def main():
     else:
         logging.warning("No speech was generated. RTF cannot be computed.")
 
+    _raise_for_failed_batches(failed_batches, total_batches)
     logging.info("Done!")
 
 

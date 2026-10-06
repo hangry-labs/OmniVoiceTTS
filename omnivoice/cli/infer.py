@@ -24,9 +24,9 @@ import logging
 
 import torch
 
-import soundfile as sf
-
+from omnivoice.cli.audio_output import resolve_audio_output_path
 from omnivoice.models.omnivoice import OmniVoice
+from omnivoice.service.audio import OUTPUT_FORMATS, write_encoded_audio_file
 from omnivoice.utils.common import str2bool
 
 
@@ -60,7 +60,15 @@ def get_parser() -> argparse.ArgumentParser:
         "--output",
         type=str,
         required=True,
-        help="Output WAV file path.",
+        help="Output audio path. The extension selects the format unless --format is set.",
+    )
+    parser.add_argument(
+        "--format",
+        "--output_format",
+        dest="output_format",
+        choices=sorted(OUTPUT_FORMATS),
+        default=None,
+        help="Output format. When set, the output extension is adjusted to match.",
     )
     # Voice cloning
     parser.add_argument(
@@ -171,8 +179,14 @@ def main():
         class_temperature=args.class_temperature,
     )
 
-    sf.write(args.output, audios[0], model.sampling_rate)
-    logging.info(f"Saved to {args.output}")
+    output_path, output_format = resolve_audio_output_path(args.output, args.output_format)
+    write_encoded_audio_file(
+        audios[0],
+        output_path,
+        output_format,
+        model.sampling_rate,
+    )
+    logging.info(f"Saved {output_format.upper()} to {output_path}")
 
 
 if __name__ == "__main__":

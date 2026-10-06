@@ -458,8 +458,11 @@ The runtime-focused Python CLI tools are still present:
 
 ```bash
 omnivoice-infer --model k2-fsa/OmniVoice --text "Hello world." --output hello.wav
-omnivoice-infer-batch --model k2-fsa/OmniVoice --test_list test.jsonl --res_dir results/
+omnivoice-infer --model k2-fsa/OmniVoice --text "Hello world." --output hello --format mp3
+omnivoice-infer-batch --model k2-fsa/OmniVoice --test_list test.jsonl --res_dir results/ --format ogg
 ```
+
+Both CLIs support WAV, MP3, FLAC, and OGG through the same encoder used by the server. Single-file inference infers the format from the output extension unless `--format` is supplied; an explicit format adjusts the extension. Batch inference defaults to WAV and applies the selected format to every result. Files are replaced atomically, and a batch codec failure is reported with a non-zero exit instead of leaving partially encoded files from that batch.
 
 This fork intentionally removes upstream training, data-preparation, benchmark-evaluation, and the superseded Gradio demo from the runtime-focused package. The maintained browser experience is the standalone UI included with `omnivoice-serve` and the Docker images. For model training or research reproduction, use the original [k2-fsa/OmniVoice](https://github.com/k2-fsa/OmniVoice) repository.
 
@@ -524,6 +527,7 @@ Current snapshot changes after `v0.3.0`:
 - Added conservative terminal `?`/`!` spacing before model inference to avoid an observed final-syllable truncation caused by the attached-punctuation tokenizer form.
 - Made `torchaudio` an optional package extra and added lazy automatic fallback to the existing Librosa resampler, while retaining the validated CUDA wheel in official Docker images.
 - Canonicalized the discoverable English language names to `Punjabi` and `Western Punjabi` while retaining the established `Panjabi` spellings as compatibility aliases and preserving model IDs `pa` and `pnb`.
+- Aligned the retained single and batch inference CLIs with the server encoder, adding WAV, MP3, FLAC, and OGG output, extension inference/normalization, correct multichannel WAV layout, atomic file replacement, and non-zero batch failure reporting.
 - Added edge audio controls for generated clips: `pad_duration` adds configurable silence before and after output audio, and `fade_duration` fades the clip edges to reduce clicks.
 - Exposed the new edge controls in the browser UI under Generation Settings.
 - Exposed the same controls through the native API, OpenAI-compatible `/v1/audio/speech` extension fields, CLI commands, and the Python client.

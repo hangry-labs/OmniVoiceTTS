@@ -67,8 +67,8 @@ def safe_existing_file_path(
 
 def secure_filename_stem(value: str | os.PathLike, *, default: str = "output") -> str:
     stem = Path(value).name
-    if stem.lower().endswith(".wav"):
-        stem = stem[:-4]
+    if Path(stem).suffix.lower() in AUDIO_EXTENSIONS:
+        stem = Path(stem).stem
     stem = SAFE_FILENAME_PATTERN.sub("-", stem).strip(".-_")
     return stem[:120] or default
 
