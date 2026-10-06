@@ -14,6 +14,7 @@ import threading
 from uuid import uuid4
 from collections import OrderedDict
 from contextlib import asynccontextmanager
+from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Iterator, Optional
@@ -29,6 +30,7 @@ from omnivoice.service.audio import (
     OUTPUT_FORMATS,
     SAMPLE_RATE,
     apply_audio_effects,
+    audio_to_wav_bytes,
     encode_audio_bytes,
     encode_audio_stream,
     normalize_audio_format,
@@ -48,8 +50,22 @@ from omnivoice.service.schemas import (
     UIGenerationDefaults,
     VoiceProfileCreateRequest,
 )
+from omnivoice.service.ssml import (
+    SSMLPlan,
+    SSMLUnit,
+    SSMLValidationError,
+    SSMLVoiceDefinition,
+    compile_ssml,
+    ssml_capabilities,
+)
+from omnivoice.service.ssml_execution import (
+    PreparedSSMLVoice,
+    SSMLExecutionSession,
+    SSMLVoiceBinding,
+)
 from omnivoice.service.voice_profiles import (
     append_openai_call_log,
+    commit_generated_voice_profiles as _commit_generated_voice_profiles,
     delete_openai_voice_profile as _delete_openai_voice_profile,
     load_openai_voice_profiles as _load_openai_voice_profiles,
     normalize_optional_seed as _normalize_optional_seed,
@@ -390,6 +406,7 @@ def ref_audio_allowed_roots() -> list[Path]:
         OPENAI_VOICE_PROFILE_DIR,
         PACKAGE_DIR / "assets",
         Path("/data"),
+        UI_UPLOAD_DIR,
         *default_upload_roots(),
     ]
     return parse_path_roots(REF_AUDIO_SAFE_ROOTS_ENV, defaults)
@@ -741,6 +758,22 @@ def normalize_language(language: str | None) -> str | None:
     return LANG_NAME_TO_ID.get(key, value)
 
 
+def resolve_ssml_language(language: str | None) -> str:
+    value = (language or "").strip()
+    if not value:
+        raise ValueError("SSML language must not be empty.")
+    normalized = value.replace("_", "-").lower()
+    if normalized in LANG_IDS:
+        return normalized
+    by_name = LANG_NAME_TO_ID.get(normalized)
+    if by_name:
+        return by_name
+    base = normalized.split("-", 1)[0]
+    if base in LANG_IDS:
+        return base
+    raise ValueError(f"Unsupported SSML language '{language}'. Use a language from GET /tts/languages.")
+
+
 def normalize_output_format(output_format: str | None) -> str:
     return normalize_audio_format(output_format)
 
@@ -869,6 +902,7 @@ def synthesize_array(
     volume: float = 1.0,
     normalize: bool = False,
     cache_voice_prompt: bool = False,
+    voice_clone_prompt: Any = None,
 ) -> tuple[int, np.ndarray]:
     validate_synthesis_text(text)
     validate_voice_design_text(text, instruct)
@@ -878,20 +912,22 @@ def synthesize_array(
     with semaphore:
         model = get_model(resolved_device)
         preprocess_prompt = True if generation_config is None else bool(generation_config.preprocess_prompt)
-        voice_clone_prompt = get_cached_voice_clone_prompt(
-            model,
-            resolved_device,
-            safe_ref_audio,
-            ref_text,
-            preprocess_prompt,
-            cache_voice_prompt,
-        )
+        resolved_voice_clone_prompt = voice_clone_prompt
+        if resolved_voice_clone_prompt is None:
+            resolved_voice_clone_prompt = get_cached_voice_clone_prompt(
+                model,
+                resolved_device,
+                safe_ref_audio,
+                ref_text,
+                preprocess_prompt,
+                cache_voice_prompt,
+            )
         audios = model.generate(
             text=text.strip(),
             language=normalize_language(language),
-            ref_audio=None if voice_clone_prompt is not None else safe_ref_audio,
-            ref_text=None if voice_clone_prompt is not None else ref_text or None,
-            voice_clone_prompt=voice_clone_prompt,
+            ref_audio=None if resolved_voice_clone_prompt is not None else safe_ref_audio,
+            ref_text=None if resolved_voice_clone_prompt is not None else ref_text or None,
+            voice_clone_prompt=resolved_voice_clone_prompt,
             instruct=instruct or None,
             duration=duration if duration and duration > 0 else None,
             speed=speed,
@@ -1412,6 +1448,422 @@ def log_openai_speech_request(payload: OpenAISpeechRequest, tts_payload: TTSRequ
     )
 
 
+def ssml_voice_binding_from_payload(payload: TTSRequest, name: str | None = None) -> SSMLVoiceBinding:
+    return SSMLVoiceBinding(
+        name=name,
+        ref_audio=payload.ref_audio,
+        ref_text=payload.ref_text,
+        instruct=payload.instruct,
+        language=normalize_language(payload.language),
+        cache_voice_prompt=payload.cache_voice_prompt,
+    )
+
+
+def resolve_ssml_saved_voice(name: str, profiles: dict[str, dict[str, Any]]) -> SSMLVoiceBinding:
+    try:
+        profile_name = normalize_profile_name(name)
+    except ValueError as exc:
+        raise ValueError(f"SSML voice '{name}' is not available in this deployment.") from exc
+    profile = profiles.get(profile_name)
+    if profile:
+        return SSMLVoiceBinding(
+            name=profile_name,
+            ref_audio=profile["ref_audio"],
+            ref_text=profile.get("ref_text") or None,
+            language=normalize_language(profile.get("language")),
+            cache_voice_prompt=True,
+        )
+    voice_id = name.strip().lower()
+    if voice_id not in OPENAI_VOICE_INSTRUCTIONS:
+        raise ValueError(
+            f"SSML voice '{name}' is not available. Use a saved profile or a voice from GET /tts/voices."
+        )
+    if voice_id in OPENAI_CLONE_VOICE_ALIASES and OPENAI_DEFAULT_CLONE_AUDIO.exists():
+        return SSMLVoiceBinding(
+            name=voice_id,
+            ref_audio=str(OPENAI_DEFAULT_CLONE_AUDIO),
+            cache_voice_prompt=True,
+        )
+    return SSMLVoiceBinding(
+        name=voice_id,
+        instruct=OPENAI_VOICE_INSTRUCTIONS.get(voice_id),
+    )
+
+
+def _age_design_value(age: str | None) -> str | None:
+    value = (age or "").strip().lower().replace("-", " ")
+    if not value:
+        return None
+    if value.isdigit():
+        number = int(value)
+        if number <= 0 or number > 150:
+            raise ValueError("SSML-H voice age must be between 1 and 150.")
+        if number < 13:
+            return "child"
+        if number < 20:
+            return "teenager"
+        if number < 35:
+            return "young adult"
+        if number < 65:
+            return "middle-aged"
+        return "elderly"
+    aliases = {
+        "young adult": "young adult",
+        "middle aged": "middle-aged",
+        "child": "child",
+        "teenager": "teenager",
+        "elderly": "elderly",
+    }
+    if value not in aliases:
+        raise ValueError(
+            "SSML-H voice age must be a positive number, child, teenager, young-adult, middle-aged, or elderly."
+        )
+    return aliases[value]
+
+
+def build_ssml_h_voice_instruct(definition: SSMLVoiceDefinition) -> str:
+    if definition.description:
+        raise ValueError(
+            "OmniVoiceTTS does not support free-form h:description. Use gender, age, pitch, style, accent, or dialect."
+        )
+    if definition.accent and definition.dialect:
+        raise ValueError(
+            "SSML-H voice definitions cannot combine an English accent with a Chinese dialect."
+        )
+    values: list[str] = []
+    if definition.gender:
+        gender = definition.gender.strip().lower()
+        if gender not in {"male", "female"}:
+            raise ValueError("OmniVoiceTTS SSML-H gender supports male or female.")
+        values.append(gender)
+    age = _age_design_value(definition.age)
+    if age:
+        values.append(age)
+    if definition.pitch:
+        pitch = definition.pitch.strip().lower().replace("-", " ")
+        if not pitch.endswith(" pitch"):
+            pitch = f"{pitch} pitch"
+        if pitch not in VOICE_DESIGN_CATEGORIES["pitch"]["options"]:
+            raise ValueError(
+                "OmniVoiceTTS SSML-H pitch supports very-low, low, moderate, high, or very-high."
+            )
+        values.append(pitch)
+    if definition.style:
+        style = definition.style.strip().lower()
+        if style not in VOICE_DESIGN_CATEGORIES["style"]["options"]:
+            raise ValueError("OmniVoiceTTS SSML-H style currently supports whisper only.")
+        values.append(style)
+    if definition.accent:
+        accent = definition.accent.strip().lower().replace("-", " ")
+        if not accent.endswith(" accent"):
+            accent = f"{accent} accent"
+        if accent not in VOICE_DESIGN_CATEGORIES["english_accent"]["options"]:
+            raise ValueError(
+                "Unsupported SSML-H accent for OmniVoiceTTS. See GET /tts/ssml/capabilities."
+            )
+        values.append(accent)
+    if definition.dialect:
+        dialect = definition.dialect.strip()
+        if dialect not in VOICE_DESIGN_CATEGORIES["chinese_dialect"]["options"]:
+            raise ValueError(
+                "Unsupported SSML-H Chinese dialect for OmniVoiceTTS. See GET /tts/ssml/capabilities."
+            )
+        values.append(dialect)
+    if not values:
+        raise ValueError(
+            f"SSML-H voice '{definition.name}' does not contain a voice-design property supported by OmniVoiceTTS."
+        )
+    return ", ".join(values)
+
+
+def compile_ssml_request(payload: TTSRequest) -> tuple[SSMLPlan, dict[str, dict[str, Any]]]:
+    profiles = load_openai_voice_profiles()
+    default_language = None
+    if (payload.language or "").strip() and (payload.language or "").strip().lower() != "auto":
+        default_language = resolve_ssml_language(payload.language)
+
+    def validate_voice(name: str, _definitions: frozenset[str]) -> None:
+        resolve_ssml_saved_voice(name, profiles)
+
+    plan = compile_ssml(
+        payload.text,
+        payload.input_type,
+        default_language=default_language,
+        resolve_language=resolve_ssml_language,
+        validate_voice=validate_voice,
+    )
+    aliases = set(OPENAI_VOICE_INSTRUCTIONS)
+    for definition in plan.voice_definitions:
+        profile_name = normalize_profile_name(definition.name)
+        if profile_name in profiles and not (definition.scope == "profile" and definition.replace):
+            raise SSMLValidationError(
+                f"Voice profile '{profile_name}' already exists. Use scope='profile' replace='true' to replace it."
+            )
+        if definition.name.lower() in aliases:
+            raise SSMLValidationError(
+                f"SSML-H voice definition '{definition.name}' conflicts with a built-in voice name."
+            )
+        for language in definition.languages:
+            resolve_ssml_language(language)
+        if definition.sample_language:
+            resolve_ssml_language(definition.sample_language)
+        build_ssml_h_voice_instruct(definition)
+    return plan, profiles
+
+
+def create_ssml_execution_session(
+    payload: TTSRequest,
+    used_seed: int,
+) -> SSMLExecutionSession:
+    if payload.duration is not None:
+        raise SSMLValidationError(
+            "Fixed request duration is not supported for multi-unit SSML. Use prosody rate and breaks instead."
+        )
+    plan, profiles = compile_ssml_request(payload)
+    requested_device = resolve_requested_device(payload.device, payload.use_gpu)
+    resolved_device = normalize_device(requested_device)
+    config = build_generation_config(
+        num_step=payload.num_step,
+        guidance_scale=payload.guidance_scale,
+        denoise=payload.denoise,
+        preprocess_prompt=payload.preprocess_prompt,
+        postprocess_output=payload.postprocess_output,
+        pad_duration=0.0,
+        fade_duration=0.0,
+        t_shift=payload.t_shift,
+        layer_penalty_factor=payload.layer_penalty_factor,
+        position_temperature=payload.position_temperature,
+        class_temperature=payload.class_temperature,
+        audio_chunk_duration=payload.audio_chunk_duration,
+        audio_chunk_threshold=payload.audio_chunk_threshold,
+    )
+
+    def resolve_voice(name: str) -> SSMLVoiceBinding:
+        return resolve_ssml_saved_voice(name, profiles)
+
+    def prepare_voice(
+        definition: SSMLVoiceDefinition,
+        sample_text: str,
+        sample_language: str | None,
+        seed: int,
+        staging_dir: Path,
+    ) -> SSMLVoiceBinding:
+        language = sample_language
+        if language is None and definition.languages:
+            language = resolve_ssml_language(definition.languages[0])
+        instruct = build_ssml_h_voice_instruct(definition)
+        fix_random_seed(seed)
+        reference_config = replace(config, pad_duration=0.1, fade_duration=0.1)
+        sample_rate, waveform = synthesize_array(
+            text=sample_text,
+            language=language,
+            instruct=instruct,
+            device=resolved_device,
+            generation_config=reference_config,
+        )
+        audio_path = staging_dir / f"{definition.name}.wav"
+        audio_path.write_bytes(audio_to_wav_bytes(waveform, sample_rate))
+        safe_audio = validate_ref_audio_path(str(audio_path))
+        assert safe_audio is not None
+        semaphore = get_generation_semaphore(resolved_device)
+        with semaphore:
+            model = get_model(resolved_device)
+            prompt = model.create_voice_clone_prompt(
+                ref_audio=safe_audio,
+                ref_text=sample_text,
+                preprocess_prompt=payload.preprocess_prompt,
+            )
+        return SSMLVoiceBinding(
+            name=definition.name,
+            ref_audio=safe_audio,
+            ref_text=sample_text,
+            language=language,
+            voice_clone_prompt=prompt,
+        )
+
+    def generate_speech(
+        unit: SSMLUnit,
+        binding: SSMLVoiceBinding,
+        speed: float,
+        pitch: float,
+        tempo: float,
+        volume: float,
+        seed: int,
+    ) -> tuple[int, np.ndarray]:
+        language = unit.language
+        if not unit.language_explicit and binding.language:
+            language = binding.language
+        fix_random_seed(seed)
+        return synthesize_array(
+            text=unit.text,
+            language=language,
+            ref_audio=binding.ref_audio,
+            ref_text=binding.ref_text,
+            instruct=binding.instruct,
+            speed=speed,
+            device=resolved_device,
+            generation_config=config,
+            pitch_semitones=pitch,
+            tempo=tempo,
+            volume=volume,
+            normalize=False,
+            cache_voice_prompt=binding.cache_voice_prompt,
+            voice_clone_prompt=binding.voice_clone_prompt,
+        )
+
+    def commit_profiles(prepared: list[PreparedSSMLVoice], staging_dir: Path) -> dict[str, str]:
+        records = [
+            {
+                "name": item.definition.name,
+                "audio_path": item.binding.ref_audio,
+                "ref_text": item.sample_text,
+                "language": item.sample_language or item.binding.language or "",
+                "seed": item.seed,
+                "replace": item.definition.replace,
+            }
+            for item in prepared
+        ]
+        published = _commit_generated_voice_profiles(
+            OPENAI_VOICE_PROFILE_DIR,
+            OPENAI_VOICE_PROFILE_INDEX,
+            MAX_RANDOM_SEED,
+            records,
+            [staging_dir],
+        )
+        if published:
+            clear_voice_clone_prompt_cache(resolved_device)
+        return published
+
+    session = SSMLExecutionSession(
+        plan=plan,
+        default_binding=ssml_voice_binding_from_payload(payload),
+        request_seed=used_seed,
+        request_speed=float(payload.speed or 1.0),
+        request_pitch_semitones=payload.pitch_semitones,
+        request_tempo=payload.tempo,
+        request_volume=payload.volume,
+        normalize=payload.normalize,
+        pad_duration=payload.pad_duration,
+        fade_duration=payload.fade_duration,
+        staging_parent=UI_UPLOAD_DIR,
+        resolve_voice=resolve_voice,
+        resolve_language=resolve_ssml_language,
+        prepare_voice=prepare_voice,
+        generate_speech=generate_speech,
+        commit_profiles=commit_profiles,
+    )
+    try:
+        session.prepare()
+    except Exception:
+        session.close()
+        raise
+    return session
+
+
+def _ssml_headers(
+    payload: TTSRequest,
+    route_name: str,
+    output_format: str,
+    sample_rate: int,
+    used_seed: int,
+    *,
+    streaming: bool,
+    duration: float | None = None,
+) -> dict[str, str]:
+    extension = OUTPUT_FORMATS[output_format]["extension"]
+    headers = {
+        "Content-Disposition": (
+            f"inline; filename=omnivoicetts-ssml.{extension}"
+            if streaming
+            else f"attachment; filename=omnivoicetts-ssml.{extension}"
+        ),
+        "X-OmniVoiceTTS-Sample-Rate": str(sample_rate),
+        "X-OmniVoiceTTS-Route": route_name,
+        "X-OmniVoiceTTS-Format": output_format,
+        "X-OmniVoiceTTS-Seed": str(used_seed),
+        "X-OmniVoiceTTS-Input-Type": payload.input_type,
+    }
+    if streaming:
+        headers["X-OmniVoiceTTS-Streaming"] = "ssml-units"
+    if duration is not None:
+        headers["X-OmniVoiceTTS-Duration"] = f"{duration:.3f}"
+    return headers
+
+
+def ssml_audio_response(payload: TTSRequest, route_name: str) -> StreamingResponse:
+    session: SSMLExecutionSession | None = None
+    try:
+        output_format = normalize_output_format(payload.output_format)
+        used_seed = resolve_generation_seed(payload.seed, payload.randomize_seed)
+        session = create_ssml_execution_session(payload, used_seed)
+        sample_rate, waveform = session.render_array()
+        audio_bytes = encode_audio_bytes(waveform, output_format, sample_rate)
+        session.commit_profiles()
+        headers = _ssml_headers(
+            payload,
+            route_name,
+            output_format,
+            sample_rate,
+            used_seed,
+            streaming=False,
+            duration=len(waveform) / sample_rate if sample_rate else 0,
+        )
+        return StreamingResponse(
+            io.BytesIO(audio_bytes),
+            media_type=OUTPUT_FORMATS[output_format]["media_type"],
+            headers=headers,
+        )
+    except (ValueError, RuntimeError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"{type(exc).__name__}: {exc}") from exc
+    finally:
+        if session is not None:
+            session.close()
+        if EMPTY_CUDA_CACHE_AFTER_REQUEST:
+            clear_cuda_allocator_cache(RESET_CUDA_PEAK_AFTER_CACHE_CLEAR)
+
+
+def ssml_progressive_audio_response(payload: TTSRequest, route_name: str) -> StreamingResponse:
+    try:
+        requested_format = normalize_output_format(payload.output_format)
+        output_format = "mp3" if requested_format == "wav" else requested_format
+        used_seed = resolve_generation_seed(payload.seed, payload.randomize_seed)
+        session = create_ssml_execution_session(payload, used_seed)
+    except (ValueError, RuntimeError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"{type(exc).__name__}: {exc}") from exc
+
+    sample_rate = SAMPLE_RATE
+
+    def body() -> Iterator[bytes]:
+        completed = False
+        try:
+            yield from encode_audio_stream(session.iter_chunks(), output_format, sample_rate)
+            completed = True
+            session.commit_profiles()
+        finally:
+            if not completed:
+                logging.info("SSML stream ended before completion; staged SSML-H profiles were not published.")
+            session.close()
+            if EMPTY_CUDA_CACHE_AFTER_REQUEST:
+                clear_cuda_allocator_cache(RESET_CUDA_PEAK_AFTER_CACHE_CLEAR)
+
+    return StreamingResponse(
+        body(),
+        media_type=OUTPUT_FORMATS[output_format]["media_type"],
+        headers=_ssml_headers(
+            payload,
+            route_name,
+            output_format,
+            sample_rate,
+            used_seed,
+            streaming=True,
+        ),
+    )
+
+
 def synthesize_payload(payload: TTSRequest) -> tuple[str, int, np.ndarray, int]:
     try:
         output_format = normalize_output_format(payload.output_format)
@@ -1513,6 +1965,8 @@ def stream_audio_response(payload: TTSRequest, route_name: str) -> StreamingResp
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     warn_if_cpu_memory_tight(payload, route_name)
+    if payload.input_type != "text":
+        return ssml_audio_response(payload, route_name)
     try:
         output_format, sample_rate, waveform, used_seed = synthesize_payload(payload)
         try:
@@ -1546,6 +2000,8 @@ def progressive_audio_response(payload: TTSRequest, route_name: str) -> Streamin
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     warn_if_cpu_memory_tight(payload, route_name)
+    if payload.input_type != "text":
+        return ssml_progressive_audio_response(payload, route_name)
     output_format, sample_rate, chunks, used_seed = synthesize_payload_chunks(payload)
     extension = OUTPUT_FORMATS[output_format]["extension"]
     media_type = OUTPUT_FORMATS[output_format]["media_type"]
@@ -1823,12 +2279,44 @@ def voice_design_options() -> dict:
     return voice_design_options_payload()
 
 
+@api.get("/tts/ssml/capabilities", tags=["SSML-H"])
+def get_ssml_capabilities() -> dict:
+    capabilities = ssml_capabilities()
+    capabilities["ssml_h"]["voice_design"] = voice_design_options_payload()
+    capabilities["ssml_h"]["persistent_profiles"] = True
+    return capabilities
+
+
 @api.post("/tts/metrics")
 def metrics(payload: TTSRequest = Body(...)) -> dict:
     text = payload.text or ""
+    if payload.input_type != "text":
+        try:
+            resolved = resolve_tts_compatible_voice(payload)
+            plan, _profiles = compile_ssml_request(resolved)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        spoken_text = " ".join(unit.text for unit in plan.units if unit.kind == "speech")
+        return {
+            "voice": payload.voice or "auto",
+            "language": payload.language,
+            "input_type": payload.input_type,
+            "metrics": {
+                "source_characters": len(text),
+                "spoken_characters": len(spoken_text),
+                "words": len(spoken_text.split()),
+                "speech_units": sum(unit.kind == "speech" for unit in plan.units),
+                "break_units": sum(unit.kind == "break" for unit in plan.units),
+                "break_ms": sum(unit.duration_ms for unit in plan.units if unit.kind == "break"),
+                "voice_definitions": len(plan.voice_definitions),
+                "voices": list(plan.voices),
+                "languages": list(plan.languages),
+            },
+        }
     return {
         "voice": payload.voice or "auto",
         "language": payload.language,
+        "input_type": payload.input_type,
         "metrics": {
             "characters": len(text),
             "words": len(text.split()),

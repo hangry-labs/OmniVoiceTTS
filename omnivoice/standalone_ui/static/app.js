@@ -20,6 +20,7 @@ const state = {
   gpuRefreshActive: false,
   gpuHovering: false,
   headerAnimation: null,
+  inputType: 'text',
 }
 
 const UI_SESSION_KEY = 'omnivoicetts-ui-state-v1'
@@ -31,6 +32,33 @@ const SAMPLE_TEXTS = [
   'The quickest way to understand a voice is to hear it explain something clearly and naturally.',
   'That timing was almost perfect. [laughter] Let us try the line one more time.',
   'A consistent saved voice can speak new text without uploading the same reference for every request.',
+]
+const SSML_SAMPLES = [
+  `<speak version="1.1" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="en-US">
+  Welcome to <sub alias="Hangry Labs">HangryLabs</sub>.
+  <break time="300ms"/>
+  <prosody rate="slow" pitch="+2st">This sentence uses standard SSML controls.</prosody>
+</speak>`,
+  `<speak version="1.1" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="en-US">
+  Spell <say-as interpret-as="characters">SSML</say-as>, then pause.
+  <break strength="medium"/>
+  Continue at <prosody rate="120%">a slightly faster rate</prosody>.
+</speak>`,
+]
+const SSML_H_SAMPLES = [
+  `<speak version="1.1" xmlns="http://www.w3.org/2001/10/synthesis" xmlns:h="https://hangrylabs.app/ns/ssml-h/1.0" xml:lang="en-US">
+  <metadata>
+    <h:extensions version="1.0">
+      <h:voice-definition name="Bob" gender="male" age="elderly" accent="american" scope="request" seed="4242">
+        <h:sample xml:lang="en-US">My name is Bob. I am ready for this conversation.</h:sample>
+      </h:voice-definition>
+      <h:voice-definition name="Elisabeth" gender="female" age="elderly" accent="american" scope="request" seed="8241"/>
+    </h:extensions>
+  </metadata>
+  <voice name="Bob">Are we ready?</voice>
+  <break time="300ms"/>
+  <voice name="Elisabeth"><prosody rate="slow">Yes, all preparations are complete.</prosody></voice>
+</speak>`,
 ]
 const DEFAULT_CONTROLS = {
   voice_mode: 'random', language: '', voice_profile: '', device: 'auto', output_format: 'mp3',
@@ -138,6 +166,7 @@ function persistUiSession() {
       activeTab: state.activeTab,
       headerCollapsed: state.headerCollapsed,
       gpuWindowMs: state.gpuWindowMs,
+      inputType: state.inputType,
     }))
   } catch {}
 }
@@ -155,6 +184,7 @@ function restoreSessionState() {
   if (['generate', 'stream', 'voices', 'api', 'system'].includes(ui?.activeTab)) state.activeTab = ui.activeTab
   if (typeof ui?.headerCollapsed === 'boolean') state.headerCollapsed = ui.headerCollapsed
   if ([60 * 1000, 10 * 60 * 1000].includes(ui?.gpuWindowMs)) state.gpuWindowMs = ui.gpuWindowMs
+  if (['text', 'ssml', 'ssml-h'].includes(ui?.inputType)) state.inputType = ui.inputType
 
   const cached = readSessionJson(GPU_SESSION_KEY)
   const cutoff = Date.now() - GPU_HISTORY_RETENTION_MS
@@ -232,6 +262,33 @@ function bindRangePairs() {
 
 function updateTextMetrics() {
   $('#text-metrics').textContent = t('composer.characters', { count: $('#text-input').value.length })
+}
+
+function samplesForInputType(inputType = state.inputType) {
+  if (inputType === 'ssml') return SSML_SAMPLES
+  if (inputType === 'ssml-h') return SSML_H_SAMPLES
+  return SAMPLE_TEXTS
+}
+
+function setInputType(inputType, { replaceKnownSample = true, persist = true } = {}) {
+  if (!['text', 'ssml', 'ssml-h'].includes(inputType)) return
+  const editor = $('#text-input')
+  const previousSamples = samplesForInputType(state.inputType)
+  const shouldReplace = replaceKnownSample && (!editor.value.trim()
+    || previousSamples.includes(editor.value)
+    || editor.value === t('composer.defaultText'))
+  state.inputType = inputType
+  editor.dataset.inputType = inputType
+  editor.spellcheck = inputType === 'text'
+  $$('[data-input-type]').forEach((button) => {
+    const active = button.dataset.inputType === inputType
+    button.classList.toggle('active', active)
+    button.setAttribute('aria-pressed', String(active))
+  })
+  $('#expression-guide-button').hidden = inputType !== 'text'
+  if (shouldReplace) editor.value = samplesForInputType(inputType)[0]
+  updateTextMetrics()
+  if (persist) persistUiSession()
 }
 
 function populateSelect(select, options, selected = '') {
@@ -344,6 +401,7 @@ async function requestPayload(forceFormat = null) {
   const controls = controlValues()
   const payload = {
     text,
+    input_type: state.inputType,
     language: controls.language || null,
     device: controls.device,
     output_format: forceFormat || controls.output_format,
@@ -737,7 +795,7 @@ $('#delete-profile-confirm').addEventListener('click', async (event) => {
 
 async function refreshApiStatus() {
   $('#api-output').textContent = t('common.loading')
-  const paths = ['/tts/ping', '/v1/models', '/v1/audio/voices', '/tts/formats', '/tts/stream-formats']
+  const paths = ['/tts/ping', '/v1/models', '/v1/audio/voices', '/tts/formats', '/tts/stream-formats', '/tts/ssml/capabilities']
   const values = await Promise.all(paths.map(async (path) => {
     try { return [path, await fetchJson(path)] } catch (error) { return [path, { error: errorMessage(error) }] }
   }))
@@ -979,17 +1037,19 @@ async function loadWorkspace() {
   })
   renderProfiles(profiles.data || [])
   applyControlValues(settings.generation_defaults || DEFAULT_CONTROLS)
-  $('#text-input').value = t('composer.defaultText')
-  updateTextMetrics()
+  $('#text-input').value = state.inputType === 'text' ? t('composer.defaultText') : samplesForInputType(state.inputType)[0]
+  setInputType(state.inputType, { replaceKnownSample: false, persist: false })
   $('#reference-audio-name').textContent = 'WAV, MP3, FLAC, OGG, or M4A'
 }
 
 $('#voice-mode').addEventListener('change', updateVoiceMode)
+$$('[data-input-type]').forEach((button) => button.addEventListener('click', () => setInputType(button.dataset.inputType)))
 $('#text-input').addEventListener('input', updateTextMetrics)
 $('#sample-button').addEventListener('click', () => {
   const current = $('#text-input').value
-  const candidates = SAMPLE_TEXTS.filter((sample) => sample !== current)
-  $('#text-input').value = candidates[Math.floor(Math.random() * candidates.length)] || SAMPLE_TEXTS[0]
+  const samples = samplesForInputType()
+  const candidates = samples.filter((sample) => sample !== current)
+  $('#text-input').value = candidates[Math.floor(Math.random() * candidates.length)] || samples[0]
   updateTextMetrics()
 })
 $('#reference-audio').addEventListener('change', (event) => { $('#reference-audio-name').textContent = event.target.files[0]?.name || 'WAV, MP3, FLAC, OGG, or M4A' })

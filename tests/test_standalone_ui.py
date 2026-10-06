@@ -68,6 +68,8 @@ class StandaloneUiTests(unittest.TestCase):
         self.assertIn('id="profile-audio-preview"', index.text)
         self.assertIn('id="delete-profile-dialog"', index.text)
         self.assertIn('id="advanced-generation"', index.text)
+        self.assertIn('data-input-type="ssml"', index.text)
+        self.assertIn('data-input-type="ssml-h"', index.text)
         self.assertLess(index.text.index('id="advanced-generation"'), index.text.index('<section class="content-panel">'))
         self.assertIn('class="voice-form-grid"', index.text)
         self.assertIn('<div class="system-controls">', index.text)
@@ -116,6 +118,13 @@ class StandaloneUiTests(unittest.TestCase):
         self.assertIn("document.addEventListener('visibilitychange'", script)
         self.assertIn("GPU_HISTORY_RETENTION_MS = 10 * 60 * 1000", script)
         self.assertIn("function nativeLanguageLabel(id, fallback)", script)
+        self.assertIn("input_type: state.inputType", script)
+        self.assertIn("/tts/ssml/capabilities", script)
+        self.assertIn(
+            '<voice name="Elisabeth"><prosody rate="slow">Yes, all preparations are complete.</prosody></voice>',
+            script,
+        )
+        self.assertNotIn('<voice name="Elisabeth">Yes. <prosody', script)
         self.assertIn("languages.languages", script)
         self.assertIn(".generate-action-row, .generate-action-row .primary-button { width: 100%; }", stylesheet)
         self.assertIn("grid-template-columns: minmax(700px, 1.45fr) minmax(340px, 0.75fr)", stylesheet)

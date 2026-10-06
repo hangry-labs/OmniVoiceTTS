@@ -113,9 +113,9 @@
       <section class="composer workflow-only" id="composer">
         <div class="composer-heading">
           <div class="section-title"><i class="icon-message-square-text"></i><span data-i18n="composer.text">Input text</span></div>
-          <div class="composer-actions"><span class="text-metrics" id="text-metrics">0 characters</span><button class="secondary-button compact-command" id="expression-guide-button" type="button"><i class="icon-sparkles"></i><span data-i18n="composer.expressionGuide">Expression guide</span></button><button class="secondary-button compact-command" id="sample-button" type="button"><i class="icon-refresh-cw"></i><span data-i18n="composer.newSample">New sample</span></button></div>
+          <div class="composer-actions"><div class="segmented-control input-type-control" role="group" aria-label="Input format" data-i18n-aria-label="composer.inputType"><button class="active" type="button" data-input-type="text" aria-pressed="true">Text</button><button type="button" data-input-type="ssml" aria-pressed="false">SSML</button><button type="button" data-input-type="ssml-h" aria-pressed="false">SSML-H</button></div><span class="text-metrics" id="text-metrics">0 characters</span><button class="secondary-button compact-command" id="expression-guide-button" type="button"><i class="icon-sparkles"></i><span data-i18n="composer.expressionGuide">Expression guide</span></button><button class="secondary-button compact-command" id="sample-button" type="button"><i class="icon-refresh-cw"></i><span data-i18n="composer.newSample">New sample</span></button></div>
         </div>
-        <textarea id="text-input" rows="7" spellcheck="true" aria-label="Text to synthesize" data-i18n-aria-label="composer.text"></textarea>
+        <textarea id="text-input" rows="7" spellcheck="true" aria-label="Text or markup to synthesize" data-i18n-aria-label="composer.input"></textarea>
       </section>
 
       <section class="conditioning-panel workflow-only" id="design-panel" hidden>

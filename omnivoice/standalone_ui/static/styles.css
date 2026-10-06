@@ -141,6 +141,9 @@ input[readonly] { color: #c7c9cf; cursor: default; }
 .segmented-control button { min-width: 110px; height: 34px; border: 0; border-radius: 4px; background: transparent; color: var(--muted); font-size: 0.8rem; font-weight: 650; }
 .segmented-control button.active { background: var(--surface-3); color: var(--text); box-shadow: inset 0 0 0 1px #454852; }
 .segmented-control i { margin-right: 5px; }
+.input-type-control { grid-template-columns: repeat(3, 1fr); margin: 0; }
+.input-type-control button { min-width: 72px; }
+#text-input[data-input-type="ssml"], #text-input[data-input-type="ssml-h"] { min-height: 260px; font-family: "Cascadia Code", "SFMono-Regular", Consolas, monospace; font-size: 0.86rem; tab-size: 2; }
 
 .audio-editor { width: 100%; min-width: 0; border: 1px solid #555861; border-radius: 5px; overflow: hidden; background: #202126; transition: border-color 120ms ease; }
 .audio-editor.dragging { border-color: var(--accent); }

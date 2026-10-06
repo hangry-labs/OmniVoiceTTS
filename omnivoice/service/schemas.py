@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from typing import Literal
 
-from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from omnivoice.utils.text import validate_synthesis_text
 
@@ -15,7 +15,13 @@ DEFAULT_DEVICE = os.getenv("OMNIVOICE_DEVICE", "auto")
 class TTSRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
-    text: str = Field(..., min_length=1, description="Text to synthesize.")
+    text: str = Field(..., min_length=1, description="Plain text, SSML, or SSML-H document to synthesize.")
+    input_type: Literal["text", "ssml", "ssml-h"] = Field(
+        "text",
+        description=(
+            "Input interpretation. Plain text remains the default; SSML and SSML-H must be selected explicitly."
+        ),
+    )
     voice: str | None = Field(
         None,
         description=(
@@ -79,10 +85,13 @@ class TTSRequest(BaseModel):
         description="wav, mp3, flac, or ogg.",
     )
 
-    @field_validator("text")
-    @classmethod
-    def validate_text_content(cls, value: str) -> str:
-        return validate_synthesis_text(value)
+    @model_validator(mode="after")
+    def validate_text_content(self) -> "TTSRequest":
+        if self.input_type == "text":
+            validate_synthesis_text(self.text)
+        elif not self.text.strip():
+            raise ValueError("SSML input must not be empty.")
+        return self
 
 
 class PurgeRequest(BaseModel):

@@ -32,6 +32,8 @@
   "modes.clone": "Voice clone",
   "modes.profile": "Saved voice",
   "composer.text": "Input text",
+  "composer.input": "Text or markup to synthesize",
+  "composer.inputType": "Input format",
   "composer.defaultText": "Hello from OmniVoice. This Docker image includes a browser UI and an HTTP API.",
   "composer.characters": "{count} characters",
   "composer.newSample": "New sample",

@@ -40,6 +40,7 @@ dependencies = [
     "pydantic==2.13.4",
     "python-multipart==0.0.28",
     "soundfile==0.13.1",
+    "ssml-h-tools==0.1.0",
     "torch==2.8.0",
     "transformers==5.8.0",
     "uvicorn[standard]==0.46.0",

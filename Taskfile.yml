@@ -41,6 +41,11 @@ vars:
   BENCHMARK_CPU_MEMORY_RESULTS: 'benchmarks\cpu-memory.json'
   BENCHMARK_CPU_MEMORY_MARKDOWN: 'benchmarks\CPU_MEMORY.md'
   BENCHMARK_CPU_MEMORY_START_PORT: '7870'
+  SSML_H_BENCHMARK_TTS_URL: 'http://127.0.0.1:7861'
+  SSML_H_BENCHMARK_ASR_URL: 'http://127.0.0.1:8000'
+  SSML_H_BENCHMARK_CALLS: '20'
+  SSML_H_BENCHMARK_RESULTS: 'benchmarks\ssml-h-reliability.json'
+  SSML_H_BENCHMARK_MARKDOWN: 'benchmarks\SSML_H_RELIABILITY.md'
   CODEQL: 'C:\sandbox\tools\codeql\codeql.exe'
   DRY_RUN: '0'
   NEXT_VERSION: ''
@@ -234,6 +239,11 @@ tasks:
     desc: Benchmark CPU Docker memory limits for common OpenAI speech scenarios
     cmds:
       - powershell -NoProfile -ExecutionPolicy Bypass -Command ".\.venv\Scripts\python.exe scripts\benchmark-cpu-memory.py --image '{{.IMAGE}}' --limits '{{.BENCHMARK_CPU_MEMORY_LIMITS}}' --start-port '{{.BENCHMARK_CPU_MEMORY_START_PORT}}' --results '{{.BENCHMARK_CPU_MEMORY_RESULTS}}' --markdown '{{.BENCHMARK_CPU_MEMORY_MARKDOWN}}'"
+
+  benchmark-ssml-h-reliability:
+    desc: Benchmark deterministic SSML-H dialogue completion through local TTS and Qwen3-ASR
+    cmds:
+      - powershell -NoProfile -ExecutionPolicy Bypass -Command ".\.venv\Scripts\python.exe scripts\benchmark-ssml-h-reliability.py --tts-url '{{.SSML_H_BENCHMARK_TTS_URL}}' --asr-url '{{.SSML_H_BENCHMARK_ASR_URL}}' --calls '{{.SSML_H_BENCHMARK_CALLS}}' --results '{{.SSML_H_BENCHMARK_RESULTS}}' --markdown '{{.SSML_H_BENCHMARK_MARKDOWN}}'"
 
   imagestop:
     desc: Stop running OmniVoiceTTS containers

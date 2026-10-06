@@ -56,6 +56,9 @@ class OmniVoiceTTSClient:
     def formats(self) -> dict[str, Any]:
         return self._json("GET", "/tts/formats")
 
+    def ssml_capabilities(self) -> dict[str, Any]:
+        return self._json("GET", "/tts/ssml/capabilities")
+
     def languages(self) -> dict[str, Any]:
         return self._json("GET", "/tts/languages")
 
@@ -66,6 +69,7 @@ class OmniVoiceTTSClient:
     def generate(
         self,
         text: str,
+        input_type: str = "text",
         language: str | None = None,
         voice: str | None = None,
         instruct: str | None = None,
@@ -84,6 +88,7 @@ class OmniVoiceTTSClient:
             "/tts/generate",
             {
                 "text": text,
+                "input_type": input_type,
                 "language": language,
                 "voice": voice,
                 "instruct": instruct,

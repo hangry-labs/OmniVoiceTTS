@@ -66,12 +66,16 @@ class RepositoryContractTests(unittest.TestCase):
         project = config["project"]
         self.assertNotIn("gradio==6.14.0", project["dependencies"])
         self.assertNotIn("torchaudio==2.8.0", project["dependencies"])
+        self.assertNotIn("defusedxml==0.7.1", project["dependencies"])
+        self.assertIn("ssml-h-tools==0.1.0", project["dependencies"])
         self.assertEqual(project["optional-dependencies"]["torchaudio"], ["torchaudio==2.8.0"])
         self.assertNotIn("omnivoice-demo", project["scripts"])
         self.assertFalse((ROOT / "omnivoice" / "cli" / "demo.py").exists())
         self.assertIn("python-multipart==0.0.28", project["dependencies"])
         self.assertIn("VERSION", config["tool"]["hatch"]["build"]["targets"]["sdist"]["include"])
         self.assertIn("assets", config["tool"]["hatch"]["build"]["targets"]["sdist"]["include"])
+        ssml_adapter = (ROOT / "omnivoice" / "service" / "ssml.py").read_text(encoding="utf-8")
+        self.assertIn("from ssml_h import (", ssml_adapter)
 
     def test_builtin_voice_is_an_explicit_runtime_asset(self) -> None:
         runtime_voice = ROOT / "omnivoice" / "runtime_assets" / "voices" / "openai_default_voice.mp3"

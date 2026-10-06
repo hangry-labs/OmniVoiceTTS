@@ -35,3 +35,7 @@ Current baseline hardware: NVIDIA GeForce RTX 5060 Ti. AMD ROCm support is not v
 - [prewarm_direct_reference](PREWARM_DIRECT_REFERENCE.md)
 
 Detailed machine-readable run data is stored in `example-generation.json`.
+
+## Reliability
+
+- [SSML-H dialogue completion](SSML_H_RELIABILITY.md) generates the browser's standard two-character SSML-H example with fixed seeds, transcribes every WAV through local Qwen3-ASR, and tracks whether the complete dialogue survives generation. Detailed evidence is stored in `ssml-h-reliability.json`.

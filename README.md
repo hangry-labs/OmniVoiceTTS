@@ -13,6 +13,7 @@ This Hangry Labs fork is made for ease of use. The aim is that anyone should be 
 ## What This Project Provides
 
 - A browser UI for auto voice, voice design, and voice cloning
+- Explicit SSML and SSML-H input modes for controlled speech and multi-character dialogue
 - An HTTP API for your own applications and tools
 - No manual Python, model, ASR, or audio dependency setup
 - 600+ language support inherited from OmniVoice
@@ -170,6 +171,33 @@ Voice profiles are stored under `/app/persistent/voices/openai` inside the unifi
 
 The same saved profiles and built-in aliases are available on native `/tts/generate`, `/tts/convert`, `/tts/stream`, and `/tts/stream-chunks` requests through either `voice` or `voice_profile`. Explicit `ref_audio` still takes precedence when provided.
 
+### SSML And SSML-H
+
+The native generation routes support explicit `input_type` values of `text`, `ssml`, and `ssml-h`. Plain text remains the default; markup is never inferred. The browser Generate and Stream workspaces expose the same three modes with working samples.
+
+Standard SSML example:
+
+```bash
+curl -X POST "http://localhost:7861/tts/generate" \
+  -H "Content-Type: application/json" \
+  -d '{"input_type":"ssml","text":"<speak version=\"1.1\" xml:lang=\"en-US\">Welcome to <sub alias=\"Hangry Labs\">HangryLabs</sub>.<break time=\"300ms\"/><prosody rate=\"slow\" pitch=\"+2st\">This uses standard SSML controls.</prosody></speak>","output_format":"mp3"}' \
+  -o ssml.mp3
+```
+
+[SSML-H 1.0](https://hangrylabs.app/ns/ssml-h/1.0) extends standard SSML metadata with dynamic voice definitions. Parsing, validation, resource limits, and immutable synthesis plans come from the versioned [`ssml-h-tools`](https://pypi.org/project/ssml-h-tools/) package; OmniVoiceTTS supplies the model-specific language, voice, phoneme, profile, and audio execution adapters. `scope="request"` keeps a generated character in memory only. `scope="profile"` publishes it as a normal reusable voice profile only after synthesis and output encoding succeed.
+
+When a dynamic voice omits `<h:sample>`, OmniVoiceTTS designs it from one fixed internal English reference sentence. Dialogue text is never reused as voice-training material. Provide `<h:sample xml:lang="...">...</h:sample>` when a specific reference phrase or language is required.
+
+```json
+{
+  "input_type": "ssml-h",
+  "output_format": "mp3",
+  "text": "<speak version=\"1.1\" xmlns=\"http://www.w3.org/2001/10/synthesis\" xmlns:h=\"https://hangrylabs.app/ns/ssml-h/1.0\" xml:lang=\"en-US\"><metadata><h:extensions version=\"1.0\"><h:voice-definition name=\"Bob\" gender=\"male\" age=\"elderly\" accent=\"american\" scope=\"request\" seed=\"4242\"><h:sample xml:lang=\"en-US\">My name is Bob. I am ready for this conversation.</h:sample></h:voice-definition></h:extensions></metadata><voice name=\"Bob\">Are we ready?</voice></speak>"
+}
+```
+
+OmniVoiceTTS supports a bounded SSML 1.1-compatible subset: `speak`, `metadata`, `p`, `s`, `token`, `w`, `voice`, `lang`, `break`, `prosody`, `sub`, `say-as`, and English `x-arpabet` phonemes. Generic IPA, remote `audio`, external lexicons, DTDs, entities, and external XML references are rejected. Query `GET /tts/ssml/capabilities` for the machine-readable feature and limit contract. The OpenAI-compatible endpoint remains plain text because SSML is not part of that compatibility contract.
+
 Useful endpoints:
 
 - `GET /v1/models`
@@ -189,6 +217,7 @@ Useful endpoints:
 - `POST /tts/voice-profiles`
 - `DELETE /tts/voice-profiles/{name}`
 - `GET /tts/voice-design/options`
+- `GET /tts/ssml/capabilities`
 - `GET /tts/openai-calls`
 - `POST /tts/generate`
 - `POST /tts/convert`
@@ -360,6 +389,14 @@ task benchmark-cpu-memory
 
 This starts short-lived CPU containers with increasing Docker memory limits and sends OpenAI speech requests for random voice, design voice, direct clone with/without transcript, and stored voice with/without transcript. The default ladder starts at 1536 MiB and skips obviously unusable sub-GB limits. Results are appended to `benchmarks/CPU_MEMORY.md` as scenario recommendation columns and to `benchmarks/cpu-memory.json` with detailed attempt data.
 
+Run the deterministic SSML-H dialogue-completion benchmark against local OmniVoiceTTS and Qwen3-ASR services:
+
+```bash
+task benchmark-ssml-h-reliability
+```
+
+This generates the exact two-character browser sample with fixed seeds, transcribes each WAV, and appends completion results to `benchmarks/SSML_H_RELIABILITY.md`. Per-call transcripts and audio hashes are retained in `benchmarks/ssml-h-reliability.json` for failed-run diagnosis.
+
 Hot-swap local service code into the container without rebuilding:
 
 ```bash
@@ -466,6 +503,9 @@ The snapshot channel is the current Docker `latest` build after the latest tagge
 
 Current snapshot changes after `v0.3.0`:
 
+- Implemented [SSML-H 1.0](https://hangrylabs.app/ns/ssml-h/1.0), the Hangry Labs SSML extension standard for portable dynamic voice definitions, temporary characters, multi-speaker turns, and atomically persisted voice profiles.
+- Integrated the published [`ssml-h-tools`](https://pypi.org/project/ssml-h-tools/) parser, validator, builder data model, and bounded resource contract while retaining OmniVoice-specific execution and profile transactions locally.
+- Added hardened, explicit SSML and SSML-H modes across complete generation, progressive streaming, metrics, the Python client, capability discovery, and the browser UI, while preserving plain text as the default and keeping OpenAI compatibility routes unchanged.
 - Replaced the Gradio application shell with a purpose-built, responsive standalone UI based on the Hangry Labs v1.0 interface architecture.
 - Added focused Generate, Stream, Voices, API, and System workspaces with a shared settings rail, compact/expanded branded header, bundled WebP product assets, and responsive desktop/mobile layouts.
 - Added a shared local waveform workspace for generated, streamed, and reference audio with playback, seeking, volume, speed, trim, download, share, and removal controls.

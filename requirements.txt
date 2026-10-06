@@ -10,6 +10,7 @@ charset-normalizer==3.5.2
 click==8.5.0
 cloudpickle==3.1.2
 decorator==5.3.1
+defusedxml==0.7.1
 fastapi==0.136.1
 filelock==4.0.12
 fsspec==2026.9.0
@@ -70,6 +71,7 @@ setuptools==84.0.0
 shellingham==1.5.4
 soundfile==0.13.1
 soxr==1.1.0
+ssml-h-tools==0.1.0
 standard-aifc==3.13.0
 standard-chunk==3.13.0
 standard-sunau==3.13.0
