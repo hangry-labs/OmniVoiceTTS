@@ -1,0 +1,27 @@
+Hangry Labs OmniVoiceTTS
+Copyright 2026 Hangry Labs
+
+This distribution is based on OmniVoice by k2-fsa and contributors.
+Copyright notices in the upstream source files are retained. Hangry Labs has
+modified the upstream work for container deployment, serving APIs, the browser
+interface, runtime management, SSML/SSML-H support, testing, documentation,
+and related integration features.
+
+The project-owned source code is licensed under Apache License 2.0. Model
+weights, tokenizers, generated media, browser libraries, Python packages, and
+system packages included or downloaded by the runtime remain subject to their
+own terms. See THIRD_PARTY_NOTICES.md and /app/third_party in the Docker image.
+
+Required model attribution:
+
+Meta Llama 3 is licensed under the Meta Llama 3 Community License, Copyright
+© Meta Platforms, Inc. All Rights Reserved.
+
+Boson Higgs Audio 2 is licensed under the Boson Community License, Copyright
+© Boson AI USA, Inc. All Rights Reserved.
+
+Built with Meta Llama 3
+
+Built with Higgs Materials licensed from Boson AI USA, Inc., Copyright Boson
+AI USA, Inc., All Rights Reserved and Meta Llama 3 licensed under the Meta
+Llama 3 Community License, Copyright Meta Platforms, Inc., All Right Reserved

@@ -32,6 +32,7 @@ class UpstreamRuntimeFixTests(unittest.TestCase):
     def test_asr_loader_uses_configured_model_and_device(self) -> None:
         model = SimpleNamespace(
             _asr_model_name="local/custom-whisper",
+            _asr_model_revision="reviewed-revision",
             _asr_device="cpu",
             device=torch.device("cuda:0"),
             _asr_pipe=None,
@@ -45,10 +46,15 @@ class UpstreamRuntimeFixTests(unittest.TestCase):
             patch(
                 "omnivoice.models.omnivoice._resolve_model_path",
                 return_value="/models/custom-whisper",
-            ),
+            ) as resolve_model_path,
             patch.dict(sys.modules, {"transformers": transformers_module}),
         ):
             OmniVoice.load_asr_model(model)
+
+        resolve_model_path.assert_called_once_with(
+            "local/custom-whisper",
+            revision="reviewed-revision",
+        )
 
         pipeline_factory.assert_called_once_with(
             "automatic-speech-recognition",

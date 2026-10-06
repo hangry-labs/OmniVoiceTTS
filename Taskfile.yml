@@ -114,6 +114,11 @@ tasks:
       - uv lock --check
       - docker build --check .
 
+  compliance-test:
+    desc: Verify the license, notice, inventory, and corresponding-source bundle in the tiny image
+    cmds:
+      - docker run --rm --entrypoint python {{.TINY_IMAGE}} /app/third_party/build/verify_compliance_bundle.py /app/third_party
+
   gpuinfo:
     desc: Show host GPU indexes
     cmds:

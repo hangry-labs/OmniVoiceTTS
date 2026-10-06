@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # Copyright    2026  Xiaomi Corp.        (authors:  Han Zhu)
+# Modified by Hangry Labs, 2026.
 #
 # See ../../LICENSE for clarification regarding multiple authors
 #
@@ -286,12 +287,12 @@ class OmniVoiceConfig(PretrainedConfig):
         self.audio_codebook_weights = audio_codebook_weights
 
 
-def _resolve_model_path(name_or_path: str) -> str:
+def _resolve_model_path(name_or_path: str, revision: Optional[str] = None) -> str:
     if os.path.isdir(name_or_path):
         return name_or_path
     from huggingface_hub import snapshot_download
 
-    return snapshot_download(name_or_path)
+    return snapshot_download(name_or_path, revision=revision)
 
 
 class OmniVoice(PreTrainedModel):
@@ -339,6 +340,7 @@ class OmniVoice(PreTrainedModel):
         self.sampling_rate = None
         self._asr_pipe = None
         self._asr_model_name = "openai/whisper-large-v3-turbo"
+        self._asr_model_revision = None
         self._asr_device = None
 
     @classmethod
@@ -347,6 +349,8 @@ class OmniVoice(PreTrainedModel):
         load_asr = kwargs.pop("load_asr", False)
         asr_model_name = kwargs.pop("asr_model_name", None)
         asr_device = kwargs.pop("asr_device", None)
+        revision = kwargs.pop("revision", None)
+        asr_model_revision = kwargs.pop("asr_model_revision", None)
 
         # Suppress noisy INFO logs from transformers/huggingface_hub during loading
         _prev_disable = logging.root.manager.disable
@@ -354,7 +358,10 @@ class OmniVoice(PreTrainedModel):
 
         try:
             # Resolve to local path first; download only if not already cached
-            resolved_path = _resolve_model_path(pretrained_model_name_or_path)
+            resolved_path = _resolve_model_path(
+                pretrained_model_name_or_path,
+                revision=revision,
+            )
 
             model = super().from_pretrained(resolved_path, *args, **kwargs)
 
@@ -388,6 +395,7 @@ class OmniVoice(PreTrainedModel):
                     model._asr_model_name = asr_model_name
                 if asr_device is not None:
                     model._asr_device = asr_device
+                model._asr_model_revision = asr_model_revision
                 if load_asr:
                     model.load_asr_model()
         finally:
@@ -427,7 +435,10 @@ class OmniVoice(PreTrainedModel):
             else torch.float32
         )
 
-        model_name = _resolve_model_path(model_name)
+        model_name = _resolve_model_path(
+            model_name,
+            revision=getattr(self, "_asr_model_revision", None),
+        )
 
         self._asr_pipe = hf_pipeline(
             "automatic-speech-recognition",

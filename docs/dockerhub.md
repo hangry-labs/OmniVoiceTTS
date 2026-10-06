@@ -8,6 +8,8 @@
 
 Easy-to-run, massively multilingual text-to-speech Docker images with a responsive browser UI, HTTP API, voice design, voice cloning, saved profiles, SSML, and SSML-H included.
 
+**License notice:** the source code is Apache-2.0, but upstream describes the default OmniVoice pretrained checkpoint as `CC-BY-NC`, so the default model is not licensed for commercial use. The embedded Higgs Audio 2 tokenizer has separate Boson and Meta Llama 3 terms, including an expanded-license threshold above 100,000 annual active users. Review the repository's [Third-Party Notices](https://github.com/Hangry-Labs/OmniVoiceTTS/blob/master/THIRD_PARTY_NOTICES.md) before use or redistribution.
+
 ## Quick Start
 
 Run the full offline-friendly image with an NVIDIA GPU:
@@ -35,6 +37,8 @@ The smaller `latest_tiny` image downloads model assets on first use and keeps th
 ```bash
 docker run --name omnivoicetts-tiny --restart unless-stopped -p 7861:7861 --gpus all -e CUDA_VISIBLE_DEVICES=0 -e HF_HUB_OFFLINE=0 -e TRANSFORMERS_OFFLINE=0 -v omnivoicetts_data:/app/persistent hangrylabs/omnivoicetts:latest_tiny
 ```
+
+The full image incrementally seeds its pinned baked model cache into this volume at startup. Existing downloaded models, saved voices, and settings are preserved across image upgrades.
 
 Use versioned `vX.Y.Z` and `vX.Y.Z_tiny` tags for reproducible deployments. Use `latest` and `latest_tiny` to test the current snapshot.
 
@@ -119,6 +123,14 @@ Path overrides are available through `HF_HOME`, `OMNIVOICE_SETTINGS_PATH`, and `
 ## Responsible Use
 
 OmniVoice supports voice cloning. Do not use this image for unauthorized cloning, impersonation, fraud, harassment, scams, or illegal or unethical activity. Only clone voices when you have the rights and consent to do so.
+
+## Licensing
+
+The Docker images are mixed-license distributions. They include `/app/NOTICE`, `/app/THIRD_PARTY_NOTICES.md`, and a verifiable `/app/third_party` bundle with the reviewed model agreements, dependency notices, package inventory, and corresponding source for LGPL runtime components.
+
+Built with Meta Llama 3
+
+Built with Higgs Materials licensed from Boson AI USA, Inc., Copyright Boson AI USA, Inc., All Rights Reserved and Meta Llama 3 licensed under the Meta Llama 3 Community License, Copyright Meta Platforms, Inc., All Right Reserved
 
 ## Links
 

@@ -104,8 +104,16 @@ def env_int(name: str, default: int, minimum: int = 1) -> int:
 
 
 DEFAULT_MODEL = os.getenv("OMNIVOICE_MODEL", "k2-fsa/OmniVoice")
+DEFAULT_MODEL_REVISION = os.getenv(
+    "OMNIVOICE_MODEL_REVISION",
+    "c5fdb5ccb189668d56333f77ba2629f4cd7535f4",
+).strip() or None
 DEFAULT_DEVICE = os.getenv("OMNIVOICE_DEVICE", "auto")
 DEFAULT_ASR_MODEL = os.getenv("OMNIVOICE_ASR_MODEL", "openai/whisper-large-v3-turbo")
+DEFAULT_ASR_MODEL_REVISION = os.getenv(
+    "OMNIVOICE_ASR_MODEL_REVISION",
+    "41f01f3fe87f28c78e2fbf8b568835947dd65ed9",
+).strip() or None
 DEFAULT_ASR_DEVICE = os.getenv("OMNIVOICE_ASR_DEVICE", "").strip() or None
 LOAD_ASR = env_bool("OMNIVOICE_LOAD_ASR", False)
 ALLOW_CPU_EAGER_ASR = env_bool("OMNIVOICE_ALLOW_CPU_EAGER_ASR", False)
@@ -194,8 +202,10 @@ STARTUP_PARAMETER_DEFAULTS = OrderedDict(
         ("OMNIVOICE_UI_UPLOAD_LIMIT_MIB", "64"),
         ("TMPDIR", ""),
         ("OMNIVOICE_MODEL", "k2-fsa/OmniVoice"),
+        ("OMNIVOICE_MODEL_REVISION", "c5fdb5ccb189668d56333f77ba2629f4cd7535f4"),
         ("OMNIVOICE_DEVICE", "auto"),
         ("OMNIVOICE_ASR_MODEL", "openai/whisper-large-v3-turbo"),
+        ("OMNIVOICE_ASR_MODEL_REVISION", "41f01f3fe87f28c78e2fbf8b568835947dd65ed9"),
         ("OMNIVOICE_ASR_DEVICE", ""),
         ("OMNIVOICE_LOAD_ASR", "0"),
         ("OMNIVOICE_ALLOW_CPU_EAGER_ASR", "0"),
@@ -441,8 +451,10 @@ def get_model(device: str) -> OmniVoice:
                 DEFAULT_MODEL,
                 device_map=resolved_device,
                 dtype=dtype,
+                revision=DEFAULT_MODEL_REVISION,
                 load_asr=load_asr,
                 asr_model_name=DEFAULT_ASR_MODEL,
+                asr_model_revision=DEFAULT_ASR_MODEL_REVISION,
                 asr_device=DEFAULT_ASR_DEVICE,
             )
         return MODEL_CACHE[resolved_device]
@@ -1052,11 +1064,13 @@ def get_status_payload() -> dict:
         "device": DEFAULT_DEVICE,
         "resolved_device": default_device,
         "model": DEFAULT_MODEL,
+        "model_revision": DEFAULT_MODEL_REVISION,
         "sample_rate": SAMPLE_RATE,
         "load_asr": effective_load_asr,
         "requested_load_asr": LOAD_ASR,
         "allow_cpu_eager_asr": ALLOW_CPU_EAGER_ASR,
         "asr_model": DEFAULT_ASR_MODEL if effective_load_asr else None,
+        "asr_model_revision": DEFAULT_ASR_MODEL_REVISION if effective_load_asr else None,
         "asr_device": DEFAULT_ASR_DEVICE or default_device,
         "resample_backend": get_resample_backend(),
         "languages": len(LANG_IDS),
@@ -1124,6 +1138,7 @@ def get_startup_diagnostics_payload() -> dict[str, Any]:
         },
         "config": {
             "model": DEFAULT_MODEL,
+            "model_revision": DEFAULT_MODEL_REVISION,
             "device": DEFAULT_DEVICE,
             "resolved_device": resolved_device,
             "device_error": device_error,
@@ -1131,6 +1146,7 @@ def get_startup_diagnostics_payload() -> dict[str, Any]:
             "requested_load_asr": LOAD_ASR,
             "allow_cpu_eager_asr": ALLOW_CPU_EAGER_ASR,
             "asr_model": DEFAULT_ASR_MODEL if effective_load_asr else None,
+            "asr_model_revision": DEFAULT_ASR_MODEL_REVISION if effective_load_asr else None,
             "asr_device": DEFAULT_ASR_DEVICE or resolved_device,
             "max_concurrent_generations": MAX_CONCURRENT_GENERATIONS,
             "empty_cuda_cache_after_request": EMPTY_CUDA_CACHE_AFTER_REQUEST,

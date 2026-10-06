@@ -31,6 +31,58 @@ class RepositoryContractTests(unittest.TestCase):
         )
         self.assertIn("HEALTHCHECK", dockerfile)
         self.assertIn("http://127.0.0.1:7861/tts/ping", dockerfile)
+        self.assertIn("HF_HOME=/app/baked-models/huggingface", dockerfile)
+        self.assertIn('CMD ["python", "-u", "omnivoice/docker_entrypoint.py"]', dockerfile)
+
+    def test_docker_images_include_a_verifiable_compliance_bundle(self) -> None:
+        dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
+        for expected in (
+            "NOTICE THIRD_PARTY_NOTICES.md",
+            "third_party/README.md /app/third_party/README.md",
+            "install_compliance_bundle.py",
+            "verify_compliance_bundle.py",
+            "OMNIVOICE_MODEL_REVISION=c5fdb5ccb189668d56333f77ba2629f4cd7535f4",
+            "OMNIVOICE_ASR_MODEL_REVISION=41f01f3fe87f28c78e2fbf8b568835947dd65ed9",
+            "LicenseRef-OmniVoice-CC-BY-NC",
+            "LicenseRef-Boson-Higgs-Audio-2-Community",
+        ):
+            self.assertIn(expected, dockerfile)
+
+        notices = (ROOT / "THIRD_PARTY_NOTICES.md").read_text(encoding="utf-8")
+        root_notice = (ROOT / "NOTICE").read_text(encoding="utf-8")
+        required_attribution = (
+            "Built with Meta Llama 3",
+            "Built with Higgs Materials licensed from Boson AI USA, Inc., Copyright Boson",
+            "Meta Llama 3 is licensed under the Meta Llama 3 Community License",
+            "Boson Higgs Audio 2 is licensed under the Boson Community License",
+        )
+        for expected in required_attribution:
+            self.assertIn(expected, notices)
+            self.assertIn(expected, root_notice)
+        self.assertIn("CC-BY-NC", notices)
+        self.assertIn("100,000 annual active users", notices)
+
+        taskfile = (ROOT / "Taskfile.yml").read_text(encoding="utf-8")
+        self.assertIn("compliance-test:", taskfile)
+        self.assertTrue((ROOT / "scripts" / "install_compliance_bundle.py").is_file())
+        self.assertTrue((ROOT / "scripts" / "verify_compliance_bundle.py").is_file())
+
+    def test_public_docs_do_not_misrepresent_model_license(self) -> None:
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        dockerhub = (ROOT / "docs" / "dockerhub.md").read_text(encoding="utf-8")
+        for document in (readme, dockerhub):
+            self.assertIn("CC-BY-NC", document)
+            self.assertIn("not licensed for commercial use", document)
+            self.assertIn("Third-Party Notices", document)
+            self.assertIn(
+                "Built with Meta Llama 3",
+                document,
+                msg="public documentation must carry Meta's required product attribution",
+            )
+            self.assertIn(
+                "Built with Higgs Materials licensed from Boson AI USA, Inc.",
+                document,
+            )
 
     def test_one_container_workflow_builds_both_variants_and_registries(self) -> None:
         workflows = ROOT / ".github" / "workflows"

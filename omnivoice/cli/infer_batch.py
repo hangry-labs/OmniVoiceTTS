@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # Copyright    2026  Xiaomi Corp.        (authors:  Han Zhu)
+# Modified by Hangry Labs, 2026.
 #
 # See ../../LICENSE for clarification regarding multiple authors
 #

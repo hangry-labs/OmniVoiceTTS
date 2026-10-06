@@ -23,6 +23,9 @@ This Hangry Labs fork is made for ease of use. The aim is that anyone should be 
 
 Official images are published to [Docker Hub](https://hub.docker.com/r/hangrylabs/omnivoicetts/tags) and [GitHub Container Registry](https://github.com/Hangry-Labs/OmniVoiceTTS/pkgs/container/omnivoicetts).
 
+> [!IMPORTANT]
+> The repository source code is Apache-2.0, but the default pretrained OmniVoice checkpoint is described by upstream as **CC-BY-NC** and is not licensed for commercial use. The embedded Higgs Audio 2 tokenizer has separate Boson and Meta Llama 3 terms, including an expanded-license threshold above 100,000 annual active users. Read [Third-Party Notices](THIRD_PARTY_NOTICES.md) before deployment or redistribution.
+
 **Listen to examples first:** [language and voice examples](https://hangry-labs.github.io/OmniVoiceTTS/examples/) or [multi-character SSML-H conversations](https://hangry-labs.github.io/OmniVoiceTTS/examples/ssml-h.html).
 
 Hangry Labs home: [hangrylabs.app](https://hangrylabs.app/).
@@ -65,7 +68,7 @@ Then open: **[http://localhost:7861](http://localhost:7861)**
 
 The named `omnivoicetts_data` volume stores model assets, application settings, and voices created in the UI so they survive container replacement and image updates. Docker creates it automatically on first use.
 
-The full image is baked with the OmniVoice model, the Higgs audio tokenizer, and Whisper ASR assets. After the image is pulled, normal runtime is configured for offline use with `HF_HUB_OFFLINE=1` and `TRANSFORMERS_OFFLINE=1`. CPU runs should keep eager ASR disabled; saved voice profiles with transcripts do not need Whisper at request startup, and ASR can still lazy-load only when a reference audio request omits `ref_text`. To force eager Whisper preload on CPU anyway, set `OMNIVOICE_ALLOW_CPU_EAGER_ASR=1`. The Python 3.13 baked image was validated with no host model-cache volume mounted.
+The full image is baked with pinned OmniVoice, Higgs audio tokenizer, and Whisper ASR assets. At startup, it incrementally seeds missing or updated baked cache files into `/app/persistent/models/huggingface`; existing downloaded models, saved voices, and settings are preserved. Normal runtime is then configured for offline use with `HF_HUB_OFFLINE=1` and `TRANSFORMERS_OFFLINE=1`. CPU runs should keep eager ASR disabled; saved voice profiles with transcripts do not need Whisper at request startup, and ASR can still lazy-load only when a reference audio request omits `ref_text`. To force eager Whisper preload on CPU anyway, set `OMNIVOICE_ALLOW_CPU_EAGER_ASR=1`. The Python 3.13 baked image was validated with no host model-cache volume mounted.
 
 ## Tiny Image
 
@@ -426,7 +429,7 @@ task imagestop
 task nuke
 ```
 
-`task imagerun`, `task imagerun-tiny`, `task localrun`, and `task localrun-tiny` all mount the same `omnivoicetts_data` volume at `/app/persistent`. A fresh named volume mounted into the full image is initialized from the baked model assets by Docker; the tiny image downloads into the same layout on first online use.
+`task imagerun`, `task imagerun-tiny`, `task localrun`, and `task localrun-tiny` all mount the same `omnivoicetts_data` volume at `/app/persistent`. The full image entrypoint incrementally seeds missing or changed files from its pinned baked model cache into that volume without deleting user-downloaded models; the tiny image downloads into the same layout on first online use.
 
 Preview and run a release from a clean, synchronized `master` branch:
 
@@ -482,7 +485,7 @@ This project is an independently maintained packaging and serving fork of the or
 
 The upstream model and research are the core contribution. This Hangry Labs fork focuses on making OmniVoice simple to run and integrate: Docker image, included UI, HTTP API, offline-friendly baked assets, practical examples, and release tooling.
 
-License and attribution are preserved in [LICENSE](LICENSE).
+Source-code licensing is recorded in [LICENSE](LICENSE) and [NOTICE](NOTICE). Model, tokenizer, dependency, and image-runtime terms are documented separately in [Third-Party Notices](THIRD_PARTY_NOTICES.md).
 
 ---
 
@@ -686,6 +689,18 @@ If you use OmniVoice in research, cite the upstream work:
 
 ## License
 
-This fork is licensed under the [Apache License 2.0](LICENSE).
+The project-owned and upstream-derived source code in this repository is licensed under the [Apache License 2.0](LICENSE). The [NOTICE](NOTICE) identifies upstream attribution and Hangry Labs modifications.
+
+That Apache license does **not** cover every artifact used by the application:
+
+- The default `k2-fsa/OmniVoice` pretrained checkpoint is described by its upstream model card as `CC-BY-NC` due to training-data constraints. Upstream does not state a Creative Commons version number. Treat the checkpoint as noncommercial unless its owner grants different rights.
+- The embedded Higgs Audio 2 tokenizer is governed by the Boson Higgs Audio 2 Community License and the incorporated Meta Llama 3 Community License. Its terms include required attribution, acceptable-use conditions, and an expanded-license requirement above 100,000 annual active users.
+- Whisper, browser libraries, Python dependencies, CUDA wheels, and Debian packages retain their own licenses.
+
+The full and tiny Docker images are therefore **mixed-license distributions**. Complete component notices, exact reviewed revisions, required attribution, corresponding-source material, and verification instructions are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) and `/app/third_party` inside each image.
+
+Built with Meta Llama 3
+
+Built with Higgs Materials licensed from Boson AI USA, Inc., Copyright Boson AI USA, Inc., All Rights Reserved and Meta Llama 3 licensed under the Meta Llama 3 Community License, Copyright Meta Platforms, Inc., All Right Reserved
 
 Original work by k2-fsa and contributors in [OmniVoice](https://github.com/k2-fsa/OmniVoice). The upstream responsible-use disclaimer is preserved in spirit here: users must not use this model for unauthorized voice cloning, voice impersonation, fraud, scams, or any other illegal or unethical activities.

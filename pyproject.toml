@@ -8,6 +8,7 @@ version = "1.0.0.dev0"
 description = "Hangry Labs OmniVoiceTTS: easy-to-run multilingual zero-shot text-to-speech"
 readme = "README.md"
 license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE", "THIRD_PARTY_NOTICES.md"]
 requires-python = ">=3.13, <3.14"
 authors = [{name = "Han Zhu"}]
 keywords = [
@@ -81,7 +82,7 @@ url = "https://download.pytorch.org/whl/cu128"
 explicit = true
 
 [tool.hatch.build.targets.sdist]
-include = ["omnivoice", "assets", "VERSION"]
+include = ["omnivoice", "assets", "LICENSE", "NOTICE", "THIRD_PARTY_NOTICES.md", "VERSION"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["omnivoice"]
