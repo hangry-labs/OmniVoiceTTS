@@ -135,6 +135,8 @@ class RepositoryContractTests(unittest.TestCase):
     def test_release_history_is_managed_only_in_readme(self) -> None:
         release_script = (ROOT / "scripts" / "release.ps1").read_text(encoding="utf-8")
         self.assertIn('$releaseHistoryDocs = @("README.md")', release_script)
+        self.assertIn("function Get-UpdatedReleaseDocumentContent", release_script)
+        self.assertIn("-OldAvailabilityLine $developmentImageNotice", release_script)
         self.assertNotIn('@("README.md", "docs/dockerhub.md")', release_script)
         self.assertNotIn("uv.lock README.md docs/dockerhub.md", release_script)
 

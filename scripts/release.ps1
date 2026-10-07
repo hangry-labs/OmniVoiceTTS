@@ -101,24 +101,66 @@ function Set-ProjectVersion {
     Set-Utf8Text "pyproject.toml" $updated
 }
 
+function Get-UpdatedReleaseDocumentContent {
+    param(
+        [string]$Path,
+        [string]$OldHeading,
+        [string]$NewHeading,
+        [string]$OldAvailabilityLine,
+        [string]$NewDockerSection
+    )
+    $content = Get-Content -Raw -LiteralPath $Path
+    $headingIndex = $content.IndexOf($OldHeading, [StringComparison]::Ordinal)
+    if ($headingIndex -lt 0) {
+        throw "$Path does not contain the expected heading '$OldHeading'."
+    }
+
+    $sectionStart = $content.IndexOf(
+        $OldAvailabilityLine,
+        $headingIndex + $OldHeading.Length,
+        [StringComparison]::Ordinal
+    )
+    if ($sectionStart -lt 0) {
+        throw "$Path does not contain the expected rolling Docker section marker."
+    }
+
+    $nextHeading = [regex]::new('(?m)^### ').Match(
+        $content,
+        $sectionStart + $OldAvailabilityLine.Length
+    )
+    if (-not $nextHeading.Success) {
+        throw "$Path does not contain a version heading after the rolling Docker section."
+    }
+
+    $lineEnding = if ($content.Contains("`r`n")) { "`r`n" } else { "`n" }
+    $updated =
+        $content.Substring(0, $sectionStart) +
+        $NewDockerSection +
+        "$lineEnding$lineEnding" +
+        $content.Substring($nextHeading.Index)
+    $updatedHeadingIndex = $updated.IndexOf($OldHeading, [StringComparison]::Ordinal)
+    $updatedContent =
+        $updated.Substring(0, $updatedHeadingIndex) +
+        $NewHeading +
+        $updated.Substring($updatedHeadingIndex + $OldHeading.Length)
+    return $updatedContent
+}
+
 function Update-ReleaseDocument {
     param(
         [string]$Path,
         [string]$OldHeading,
         [string]$NewHeading,
-        [string]$OldDockerSection,
+        [string]$OldAvailabilityLine,
         [string]$NewDockerSection
     )
-    $content = Get-Content -Raw -LiteralPath $Path
-    if (-not $content.Contains($OldHeading)) {
-        throw "$Path does not contain the expected heading '$OldHeading'."
-    }
-    $content = $content.Replace($OldHeading, $NewHeading)
-    if (-not $content.Contains($OldDockerSection)) {
-        throw "$Path does not contain the expected rolling Docker section."
-    }
-    $content = $content.Replace($OldDockerSection, $NewDockerSection)
-    Set-Utf8Text $Path $content
+    $updated = Get-UpdatedReleaseDocumentContent `
+        -Path $Path `
+        -OldHeading $OldHeading `
+        -NewHeading $NewHeading `
+        -OldAvailabilityLine $OldAvailabilityLine `
+        -NewDockerSection $NewDockerSection
+    Set-Utf8Text $Path $updated
 }
 
 function Add-NextSnapshotSection {
@@ -201,6 +243,18 @@ foreach ($doc in $releaseHistoryDocs) {
     if (-not $content.Contains($snapshotHeading)) {
         throw "$doc must contain the exact release-history heading '$snapshotHeading'."
     }
+
+    $lineEnding = if ($content.Contains("`r`n")) { "`r`n" } else { "`n" }
+    $stableSection = Get-VersionHistoryDockerSection `
+        -Version $releaseDisplayVersion `
+        -AvailabilityLine $stableImageNotice `
+        -LineEnding $lineEnding
+    [void](Get-UpdatedReleaseDocumentContent `
+        -Path $doc `
+        -OldHeading $snapshotHeading `
+        -NewHeading $stableHeading `
+        -OldAvailabilityLine $developmentImageNotice `
+        -NewDockerSection $stableSection)
 }
 
 $branch = (git branch --show-current).Trim()
@@ -251,24 +305,19 @@ Invoke-Step "Run release validation" {
 }
 
 Invoke-Step "Update release metadata for $releaseTag" {
-    Set-Utf8Text "VERSION" "$releaseDisplayVersion`n"
-    Set-ProjectVersion $releaseVersion
-    Invoke-Native "Refresh uv.lock for release version" { uv lock }
-
     foreach ($doc in $releaseHistoryDocs) {
         $content = Get-Content -Raw -LiteralPath $doc
         $lineEnding = if ($content.Contains("`r`n")) { "`r`n" } else { "`n" }
-        $rollingSection = Get-VersionHistoryDockerSection `
-            -Version $releaseDisplayVersion `
-            -AvailabilityLine $developmentImageNotice `
-            -LineEnding $lineEnding `
-            -Rolling $true
         $stableSection = Get-VersionHistoryDockerSection `
             -Version $releaseDisplayVersion `
             -AvailabilityLine $stableImageNotice `
             -LineEnding $lineEnding
-        Update-ReleaseDocument $doc $snapshotHeading $stableHeading $rollingSection $stableSection
+        Update-ReleaseDocument $doc $snapshotHeading $stableHeading $developmentImageNotice $stableSection
     }
+
+    Set-Utf8Text "VERSION" "$releaseDisplayVersion`n"
+    Set-ProjectVersion $releaseVersion
+    Invoke-Native "Refresh uv.lock for release version" { uv lock }
 }
 
 Invoke-Step "Commit release metadata when needed and tag $releaseTag" {
