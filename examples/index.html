@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="dark">
-    <meta name="description" content="Listen to multilingual OmniVoiceTTS speech, voice-design, and cross-language cloning examples from Hangry Labs.">
+    <meta name="description" content="Listen to multilingual OmniVoiceTTS speech, voice-design, and cross-language cloning examples from Hangry Labs." data-i18n-content="metaDescription">
     <title>Hangry Labs OmniVoiceTTS Examples</title>
     <link rel="icon" type="image/webp" href="../assets/omnivoice_favicon.webp">
     <link rel="stylesheet" href="styles.css">
@@ -18,31 +18,31 @@
             <div class="topbar">
               <a class="brand-lockup" href="https://hangrylabs.app/" target="_blank" rel="noopener noreferrer">
                 <img class="brand-logo" src="../assets/hangrylabs_mascot.webp" alt="Hangry Labs">
-                <span><strong>Hangry Labs</strong><small>Useful tools, easy to run</small></span>
+                <span><strong>Hangry Labs</strong><small data-i18n="brandTagline">Useful tools, easy to run</small></span>
               </a>
               <div class="top-actions">
-                <div class="volume-control" aria-label="Volume control">
-                  <button class="volume-button" type="button" aria-label="Mute audio" data-muted="false">
+                <div class="volume-control" aria-label="Volume control" data-i18n-aria-label="volumeControl">
+                  <button class="volume-button" type="button" aria-label="Mute audio" data-muted="false" data-i18n-aria-label="muteAudio">
                     <svg class="volume-icon-on" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6.5 15.5H4.75A1.75 1.75 0 0 1 3 13.75v-3.5c0-.97.78-1.75 1.75-1.75H6.5l5-4.25v15.5l-5-4.25zM16 8.5a5 5 0 0 1 0 7M18.75 6a8.5 8.5 0 0 1 0 12"/></svg>
                     <svg class="volume-icon-muted" viewBox="0 0 24 24" fill="none" aria-hidden="true" hidden><path d="M6.5 15.5H4.75A1.75 1.75 0 0 1 3 13.75v-3.5c0-.97.78-1.75 1.75-1.75H6.5l5-4.25v15.5l-5-4.25zM17 9.5l4 4M21 9.5l-4 4"/></svg>
                   </button>
-                  <input class="volume-slider" type="range" min="0" max="1" step="0.01" value="0.85" aria-label="Volume">
+                  <input class="volume-slider" type="range" min="0" max="1" step="0.01" value="0.85" aria-label="Volume" data-i18n-aria-label="volume">
                 </div>
-                <nav class="top-links" aria-label="Project links">
-                  <a class="pill action-link primary-link" href="ssml-h.html">SSML-H conversations</a>
+                <nav class="top-links" aria-label="Project links" data-i18n-aria-label="projectLinks">
+                  <a class="pill action-link primary-link" href="ssml-h.html" data-i18n="conversations">SSML-H conversations</a>
                   <a class="pill action-link" href="https://hub.docker.com/r/hangrylabs/omnivoicetts/tags">Docker Hub</a>
                   <a class="pill action-link" href="https://github.com/Hangry-Labs/OmniVoiceTTS">GitHub</a>
                 </nav>
               </div>
             </div>
-            <h1>OmniVoiceTTS examples</h1>
-            <p class="intro">Listen to multilingual speech generated with voice design, non-verbal expression tags, and cross-language voice cloning.</p>
+            <h1 data-i18n="heading">OmniVoiceTTS examples</h1>
+            <p class="intro" data-i18n="intro">Listen to multilingual speech generated with voice design, non-verbal expression tags, and cross-language voice cloning.</p>
             <div class="feature-pills">
-              <span class="pill">20 languages</span>
-              <span class="pill">10 voice-variety samples each</span>
-              <span class="pill">Voice design</span>
-              <span class="pill">Cross-language cloning</span>
-              <a class="pill feature-link" href="ssml-h.html">Multi-character SSML-H</a>
+              <span class="pill" data-i18n="languagesPill">20 languages</span>
+              <span class="pill" data-i18n="samplesPill">10 voice-variety samples each</span>
+              <span class="pill" data-i18n="voiceDesign">Voice design</span>
+              <span class="pill" data-i18n="crossLanguageCloning">Cross-language cloning</span>
+              <a class="pill feature-link" href="ssml-h.html" data-i18n="multiCharacter">Multi-character SSML-H</a>
             </div>
           </div>
           <div class="hero-logo-panel" aria-hidden="true">
@@ -53,16 +53,17 @@
           </div>
         </header>
 
-        <section class="examples-section" aria-label="OmniVoiceTTS language examples">
+        <section class="examples-section" aria-label="OmniVoiceTTS language examples" data-i18n-aria-label="examplesAria">
           <div class="status-strip" aria-live="polite">
-            <span class="pill" data-load-status>Loading examples...</span>
-            <span class="pill" data-now-playing>Ready</span>
+            <span class="pill" data-load-status data-i18n="loading">Loading examples...</span>
+            <span class="pill" data-now-playing data-i18n="ready">Ready</span>
           </div>
-          <div class="language-filter" data-language-list role="group" aria-label="Choose a language"></div>
-          <section class="language-detail" aria-label="Selected language examples" data-language-detail></section>
+          <div class="language-filter" data-language-list role="group" aria-label="Choose a language" data-i18n-aria-label="chooseLanguage"></div>
+          <section class="language-detail" aria-label="Selected language examples" data-i18n-aria-label="selectedExamples" data-language-detail></section>
         </section>
       </div>
     </main>
+    <script src="i18n.js"></script>
     <script src="voices.js"></script>
     <script src="player.js"></script>
     <script src="background.js"></script>

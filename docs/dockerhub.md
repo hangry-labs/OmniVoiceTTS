@@ -4,6 +4,15 @@
   </a>
 </p>
 
+<p>
+  <strong>English</strong> ·
+  <a href="https://github.com/Hangry-Labs/OmniVoiceTTS/blob/master/README.nb.md">Norsk bokmål</a> ·
+  <a href="https://github.com/Hangry-Labs/OmniVoiceTTS/blob/master/README.pl.md">Polski</a> ·
+  <a href="https://github.com/Hangry-Labs/OmniVoiceTTS/blob/master/README.ja.md">日本語</a> ·
+  <a href="https://github.com/Hangry-Labs/OmniVoiceTTS/blob/master/README.zh.md">简体中文</a> ·
+  <a href="https://github.com/Hangry-Labs/OmniVoiceTTS/blob/master/README.es.md">Español</a>
+</p>
+
 # Hangry Labs OmniVoiceTTS
 
 Easy-to-run, massively multilingual text-to-speech Docker images with a responsive browser UI, HTTP API, voice design, voice cloning, saved profiles, SSML, and SSML-H included.
@@ -147,6 +156,7 @@ Built with Higgs Materials licensed from Boson AI USA, Inc., Copyright Boson AI 
 
 ## Links
 
+- Product page and installation guide: https://hangrylabs.app/software/omnivoicetts
 - Repository and full documentation: https://github.com/Hangry-Labs/OmniVoiceTTS
 - Language examples: https://hangry-labs.github.io/OmniVoiceTTS/examples/
 - SSML-H conversations: https://hangry-labs.github.io/OmniVoiceTTS/examples/ssml-h.html

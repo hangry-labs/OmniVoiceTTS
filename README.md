@@ -4,6 +4,15 @@
   </a>
 </p>
 
+<p align="center">
+  <strong>English</strong> ·
+  <a href="README.nb.md">Norsk bokmål</a> ·
+  <a href="README.pl.md">Polski</a> ·
+  <a href="README.ja.md">日本語</a> ·
+  <a href="README.zh.md">简体中文</a> ·
+  <a href="README.es.md">Español</a>
+</p>
+
 # Hangry Labs OmniVoiceTTS
 
 Easy-to-run OmniVoice text-to-speech Docker images with a browser UI and HTTP API included.
@@ -27,6 +36,8 @@ Official images are published to [Docker Hub](https://hub.docker.com/r/hangrylab
 > The repository source code is Apache-2.0, but the default pretrained OmniVoice checkpoint is described by upstream as **CC-BY-NC** and is not licensed for commercial use. The embedded Higgs Audio 2 tokenizer has separate Boson and Meta Llama 3 terms, including an expanded-license threshold above 100,000 annual active users. Read [Third-Party Notices](THIRD_PARTY_NOTICES.md) before deployment or redistribution.
 
 **Listen to examples first:** [language and voice examples](https://hangry-labs.github.io/OmniVoiceTTS/examples/) or [multi-character SSML-H conversations](https://hangry-labs.github.io/OmniVoiceTTS/examples/ssml-h.html).
+
+Product page and installation guide: [hangrylabs.app/software/omnivoicetts](https://hangrylabs.app/software/omnivoicetts).
 
 Hangry Labs home: [hangrylabs.app](https://hangrylabs.app/).
 

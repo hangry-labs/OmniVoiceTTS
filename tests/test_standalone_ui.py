@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+import re
 import unittest
 from unittest.mock import patch
 
@@ -7,7 +9,12 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from omnivoice.standalone_ui.gpu import read_gpu_stats
-from omnivoice.standalone_ui.server import _read_version_file, attach_ui
+from omnivoice.standalone_ui.server import (
+    LOCALES_DIR,
+    _english_catalog,
+    _read_version_file,
+    attach_ui,
+)
 
 
 class StandaloneUiTests(unittest.TestCase):
@@ -110,6 +117,27 @@ class StandaloneUiTests(unittest.TestCase):
         self.assertIn('"tabs.generate":"Generuj"', polish.text)
         self.assertEqual(arabic.status_code, 200)
         self.assertIn('<html lang="ar" dir="rtl">', arabic.text)
+
+    def test_primary_locale_catalogs_match_english_keys_and_placeholders(self) -> None:
+        english = _english_catalog()
+
+        for locale in ("nb", "pl", "ja", "zh", "es"):
+            with self.subTest(locale=locale):
+                catalog = json.loads((LOCALES_DIR / f"{locale}.json").read_text(encoding="utf-8"))
+                self.assertEqual(set(catalog), set(english))
+                for key, english_value in english.items():
+                    placeholders = set(re.findall(r"\{[a-zA-Z0-9_]+\}", english_value))
+                    translated_placeholders = set(re.findall(r"\{[a-zA-Z0-9_]+\}", catalog[key]))
+                    self.assertEqual(translated_placeholders, placeholders, key)
+
+    def test_primary_localized_routes_do_not_fall_back_to_english_generate_label(self) -> None:
+        with TestClient(attach_ui(api_app=self.backend_app())) as client:
+            pages = {locale: client.get(f"/{locale}").text for locale in ("nb", "pl", "ja", "zh", "es")}
+
+        for locale, page in pages.items():
+            with self.subTest(locale=locale):
+                self.assertIn(f'"locale":"{locale}"', page)
+                self.assertNotIn('"common.generate":"Generate"', page)
 
     def test_development_mode_disables_asset_caching(self) -> None:
         with patch.dict("os.environ", {"OMNIVOICE_UI_DEV": "1"}):

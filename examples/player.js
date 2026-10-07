@@ -6,6 +6,7 @@ const state = {
   selected: null,
   volume: 0.85,
   lastVolume: 0.85,
+  pageLocale: "en",
 };
 
 const LANGUAGE_CODE_TO_SLUG = {
@@ -32,6 +33,54 @@ const LANGUAGE_CODE_TO_SLUG = {
 };
 
 const LANGUAGE_STORAGE_KEY = "omnivoicetts-examples-language-v1";
+const EXAMPLE_I18N = window.EXAMPLE_I18N || { en: {} };
+const LANGUAGE_SLUG_TO_CODE = Object.fromEntries(
+  Object.entries(LANGUAGE_CODE_TO_SLUG).map(([code, slug]) => [slug, code]),
+);
+
+function t(key, variables = {}) {
+  const catalog = EXAMPLE_I18N[state.pageLocale] || EXAMPLE_I18N.en || {};
+  const fallback = EXAMPLE_I18N.en?.[key] || key;
+  return String(catalog[key] || fallback).replace(/\{([a-zA-Z0-9_]+)\}/g, (match, name) => (
+    Object.hasOwn(variables, name) ? String(variables[name]) : match
+  ));
+}
+
+function localizedLanguageName(language) {
+  const code = LANGUAGE_SLUG_TO_CODE[language.slug];
+  if (!code || typeof Intl.DisplayNames !== "function") {
+    return language.language;
+  }
+  try {
+    return new Intl.DisplayNames([state.pageLocale], { type: "language" }).of(code) || language.language;
+  } catch {
+    return language.language;
+  }
+}
+
+function translatePage(locale, updateUrl = false) {
+  state.pageLocale = EXAMPLE_I18N[locale] ? locale : "en";
+  document.documentElement.lang = state.pageLocale;
+  document.documentElement.dir = ["ar", "ur"].includes(state.pageLocale) ? "rtl" : "ltr";
+  document.title = t("pageTitle");
+  document.querySelectorAll("[data-i18n]").forEach((node) => {
+    const variables = node.dataset.i18n === "languagesPill"
+      ? { count: state.manifest?.languages?.length || 20 }
+      : node.dataset.i18n === "samplesPill" ? { count: 10 } : {};
+    node.textContent = t(node.dataset.i18n, variables);
+  });
+  document.querySelectorAll("[data-i18n-aria-label]").forEach((node) => {
+    node.setAttribute("aria-label", t(node.dataset.i18nAriaLabel));
+  });
+  document.querySelectorAll("[data-i18n-content]").forEach((node) => {
+    node.setAttribute("content", t(node.dataset.i18nContent));
+  });
+  if (updateUrl) {
+    const url = new URL(window.location.href);
+    url.searchParams.set("lang", state.pageLocale);
+    history.replaceState({}, "", url);
+  }
+}
 
 function escapeHtml(value) {
   return String(value)
@@ -75,13 +124,13 @@ function sampleBadge(sample) {
   if (sample.nonverbal_tag) {
     parts.push(sample.nonverbal_tag);
   }
-  return parts.length ? parts.join(" / ") : "voice sample";
+  return parts.length ? parts.join(" / ") : t("voiceSample");
 }
 
 function setNowPlaying(label) {
   const target = document.querySelector("[data-now-playing]");
   if (target) {
-    target.textContent = label || "Ready";
+    target.textContent = label || t("ready");
   }
 }
 
@@ -126,7 +175,7 @@ function updateVolumeControl() {
 
   if (volumeButton) {
     volumeButton.dataset.muted = isMuted.toString();
-    volumeButton.setAttribute("aria-label", isMuted ? "Unmute audio" : "Mute audio");
+    volumeButton.setAttribute("aria-label", isMuted ? t("unmuteAudio") : t("muteAudio"));
   }
 
   if (volumeIconOn && volumeIconMuted) {
@@ -176,7 +225,7 @@ function playIntro(file, label) {
   applyAudioVolume(state.introAudio);
   setNowPlaying(label);
   state.introAudio.play().catch(() => {
-    setNowPlaying("Press play again if your browser blocked autoplay.");
+    setNowPlaying(t("autoplayBlocked"));
   });
 }
 
@@ -235,12 +284,12 @@ function renderSelectedLanguage() {
   const randomSamples = language.random
     .map((sample, index) =>
       renderAudioCard({
-        eyebrow: `Sample ${String(index + 1).padStart(2, "0")}`,
+        eyebrow: t("sample", { number: String(index + 1).padStart(2, "0") }),
         title: sampleBadge(sample),
         description: sample.text,
         file: sample.file,
-        label: `${meta.nativeName} sample ${index + 1}`,
-        badge: "Play",
+        label: `${meta.nativeName} ${t("sample", { number: index + 1 })}`,
+        badge: t("play"),
       }),
     )
     .join("");
@@ -252,22 +301,21 @@ function renderSelectedLanguage() {
             <span class="language-icon large" aria-hidden="true">${escapeHtml(meta.icon)}</span>
             <div>
               <h2>${escapeHtml(meta.nativeName)}</h2>
-              <p>${escapeHtml(language.language)}</p>
+              <p>${escapeHtml(localizedLanguageName(language))}</p>
             </div>
           </div>
-          <button class="filter-button is-active" type="button" data-random-intro="${escapeHtml(language.slug)}">Play random intro</button>
+          <button class="filter-button is-active" type="button" data-random-intro="${escapeHtml(language.slug)}">${escapeHtml(t("playRandomIntro"))}</button>
       </div>
 
       <div class="clone-grid">
         ${renderAudioCard({
           classes: "clone-card",
-          eyebrow: "Cross-language clone demo",
-          title: "Same English reference voice, different language",
-          description:
-            "Cloned from examples/original_clone.mp3. The accent may not be perfect because the reference is English, but it demonstrates that the same voice identity can be carried across languages.",
+          eyebrow: t("cloneEyebrow"),
+          title: t("cloneTitle"),
+          description: t("cloneDescription"),
           file: clone.file,
-          label: `${meta.nativeName} cloned voice demo`,
-          badge: "Clone",
+          label: t("cloneLabel", { language: meta.nativeName }),
+          badge: t("clone"),
         })}
       </div>
 
@@ -279,20 +327,20 @@ function renderSelectedLanguage() {
 
   target.querySelector("[data-random-intro]")?.addEventListener("click", () => {
     const intro = randomItem(language.intro);
-    playIntro(intro.file, `${meta.nativeName} intro`);
+    playIntro(intro.file, t("introLabel", { language: meta.nativeName }));
   });
 
   enhanceAudioCards(target);
 }
 
-function chooseLanguage(slug, autoplayIntro = true) {
+function chooseLanguage(slug, autoplayIntro = true, requestedPageLocale = null) {
   const language = state.manifest.languages.find((item) => item.slug === slug);
   if (!language) {
     return;
   }
 
   state.selected = language;
-  document.documentElement.lang = Object.entries(LANGUAGE_CODE_TO_SLUG).find(([, value]) => value === slug)?.[0] || "en";
+  translatePage(requestedPageLocale || LANGUAGE_SLUG_TO_CODE[slug] || "en", true);
   try {
     localStorage.setItem(LANGUAGE_STORAGE_KEY, slug);
   } catch {
@@ -308,9 +356,9 @@ function chooseLanguage(slug, autoplayIntro = true) {
 
   if (autoplayIntro) {
     const intro = randomItem(language.intro);
-    playIntro(intro.file, `${metaFor(language).nativeName} intro`);
+    playIntro(intro.file, t("introLabel", { language: metaFor(language).nativeName }));
   } else {
-    setNowPlaying("Ready");
+    setNowPlaying(t("ready"));
   }
 }
 
@@ -319,7 +367,7 @@ function enhanceAudioCards(container) {
 
   state.cardAudios.forEach((audio) => {
     const card = audio.closest("[data-audio-card]");
-    const label = card?.dataset.audioLabel || "voice sample";
+    const label = card?.dataset.audioLabel || t("voiceSample");
     applyAudioVolume(audio);
     audio.removeAttribute("controls");
 
@@ -330,7 +378,7 @@ function enhanceAudioCards(container) {
     const controls = document.createElement("div");
     controls.className = "player";
     controls.innerHTML = `
-      <button class="progress-button" type="button" aria-label="Seek sample">
+      <button class="progress-button" type="button" aria-label="${escapeHtml(t("seekSample"))}">
         <span class="progress-track" aria-hidden="true">
           <span class="progress-fill"></span>
           <span class="progress-knob"></span>
@@ -374,7 +422,7 @@ function enhanceAudioCards(container) {
 
     card.setAttribute("role", "button");
     card.setAttribute("tabindex", "0");
-    card.setAttribute("aria-label", `Play ${label}`);
+    card.setAttribute("aria-label", t("playLabel", { label }));
 
     card.addEventListener("click", togglePlayback);
     card.addEventListener("keydown", (event) => {
@@ -434,14 +482,14 @@ function enhanceAudioCards(container) {
       state.currentCard = card;
       card.classList.add("is-playing");
       card.setAttribute("aria-current", "true");
-      card.setAttribute("aria-label", `Pause ${label}`);
+      card.setAttribute("aria-label", t("pauseLabel", { label }));
       setNowPlaying(label);
     });
 
     audio.addEventListener("pause", () => {
       card.classList.remove("is-playing");
       card.removeAttribute("aria-current");
-      card.setAttribute("aria-label", `Play ${label}`);
+      card.setAttribute("aria-label", t("playLabel", { label }));
       if (state.currentCard === card) {
         state.currentCard = null;
       }
@@ -451,8 +499,8 @@ function enhanceAudioCards(container) {
       setProgress(0);
       card.classList.remove("is-playing");
       card.removeAttribute("aria-current");
-      card.setAttribute("aria-label", `Play ${label}`);
-      setNowPlaying("Ready");
+      card.setAttribute("aria-label", t("playLabel", { label }));
+      setNowPlaying(t("ready"));
     });
   });
 
@@ -467,7 +515,7 @@ function initExamples() {
     }
     state.manifest = window.EXAMPLE_MANIFEST;
     if (status) {
-      status.textContent = `${state.manifest.languages.length} languages loaded`;
+      status.textContent = t("languagesLoaded", { count: state.manifest.languages.length });
     }
     initVolumeControl();
     renderLanguageButtons();
@@ -478,17 +526,18 @@ function initExamples() {
     } catch {
       storedSlug = "";
     }
-    const requestedSlug = LANGUAGE_CODE_TO_SLUG[params.get("lang")] || params.get("language") || storedSlug;
+    const requestedLocale = String(params.get("lang") || "").toLowerCase();
+    const requestedSlug = LANGUAGE_CODE_TO_SLUG[requestedLocale] || params.get("language") || storedSlug;
     const initialSlug = state.manifest.languages.some((item) => item.slug === requestedSlug)
       ? requestedSlug
       : "english";
-    chooseLanguage(initialSlug, false);
+    chooseLanguage(initialSlug, false, EXAMPLE_I18N[requestedLocale] ? requestedLocale : null);
   } catch (error) {
     if (status) {
-      status.textContent = `Examples unavailable: ${error.message}`;
+      status.textContent = t("unavailable", { error: error.message });
     }
   }
 }
 
-state.introAudio.addEventListener("ended", () => setNowPlaying("Ready"));
+state.introAudio.addEventListener("ended", () => setNowPlaying(t("ready")));
 initExamples();

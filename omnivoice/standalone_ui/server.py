@@ -18,6 +18,7 @@ from omnivoice.web.translations import UI_FALLBACK_LOCALE, UI_LOCALES, UI_STRING
 PACKAGE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = PACKAGE_DIR / "static"
 ENGLISH_CATALOG_PATH = STATIC_DIR / "locales" / "en.json"
+LOCALES_DIR = STATIC_DIR / "locales"
 REPO_ROOT = PACKAGE_DIR.parents[1]
 SOURCE_ASSET_DIR = REPO_ROOT / "assets"
 PACKAGED_ASSET_DIR = PACKAGE_DIR / "assets"
@@ -91,9 +92,22 @@ def _message(locale: str, key: str, fallback: str) -> str:
 
 
 @lru_cache(maxsize=128)
+def _dedicated_catalog(locale: str) -> dict[str, str]:
+    path = LOCALES_DIR / f"{locale}.json"
+    if locale == "en" or not path.is_file():
+        return {}
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError(f"The {locale} UI catalog must be a JSON object.")
+    return {str(key): str(value) for key, value in payload.items()}
+
+
+@lru_cache(maxsize=128)
 def _locale_catalog(locale: str) -> dict[str, str]:
     english = _english_catalog()
-    return {key: _message(locale, key, value) for key, value in english.items()}
+    catalog = {key: _message(locale, key, value) for key, value in english.items()}
+    catalog.update(_dedicated_catalog(locale))
+    return catalog
 
 
 def _locale_manifest() -> dict[str, object]:
