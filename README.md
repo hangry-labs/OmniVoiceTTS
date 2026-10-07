@@ -545,6 +545,24 @@ If you encounter bugs, have feature requests, or need help using Hangry Labs Omn
 
 Snapshot commands intentionally follow the rolling `latest` tags. Published-release commands retain their readable version tag and also pin Docker Hub's immutable top-level OCI digest; the digest is authoritative if a tag is ever changed.
 
+### v1.1 Snapshot
+
+- No changes yet.
+
+The current development snapshot is published through the rolling tags from `master`:
+
+**Standard image**
+
+```bash
+docker run --name omnivoicetts --restart unless-stopped -p 7861:7861 --gpus all -e CUDA_VISIBLE_DEVICES=0 -v omnivoicetts_data:/app/persistent hangrylabs/omnivoicetts:latest
+```
+
+**Tiny image**
+
+```bash
+docker run --name omnivoicetts-tiny --restart unless-stopped -p 7861:7861 --gpus all -e CUDA_VISIBLE_DEVICES=0 -e HF_HUB_OFFLINE=0 -e TRANSFORMERS_OFFLINE=0 -v omnivoicetts_data:/app/persistent hangrylabs/omnivoicetts:latest_tiny
+```
+
 ### v1.0
 
 Changes since `v0.3.0`:
