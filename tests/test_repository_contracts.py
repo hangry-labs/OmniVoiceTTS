@@ -11,15 +11,16 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class RepositoryContractTests(unittest.TestCase):
-    def test_snapshot_and_package_versions_match(self) -> None:
-        snapshot = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
-        match = re.fullmatch(r"(\d+\.\d+(?:\.\d+)?)-snapshot", snapshot)
+    def test_version_and_package_versions_match(self) -> None:
+        version = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
+        match = re.fullmatch(r"(\d+\.\d+(?:\.\d+)?)(-snapshot)?", version)
         self.assertIsNotNone(match)
         release = match.group(1)
         package_base = release if release.count(".") == 2 else f"{release}.0"
         with (ROOT / "pyproject.toml").open("rb") as handle:
             package_version = tomllib.load(handle)["project"]["version"]
-        self.assertEqual(package_version, f"{package_base}.dev0")
+        expected = f"{package_base}.dev0" if match.group(2) else package_base
+        self.assertEqual(package_version, expected)
 
     def test_dockerfile_uses_unified_persistent_layout(self) -> None:
         dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
@@ -136,7 +137,9 @@ class RepositoryContractTests(unittest.TestCase):
         release_script = (ROOT / "scripts" / "release.ps1").read_text(encoding="utf-8")
         self.assertIn('$releaseHistoryDocs = @("README.md")', release_script)
         self.assertIn("function Get-UpdatedReleaseDocumentContent", release_script)
+        self.assertIn("function Get-NextSnapshotDocumentContent", release_script)
         self.assertIn("-OldAvailabilityLine $developmentImageNotice", release_script)
+        self.assertIn("Get-Content -Raw -Encoding utf8", release_script)
         self.assertNotIn('@("README.md", "docs/dockerhub.md")', release_script)
         self.assertNotIn("uv.lock README.md docs/dockerhub.md", release_script)
 

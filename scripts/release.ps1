@@ -18,6 +18,18 @@ function Set-Utf8Text {
     [System.IO.File]::WriteAllText($resolved, $Text, $encoding)
 }
 
+function Get-LineEndingAfter {
+    param([string]$Content, [int]$StartIndex, [string]$Description)
+    $lineFeedIndex = $Content.IndexOf("`n", $StartIndex)
+    if ($lineFeedIndex -lt 0) {
+        throw "$Description is not followed by a line ending."
+    }
+    if ($lineFeedIndex -gt 0 -and $Content[$lineFeedIndex - 1] -eq "`r") {
+        return "`r`n"
+    }
+    return "`n"
+}
+
 function Convert-ToPackageVersion {
     param([string]$Version)
     if ($Version -match '^\d+\.\d+$') { return "$Version.0" }
@@ -82,7 +94,7 @@ function Invoke-Step {
 }
 
 function Get-ProjectVersion {
-    $content = Get-Content -Raw -LiteralPath "pyproject.toml"
+    $content = Get-Content -Raw -Encoding utf8 -LiteralPath "pyproject.toml"
     $match = [regex]::Match($content, '(?m)^version = "([^"]+)"(?=\r?$)')
     if (-not $match.Success) {
         throw "Could not read [project].version from pyproject.toml."
@@ -92,7 +104,7 @@ function Get-ProjectVersion {
 
 function Set-ProjectVersion {
     param([string]$Version)
-    $content = Get-Content -Raw -LiteralPath "pyproject.toml"
+    $content = Get-Content -Raw -Encoding utf8 -LiteralPath "pyproject.toml"
     $pattern = [regex]::new('(?m)^version = "[^"]+"(?=\r?$)')
     $updated = $pattern.Replace($content, "version = `"$Version`"", 1)
     if ($updated -eq $content -and (Get-ProjectVersion) -ne $Version) {
@@ -109,7 +121,7 @@ function Get-UpdatedReleaseDocumentContent {
         [string]$OldAvailabilityLine,
         [string]$NewDockerSection
     )
-    $content = Get-Content -Raw -LiteralPath $Path
+    $content = Get-Content -Raw -Encoding utf8 -LiteralPath $Path
     $headingIndex = $content.IndexOf($OldHeading, [StringComparison]::Ordinal)
     if ($headingIndex -lt 0) {
         throw "$Path does not contain the expected heading '$OldHeading'."
@@ -132,7 +144,10 @@ function Get-UpdatedReleaseDocumentContent {
         throw "$Path does not contain a version heading after the rolling Docker section."
     }
 
-    $lineEnding = if ($content.Contains("`r`n")) { "`r`n" } else { "`n" }
+    $lineEnding = Get-LineEndingAfter `
+        -Content $content `
+        -StartIndex $sectionStart `
+        -Description "$Path rolling Docker section marker"
     $updated =
         $content.Substring(0, $sectionStart) +
         $NewDockerSection +
@@ -163,6 +178,40 @@ function Update-ReleaseDocument {
     Set-Utf8Text $Path $updated
 }
 
+function Get-NextSnapshotDocumentContent {
+    param(
+        [string]$Content,
+        [string]$Path,
+        [string]$StableHeading,
+        [string]$NextHeading,
+        [string]$DockerSection
+    )
+    if ($Content.Contains($NextHeading)) { return $Content }
+    $stableHeadingIndex = $Content.IndexOf($StableHeading, [StringComparison]::Ordinal)
+    if ($stableHeadingIndex -lt 0) {
+        throw "$Path does not contain release heading '$StableHeading'."
+    }
+    $lineEnding = Get-LineEndingAfter `
+        -Content $Content `
+        -StartIndex $stableHeadingIndex `
+        -Description "$Path release heading '$StableHeading'"
+    $headingEnd = $stableHeadingIndex + $StableHeading.Length
+    if ($Content.Substring($headingEnd, $lineEnding.Length) -ne $lineEnding) {
+        throw "$Path release heading '$StableHeading' has unexpected trailing content."
+    }
+
+    $nextSection =
+        "$NextHeading$lineEnding$lineEnding" +
+        "- No changes yet.$lineEnding$lineEnding" +
+        "$DockerSection$lineEnding$lineEnding" +
+        $StableHeading
+    $updatedContent =
+        $Content.Substring(0, $stableHeadingIndex) +
+        $nextSection +
+        $Content.Substring($headingEnd)
+    return $updatedContent
+}
+
 function Add-NextSnapshotSection {
     param(
         [string]$Path,
@@ -170,20 +219,14 @@ function Add-NextSnapshotSection {
         [string]$NextHeading,
         [string]$DockerSection
     )
-    $content = Get-Content -Raw -LiteralPath $Path
-    if ($content.Contains($NextHeading)) { return }
-    $lineEnding = if ($content.Contains("`r`n")) { "`r`n" } else { "`n" }
-    $stableHeadingLine = "$StableHeading$lineEnding"
-    if (-not $content.Contains($stableHeadingLine)) {
-        throw "$Path release heading '$StableHeading' is not followed by a line ending."
-    }
-    $nextSection =
-        "$NextHeading$lineEnding$lineEnding" +
-        "- No changes yet.$lineEnding$lineEnding" +
-        "$DockerSection$lineEnding$lineEnding" +
-        $stableHeadingLine
-    $content = $content.Replace($stableHeadingLine, $nextSection)
-    Set-Utf8Text $Path $content
+    $content = Get-Content -Raw -Encoding utf8 -LiteralPath $Path
+    $updated = Get-NextSnapshotDocumentContent `
+        -Content $content `
+        -Path $Path `
+        -StableHeading $StableHeading `
+        -NextHeading $NextHeading `
+        -DockerSection $DockerSection
+    Set-Utf8Text $Path $updated
 }
 
 $root = Resolve-Path (Join-Path $PSScriptRoot "..")
@@ -196,7 +239,7 @@ if (-not (Test-Path -LiteralPath "VERSION")) {
     throw "VERSION file is missing from the repository root."
 }
 
-$currentVersion = (Get-Content -Raw -LiteralPath "VERSION").Trim()
+$currentVersion = (Get-Content -Raw -Encoding utf8 -LiteralPath "VERSION").Trim()
 $versionMatch = [regex]::Match($currentVersion, '^(\d+\.\d+(?:\.\d+)?)-snapshot$')
 if (-not $versionMatch.Success) {
     throw "VERSION must be a snapshot such as 1.0-snapshot or 1.0.0-snapshot. Current: '$currentVersion'"
@@ -239,22 +282,37 @@ $stableImageNotice = "Run this release with either image variant:"
 $releaseHistoryDocs = @("README.md")
 
 foreach ($doc in $releaseHistoryDocs) {
-    $content = Get-Content -Raw -LiteralPath $doc
+    $content = Get-Content -Raw -Encoding utf8 -LiteralPath $doc
     if (-not $content.Contains($snapshotHeading)) {
         throw "$doc must contain the exact release-history heading '$snapshotHeading'."
     }
 
-    $lineEnding = if ($content.Contains("`r`n")) { "`r`n" } else { "`n" }
+    $snapshotHeadingIndex = $content.IndexOf($snapshotHeading, [StringComparison]::Ordinal)
+    $lineEnding = Get-LineEndingAfter `
+        -Content $content `
+        -StartIndex $snapshotHeadingIndex `
+        -Description "$doc release heading '$snapshotHeading'"
     $stableSection = Get-VersionHistoryDockerSection `
         -Version $releaseDisplayVersion `
         -AvailabilityLine $stableImageNotice `
         -LineEnding $lineEnding
-    [void](Get-UpdatedReleaseDocumentContent `
+    $stableContent = Get-UpdatedReleaseDocumentContent `
         -Path $doc `
         -OldHeading $snapshotHeading `
         -NewHeading $stableHeading `
         -OldAvailabilityLine $developmentImageNotice `
-        -NewDockerSection $stableSection)
+        -NewDockerSection $stableSection
+    $rollingSection = Get-VersionHistoryDockerSection `
+        -Version $nextDisplayVersion `
+        -AvailabilityLine $developmentImageNotice `
+        -LineEnding $lineEnding `
+        -Rolling $true
+    [void](Get-NextSnapshotDocumentContent `
+        -Content $stableContent `
+        -Path $doc `
+        -StableHeading $stableHeading `
+        -NextHeading $nextSnapshotHeading `
+        -DockerSection $rollingSection)
 }
 
 $branch = (git branch --show-current).Trim()
@@ -306,8 +364,12 @@ Invoke-Step "Run release validation" {
 
 Invoke-Step "Update release metadata for $releaseTag" {
     foreach ($doc in $releaseHistoryDocs) {
-        $content = Get-Content -Raw -LiteralPath $doc
-        $lineEnding = if ($content.Contains("`r`n")) { "`r`n" } else { "`n" }
+        $content = Get-Content -Raw -Encoding utf8 -LiteralPath $doc
+        $snapshotHeadingIndex = $content.IndexOf($snapshotHeading, [StringComparison]::Ordinal)
+        $lineEnding = Get-LineEndingAfter `
+            -Content $content `
+            -StartIndex $snapshotHeadingIndex `
+            -Description "$doc release heading '$snapshotHeading'"
         $stableSection = Get-VersionHistoryDockerSection `
             -Version $releaseDisplayVersion `
             -AvailabilityLine $stableImageNotice `
@@ -334,13 +396,13 @@ Invoke-Step "Commit release metadata when needed and tag $releaseTag" {
 }
 
 Invoke-Step "Prepare $nextSnapshotVersion" {
-    Set-Utf8Text "VERSION" "$nextSnapshotVersion`n"
-    Set-ProjectVersion $nextProjectVersion
-    Invoke-Native "Refresh uv.lock for next snapshot" { uv lock }
-
     foreach ($doc in $releaseHistoryDocs) {
-        $content = Get-Content -Raw -LiteralPath $doc
-        $lineEnding = if ($content.Contains("`r`n")) { "`r`n" } else { "`n" }
+        $content = Get-Content -Raw -Encoding utf8 -LiteralPath $doc
+        $stableHeadingIndex = $content.IndexOf($stableHeading, [StringComparison]::Ordinal)
+        $lineEnding = Get-LineEndingAfter `
+            -Content $content `
+            -StartIndex $stableHeadingIndex `
+            -Description "$doc release heading '$stableHeading'"
         $rollingSection = Get-VersionHistoryDockerSection `
             -Version $nextDisplayVersion `
             -AvailabilityLine $developmentImageNotice `
@@ -348,6 +410,10 @@ Invoke-Step "Prepare $nextSnapshotVersion" {
             -Rolling $true
         Add-NextSnapshotSection $doc $stableHeading $nextSnapshotHeading $rollingSection
     }
+
+    Set-Utf8Text "VERSION" "$nextSnapshotVersion`n"
+    Set-ProjectVersion $nextProjectVersion
+    Invoke-Native "Refresh uv.lock for next snapshot" { uv lock }
 
     Invoke-Native "Stage next snapshot metadata" { git add -- VERSION pyproject.toml uv.lock README.md }
     Invoke-Native "Create next snapshot commit" { git commit -m "chore: start $nextSnapshotVersion" }
