@@ -109,8 +109,11 @@ SSML-H adds bounded dynamic voice definitions, request-only characters, reusable
 Useful endpoints:
 
 - API documentation: http://localhost:7861/tts/docs
-- Health check: `GET /tts/ping`
-- Runtime and memory status: `GET /tts/status`
+- Process health: `GET /tts/ping`
+- Model readiness: `GET /tts/ready`
+- Runtime, queue, timing, and memory status: `GET /tts/status`
+- Tokenizer-backed text estimate: `POST /tts/preflight`
+- Uploaded one-off clone reference: `POST /tts/generate-upload`
 - Saved voices: `GET /tts/voices`
 - Progressive audio: `POST /tts/stream` or `POST /tts/stream-chunks`
 - Release unused CUDA allocator blocks: `POST /tts/cache/clear`

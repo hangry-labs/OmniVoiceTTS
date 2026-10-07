@@ -11,9 +11,11 @@ import re
 import sys
 import tempfile
 import threading
+import time
 from uuid import uuid4
 from collections import OrderedDict
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, contextmanager
+from contextvars import ContextVar
 from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
@@ -22,8 +24,12 @@ from typing import Any, Iterator, Optional
 import numpy as np
 import torch
 import uvicorn
-from fastapi import Body, FastAPI, File, HTTPException, UploadFile
-from fastapi.responses import StreamingResponse
+from fastapi import Body, FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse, StreamingResponse
+from pydantic import ValidationError
+from starlette.concurrency import run_in_threadpool
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from omnivoice import OmniVoice, OmniVoiceGenerationConfig, __version__
 from omnivoice.service.audio import (
     FORMAT_ALIASES,
@@ -41,6 +47,7 @@ from omnivoice.service.paths import (
     parse_path_roots,
     safe_existing_file_path,
 )
+from omnivoice.service.runtime_diagnostics import GenerationDiagnostics
 from omnivoice.service.schemas import (
     MAX_RANDOM_SEED,
     CacheClearRequest,
@@ -271,6 +278,8 @@ MODEL_CACHE: dict[str, OmniVoice] = {}
 MODEL_LOCK = threading.Lock()
 GENERATION_SEMAPHORES: dict[str, threading.BoundedSemaphore] = {}
 GENERATION_SEMAPHORE_LOCK = threading.Lock()
+GENERATION_DIAGNOSTICS = GenerationDiagnostics(MAX_CONCURRENT_GENERATIONS)
+REQUEST_ID_CONTEXT: ContextVar[str | None] = ContextVar("omnivoice_request_id", default=None)
 VOICE_CLONE_PROMPT_CACHE: OrderedDict[tuple[Any, ...], Any] = OrderedDict()
 VOICE_CLONE_PROMPT_CACHE_LOCK = threading.Lock()
 VOICE_CLONE_PROMPT_CACHE_LIMIT = int(os.getenv("OMNIVOICE_VOICE_PROMPT_CACHE_LIMIT", "32"))
@@ -493,6 +502,32 @@ def get_generation_semaphore(device: str) -> threading.BoundedSemaphore:
         if device not in GENERATION_SEMAPHORES:
             GENERATION_SEMAPHORES[device] = threading.BoundedSemaphore(MAX_CONCURRENT_GENERATIONS)
         return GENERATION_SEMAPHORES[device]
+
+
+@contextmanager
+def generation_slot(device: str, request_id: str | None = None):
+    semaphore = get_generation_semaphore(device)
+    operation = GENERATION_DIAGNOSTICS.queued(
+        device,
+        request_id if request_id is not None else REQUEST_ID_CONTEXT.get(),
+    )
+    acquired = False
+    try:
+        semaphore.acquire()
+        acquired = True
+        GENERATION_DIAGNOSTICS.started(operation)
+        yield
+    except GeneratorExit:
+        GENERATION_DIAGNOSTICS.finished(operation, "cancelled")
+        raise
+    except BaseException:
+        GENERATION_DIAGNOSTICS.finished(operation, "failed")
+        raise
+    else:
+        GENERATION_DIAGNOSTICS.finished(operation, "completed")
+    finally:
+        if acquired:
+            semaphore.release()
 
 
 def cuda_memory_stats() -> list[dict[str, Any]]:
@@ -959,8 +994,7 @@ def synthesize_array(
     validate_voice_design_text(text, instruct)
     safe_ref_audio = validate_ref_audio_path(ref_audio)
     resolved_device = normalize_device(device)
-    semaphore = get_generation_semaphore(resolved_device)
-    with semaphore:
+    with generation_slot(resolved_device):
         model = get_model(resolved_device)
         preprocess_prompt = True if generation_config is None else bool(generation_config.preprocess_prompt)
         resolved_voice_clone_prompt = voice_clone_prompt
@@ -1018,22 +1052,25 @@ def synthesize_chunks(
     validate_voice_design_text(text, instruct)
     safe_ref_audio = validate_ref_audio_path(ref_audio)
     resolved_device = normalize_device(device)
-    semaphore = get_generation_semaphore(resolved_device)
-    with semaphore:
-        model = get_model(resolved_device)
-        preprocess_prompt = True if generation_config is None else bool(generation_config.preprocess_prompt)
-        voice_clone_prompt = get_cached_voice_clone_prompt(
-            model,
-            resolved_device,
-            safe_ref_audio,
-            ref_text,
-            preprocess_prompt,
-            cache_voice_prompt,
-        )
-        sample_rate = int(model.sampling_rate or SAMPLE_RATE)
+    model = get_model(resolved_device)
+    sample_rate = int(model.sampling_rate or SAMPLE_RATE)
+    request_id = REQUEST_ID_CONTEXT.get()
 
     def chunk_iterator() -> Iterator[np.ndarray]:
-        with semaphore:
+        with generation_slot(resolved_device, request_id):
+            preprocess_prompt = (
+                True
+                if generation_config is None
+                else bool(generation_config.preprocess_prompt)
+            )
+            voice_clone_prompt = get_cached_voice_clone_prompt(
+                model,
+                resolved_device,
+                safe_ref_audio,
+                ref_text,
+                preprocess_prompt,
+                cache_voice_prompt,
+            )
             for chunk in model.generate_stream(
                 text=text.strip(),
                 language=normalize_language(language),
@@ -1096,6 +1133,7 @@ def get_status_payload() -> dict:
         "cpu_memory": cpu_memory_stats() if default_device == "cpu" else None,
         "cpu_memory_recommendations": cpu_memory_recommendation_payload() if default_device == "cpu" else None,
         "max_concurrent_generations": MAX_CONCURRENT_GENERATIONS,
+        "generation_diagnostics": GENERATION_DIAGNOSTICS.snapshot(),
         "empty_cuda_cache_after_request": EMPTY_CUDA_CACHE_AFTER_REQUEST,
         "reset_cuda_peak_after_cache_clear": RESET_CUDA_PEAK_AFTER_CACHE_CLEAR,
         "voice_compatibility": (
@@ -1243,19 +1281,106 @@ api = FastAPI(
 )
 
 ACCESS_LOGGER = logging.getLogger("omnivoice.access")
+REQUEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9._:-]{1,128}$")
+
+
+def resolve_request_id(value: str | None) -> str:
+    candidate = (value or "").strip()
+    if candidate and REQUEST_ID_PATTERN.fullmatch(candidate):
+        return candidate
+    return f"req_{uuid4().hex}"
+
+
+def structured_error_payload(
+    request: Request,
+    *,
+    status_code: int,
+    detail: Any,
+    code: str,
+) -> dict[str, Any]:
+    request_id = getattr(request.state, "request_id", None) or REQUEST_ID_CONTEXT.get()
+    if isinstance(detail, str):
+        message = detail
+    elif isinstance(detail, list):
+        message = "; ".join(
+            str(item.get("msg", item)) if isinstance(item, dict) else str(item)
+            for item in detail
+        )
+    else:
+        message = str(detail)
+    return {
+        "error": {
+            "message": message,
+            "type": "invalid_request_error" if status_code < 500 else "server_error",
+            "code": code,
+            "param": None,
+            "request_id": request_id,
+        },
+        "detail": detail,
+    }
 
 
 @api.middleware("http")
 async def log_requests(request, call_next):
-    response = await call_next(request)
-    message = '%s "%s %s" %s' % (
-        request.client.host if request.client else "-",
-        request.method,
-        request.url.path,
-        response.status_code,
+    request_id = resolve_request_id(request.headers.get("X-Request-ID"))
+    request.state.request_id = request_id
+    context_token = REQUEST_ID_CONTEXT.set(request_id)
+    started_at = time.monotonic()
+    try:
+        response = await call_next(request)
+        response.headers["X-Request-ID"] = request_id
+        elapsed = time.monotonic() - started_at
+        message = '%s "%s %s" %s request_id=%s duration=%.3fs' % (
+            request.client.host if request.client else "-",
+            request.method,
+            request.url.path,
+            response.status_code,
+            request_id,
+            elapsed,
+        )
+        ACCESS_LOGGER.info(message)
+        return response
+    finally:
+        REQUEST_ID_CONTEXT.reset(context_token)
+
+
+@api.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request: Request, exc: StarletteHTTPException) -> JSONResponse:
+    payload = structured_error_payload(
+        request,
+        status_code=exc.status_code,
+        detail=exc.detail,
+        code=f"http_{exc.status_code}",
     )
-    ACCESS_LOGGER.info(message)
-    return response
+    return JSONResponse(payload, status_code=exc.status_code, headers=exc.headers)
+
+
+@api.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
+    detail = [
+        {key: value for key, value in item.items() if key not in {"ctx", "input", "url"}}
+        for item in exc.errors()
+    ]
+    payload = structured_error_payload(
+        request,
+        status_code=422,
+        detail=detail,
+        code="validation_error",
+    )
+    return JSONResponse(payload, status_code=422)
+
+
+@api.exception_handler(Exception)
+async def unexpected_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    request_id = getattr(request.state, "request_id", None)
+    logging.exception("Unhandled API error request_id=%s", request_id)
+    payload = structured_error_payload(
+        request,
+        status_code=500,
+        detail="Internal server error.",
+        code="internal_error",
+    )
+    return JSONResponse(payload, status_code=500)
 
 
 def get_ui_generation_defaults() -> UIGenerationDefaults:
@@ -1279,6 +1404,53 @@ def voice_profile_payloads() -> list[dict[str, Any]]:
         }
         for name, profile in sorted(load_openai_voice_profiles().items())
     ]
+
+
+async def store_reference_audio_upload(
+    audio: UploadFile,
+    *,
+    register: bool,
+) -> dict[str, Any]:
+    suffix = Path(audio.filename or "").suffix.lower()
+    if suffix not in AUDIO_EXTENSIONS:
+        supported = ", ".join(sorted(AUDIO_EXTENSIONS))
+        raise HTTPException(status_code=400, detail=f"Reference audio must use one of: {supported}.")
+    token = uuid4().hex
+    UI_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    upload_path = UI_UPLOAD_DIR / f"upload-{token}{suffix}"
+    total = 0
+    try:
+        with upload_path.open("xb") as output:
+            while chunk := await audio.read(1024 * 1024):
+                total += len(chunk)
+                if total > UI_UPLOAD_LIMIT_BYTES:
+                    raise HTTPException(
+                        status_code=413,
+                        detail=f"Reference audio exceeds the {UI_UPLOAD_LIMIT_BYTES // (1024 * 1024)} MiB upload limit.",
+                    )
+                output.write(chunk)
+    except Exception:
+        upload_path.unlink(missing_ok=True)
+        raise
+    finally:
+        await audio.close()
+    if total == 0:
+        upload_path.unlink(missing_ok=True)
+        raise HTTPException(status_code=400, detail="Reference audio is empty.")
+    try:
+        analysis = reference_audio_analysis(upload_path)
+    except ValueError as exc:
+        upload_path.unlink(missing_ok=True)
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if register:
+        with UI_UPLOADS_LOCK:
+            UI_UPLOADS[token] = upload_path
+    return {
+        "token": token,
+        "path": str(upload_path),
+        "name": Path(audio.filename or upload_path.name).name,
+        "analysis": analysis,
+    }
 
 
 def resolve_ui_upload(upload_token: str) -> Path:
@@ -1937,9 +2109,11 @@ def ssml_progressive_audio_response(payload: TTSRequest, route_name: str) -> Str
         raise HTTPException(status_code=500, detail=f"{type(exc).__name__}: {exc}") from exc
 
     sample_rate = SAMPLE_RATE
+    request_id = REQUEST_ID_CONTEXT.get()
 
     def body() -> Iterator[bytes]:
         completed = False
+        context_token = REQUEST_ID_CONTEXT.set(request_id)
         try:
             yield from encode_audio_stream(session.iter_chunks(), output_format, sample_rate)
             completed = True
@@ -1950,6 +2124,7 @@ def ssml_progressive_audio_response(payload: TTSRequest, route_name: str) -> Str
             session.close()
             if EMPTY_CUDA_CACHE_AFTER_REQUEST:
                 clear_cuda_allocator_cache(RESET_CUDA_PEAK_AFTER_CACHE_CLEAR)
+            REQUEST_ID_CONTEXT.reset(context_token)
 
     return StreamingResponse(
         body(),
@@ -2153,13 +2328,16 @@ def progressive_audio_response(payload: TTSRequest, route_name: str) -> Streamin
     output_format, sample_rate, chunks, used_seed = synthesize_payload_chunks(payload)
     extension = OUTPUT_FORMATS[output_format]["extension"]
     media_type = OUTPUT_FORMATS[output_format]["media_type"]
+    request_id = REQUEST_ID_CONTEXT.get()
 
     def body() -> Iterator[bytes]:
+        context_token = REQUEST_ID_CONTEXT.set(request_id)
         try:
             yield from encode_audio_stream(chunks, output_format, sample_rate)
         finally:
             if EMPTY_CUDA_CACHE_AFTER_REQUEST:
                 clear_cuda_allocator_cache(RESET_CUDA_PEAK_AFTER_CACHE_CLEAR)
+            REQUEST_ID_CONTEXT.reset(context_token)
 
     headers = {
         "Content-Disposition": f"inline; filename=omnivoicetts-stream.{extension}",
@@ -2179,6 +2357,49 @@ def progressive_audio_response(payload: TTSRequest, route_name: str) -> Streamin
 @api.get("/tts/ping")
 def ping() -> dict:
     return {"msg": "pong", "type": "OmniVoiceTTS", "version": read_version_file(), "build_id": BUILD_ID}
+
+
+@api.get("/tts/ready", tags=["System"])
+@api.get("/health/ready", include_in_schema=False)
+def readiness() -> JSONResponse:
+    started_at = time.monotonic()
+    try:
+        resolved_device = normalize_device(DEFAULT_DEVICE)
+        loaded_before = resolved_device in MODEL_CACHE
+        semaphore = get_generation_semaphore(resolved_device)
+        queued_at = time.monotonic()
+        with semaphore:
+            queue_seconds = time.monotonic() - queued_at
+            model = get_model(resolved_device)
+        payload = {
+            "ready": True,
+            "status": "ready",
+            "model": DEFAULT_MODEL,
+            "model_revision": DEFAULT_MODEL_REVISION,
+            "device": resolved_device,
+            "model_loaded": resolved_device in MODEL_CACHE,
+            "model_loaded_before_check": loaded_before,
+            "sample_rate": int(model.sampling_rate or SAMPLE_RATE),
+            "queue_seconds": queue_seconds,
+            "check_seconds": time.monotonic() - started_at,
+        }
+        return JSONResponse(payload, status_code=200)
+    except Exception as exc:
+        logging.exception(
+            "Model readiness check failed request_id=%s",
+            REQUEST_ID_CONTEXT.get(),
+        )
+        payload = {
+            "ready": False,
+            "status": "not_ready",
+            "model": DEFAULT_MODEL,
+            "model_revision": DEFAULT_MODEL_REVISION,
+            "device": DEFAULT_DEVICE,
+            "reason": "Model readiness check failed. Use X-Request-ID to correlate server logs.",
+            "error_type": type(exc).__name__,
+            "check_seconds": time.monotonic() - started_at,
+        }
+        return JSONResponse(payload, status_code=503)
 
 
 @api.get("/v1")
@@ -2252,45 +2473,7 @@ def analyze_reference_audio_endpoint(payload: ReferenceAudioAnalyzeRequest) -> d
 
 @api.post("/ui/reference-audio", include_in_schema=False)
 async def upload_ui_reference_audio(audio: UploadFile = File(...)) -> dict[str, Any]:
-    suffix = Path(audio.filename or "").suffix.lower()
-    if suffix not in AUDIO_EXTENSIONS:
-        supported = ", ".join(sorted(AUDIO_EXTENSIONS))
-        raise HTTPException(status_code=400, detail=f"Reference audio must use one of: {supported}.")
-    token = uuid4().hex
-    UI_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-    upload_path = UI_UPLOAD_DIR / f"upload-{token}{suffix}"
-    total = 0
-    try:
-        with upload_path.open("xb") as output:
-            while chunk := await audio.read(1024 * 1024):
-                total += len(chunk)
-                if total > UI_UPLOAD_LIMIT_BYTES:
-                    raise HTTPException(
-                        status_code=413,
-                        detail=f"Reference audio exceeds the {UI_UPLOAD_LIMIT_BYTES // (1024 * 1024)} MiB upload limit.",
-                    )
-                output.write(chunk)
-    except Exception:
-        upload_path.unlink(missing_ok=True)
-        raise
-    finally:
-        await audio.close()
-    if total == 0:
-        upload_path.unlink(missing_ok=True)
-        raise HTTPException(status_code=400, detail="Reference audio is empty.")
-    try:
-        analysis = reference_audio_analysis(upload_path)
-    except ValueError as exc:
-        upload_path.unlink(missing_ok=True)
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    with UI_UPLOADS_LOCK:
-        UI_UPLOADS[token] = upload_path
-    return {
-        "token": token,
-        "path": str(upload_path),
-        "name": Path(audio.filename or upload_path.name).name,
-        "analysis": analysis,
-    }
+    return await store_reference_audio_upload(audio, register=True)
 
 
 @api.delete("/ui/reference-audio/{upload_token}", include_in_schema=False)
@@ -2542,9 +2725,91 @@ def metrics(payload: TTSRequest = Body(...)) -> dict:
     }
 
 
+@api.post("/tts/preflight", tags=["Text"])
+def preflight(payload: TTSRequest = Body(...)) -> dict[str, Any]:
+    if payload.input_type != "text":
+        raise HTTPException(
+            status_code=400,
+            detail="/tts/preflight accepts input_type='text'. Use /tts/metrics to inspect SSML or SSML-H structure.",
+        )
+    try:
+        resolved = resolve_tts_compatible_voice(payload)
+        requested_device = resolve_requested_device(resolved.device, resolved.use_gpu)
+        resolved_device = normalize_device(requested_device)
+        loaded_before = resolved_device in MODEL_CACHE
+        semaphore = get_generation_semaphore(resolved_device)
+        queued_at = time.monotonic()
+        with semaphore:
+            queue_seconds = time.monotonic() - queued_at
+            load_started_at = time.monotonic()
+            model = get_model(resolved_device)
+            load_seconds = time.monotonic() - load_started_at
+            estimate = model.preflight_text(
+                text=resolved.text,
+                language=resolved.language,
+                speed=resolved.speed or 1.0,
+                duration=resolved.duration,
+                normalize_text=resolved.normalize_text,
+                audio_chunk_duration=resolved.audio_chunk_duration,
+                audio_chunk_threshold=resolved.audio_chunk_threshold,
+            )
+    except (ValueError, RuntimeError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {
+        "model": DEFAULT_MODEL,
+        "model_revision": DEFAULT_MODEL_REVISION,
+        "device": resolved_device,
+        "model_loaded_before_request": loaded_before,
+        "model_load_seconds": load_seconds,
+        "queue_seconds": queue_seconds,
+        "estimate": estimate,
+        "notes": [
+            "Tokenizer counts use the loaded OmniVoice text tokenizer.",
+            "Audio tokens, duration, and chunk count are estimates; voice conditioning and decoded waveform length can change the final result.",
+        ],
+    }
+
+
 @api.post("/tts/generate")
 def generate_tts(payload: TTSRequest = Body(...)) -> StreamingResponse:
     return stream_audio_response(payload, "/tts/generate")
+
+
+@api.post("/tts/generate-upload", tags=["Voices"])
+async def generate_tts_upload(
+    audio: UploadFile = File(..., description="Reference audio for one-off voice cloning."),
+    request_json: str = Form(
+        ...,
+        alias="request",
+        description="JSON object using the same fields as POST /tts/generate. ref_audio must be omitted.",
+    ),
+) -> StreamingResponse:
+    uploaded: dict[str, Any] | None = None
+    try:
+        try:
+            payload = TTSRequest.model_validate_json(request_json)
+        except ValidationError as exc:
+            raise HTTPException(status_code=422, detail=f"Invalid TTS request JSON: {exc}") from exc
+        if payload.input_type != "text":
+            raise HTTPException(
+                status_code=400,
+                detail="Upload-based voice cloning accepts input_type='text'.",
+            )
+        if payload.ref_audio:
+            raise HTTPException(
+                status_code=400,
+                detail="Omit ref_audio from the request JSON; the multipart audio file is the reference.",
+            )
+        uploaded = await store_reference_audio_upload(audio, register=False)
+        payload = payload.model_copy(update={"ref_audio": uploaded["path"]})
+        return await run_in_threadpool(
+            stream_audio_response,
+            payload,
+            "/tts/generate-upload",
+        )
+    finally:
+        if uploaded is not None:
+            Path(uploaded["path"]).unlink(missing_ok=True)
 
 
 @api.post("/tts/convert")

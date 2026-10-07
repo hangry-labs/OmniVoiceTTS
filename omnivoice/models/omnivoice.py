@@ -1353,6 +1353,83 @@ class OmniVoice(PreTrainedModel):
             est = est / speed
         return max(1, int(est))
 
+    def preflight_text(
+        self,
+        text: str,
+        language: str | None = None,
+        speed: float = 1.0,
+        duration: float | None = None,
+        normalize_text: bool = False,
+        audio_chunk_duration: float = 15.0,
+        audio_chunk_threshold: float = 30.0,
+    ) -> dict[str, Any]:
+        """Inspect text with the same tokenizer and duration rules as generation."""
+        if self.audio_tokenizer is None or self.text_tokenizer is None:
+            raise RuntimeError(
+                "Model is not loaded with audio/text tokenizers. Make sure you "
+                "loaded the model with OmniVoice.from_pretrained()."
+            )
+        validate_synthesis_texts(text)
+        resolved_language = _resolve_language(language)
+        processed_text = (
+            normalize_structured_text(text, resolved_language).normalized
+            if normalize_text
+            else text
+        )
+        processed_text = normalize_terminal_punctuation_spacing(processed_text)
+        frame_rate = float(self.audio_tokenizer.config.frame_rate)
+        estimated_audio_tokens = (
+            _duration_to_target_tokens(duration, frame_rate)
+            if duration is not None
+            else self._estimate_target_tokens(processed_text, None, None, speed=speed)
+        )
+        estimated_duration = estimated_audio_tokens / frame_rate
+        wrapped_text = f"<|text_start|>{processed_text}<|text_end|>"
+        text_tokens = _tokenize_with_nonverbal_tags(processed_text, self.text_tokenizer)
+        wrapped_tokens = _tokenize_with_nonverbal_tags(wrapped_text, self.text_tokenizer)
+
+        chunked = bool(
+            audio_chunk_duration > 0
+            and estimated_duration > audio_chunk_threshold
+            and processed_text
+        )
+        chunks = [processed_text]
+        if chunked:
+            average_tokens_per_character = estimated_audio_tokens / len(processed_text)
+            chunk_characters = max(
+                1,
+                int(audio_chunk_duration * frame_rate / average_tokens_per_character),
+            )
+            chunks = chunk_text_punctuation(
+                text=processed_text,
+                chunk_len=chunk_characters,
+                min_chunk_len=3,
+            )
+
+        return {
+            "language": resolved_language,
+            "source_characters": len(text),
+            "processed_characters": len(processed_text),
+            "words": len(processed_text.split()),
+            "text_tokens": int(text_tokens.numel()),
+            "model_text_tokens": int(wrapped_tokens.numel()),
+            "estimated_audio_tokens": estimated_audio_tokens,
+            "audio_token_frame_rate": frame_rate,
+            "estimated_duration_seconds": estimated_duration,
+            "chunking": {
+                "enabled": chunked,
+                "estimated_chunks": len(chunks),
+                "chunk_duration_seconds": audio_chunk_duration,
+                "threshold_seconds": audio_chunk_threshold,
+            },
+            "normalization_applied": normalize_text,
+            "terminal_punctuation_adjusted": processed_text != (
+                normalize_structured_text(text, resolved_language).normalized
+                if normalize_text
+                else text
+            ),
+        }
+
     def _ensure_list(
         self, x: Union[Any, List[Any]], batch_size: int, auto_repeat: bool = True
     ) -> List[Any]:

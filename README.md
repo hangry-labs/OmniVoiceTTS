@@ -159,6 +159,17 @@ curl -X POST "http://localhost:7861/tts/generate" \
   -o cloned.mp3
 ```
 
+API clients can also upload a one-off reference without mounting a host directory. Send the audio as multipart field `audio` and the normal `/tts/generate` JSON object as field `request`; `ref_text` remains optional and avoids loading ASR when supplied:
+
+```bash
+curl -X POST "http://localhost:7861/tts/generate-upload" \
+  -F "audio=@ref.wav" \
+  -F 'request={"text":"This voice follows the uploaded sample.","language":"English","ref_text":"Transcript of the reference audio.","output_format":"mp3"}' \
+  -o cloned.mp3
+```
+
+The upload is bounded by `OMNIVOICE_UI_UPLOAD_LIMIT_MIB` (64 MiB by default), decoded before inference, and deleted after the request.
+
 Reference uploads are analyzed for duration, level, clipping, and clean leading/trailing silence. The browser shows these diagnostics before one-off cloning or profile creation, and API users can inspect an allowed container-local path through `POST /tts/reference-audio/analyze` with `{"ref_audio":"/data/ref.wav"}`. With the default `preprocess_prompt=true`, clone preparation preserves the original speech samples while adding any missing silence up to a 100 ms leading and 200 ms trailing floor. Audio-tokenizer alignment pads the protected ending instead of discarding a partial final frame. This specifically protects very short cloned output from references that start or end directly on speech; disabling prompt preprocessing retains the caller's explicit raw-reference behavior.
 
 Kokoro-shaped compatibility fields are accepted where they can be translated cleanly. Existing callers may send `voice`, `use_gpu`, or `response_format`. The `voice` field can name a saved local voice profile or an OpenAI-style alias such as `nova`; unknown Kokoro speaker ids are accepted for compatibility but ignored because OmniVoice uses no-prompt generation, voice design, or reference-audio cloning rather than fixed speaker ids.
@@ -246,6 +257,7 @@ Useful endpoints:
 - `GET /v1/audio/voices`
 - `POST /v1/audio/speech`
 - `GET /tts/ping`
+- `GET /tts/ready`
 - `GET /tts/status`
 - `GET /tts/defaults`
 - `GET /tts/formats`
@@ -261,11 +273,13 @@ Useful endpoints:
 - `POST /tts/text/normalize`
 - `GET /tts/openai-calls`
 - `POST /tts/generate`
+- `POST /tts/generate-upload`
 - `POST /tts/convert`
 - `POST /tts/stream`
 - `POST /tts/stream-chunks`
 - `POST /tts/cache/clear`
 - `POST /tts/metrics`
+- `POST /tts/preflight`
 - `POST /tts/purge`
 - `GET /system/settings`
 - `PUT /system/settings/generation-defaults`
@@ -273,6 +287,10 @@ Useful endpoints:
 - `GET /system/gpu`
 
 `/tts/generate` and `/tts/convert` return complete generated audio. `/tts/stream` and `/tts/stream-chunks` progressively return encoded audio after each generated long-text chunk and support the same `voice`/`voice_profile` profile resolution; WAV stream requests are returned as MP3 for live playback compatibility.
+
+`GET /tts/ping` remains the cheap process liveness check used by Docker. `GET /tts/ready` is the stronger orchestrator check: it resolves the configured device, waits for generation capacity, loads or verifies the model, and returns `200` only when inference assets are ready (`503` otherwise). The first readiness call can therefore take as long as a normal cold model load.
+
+`POST /tts/preflight` loads the configured model and uses its real text tokenizer, punctuation handling, duration estimator, and chunking thresholds to report character/word counts, text-token counts, estimated audio tokens, rough duration, and estimated chunk count without generating audio. `/tts/metrics` remains the lightweight, no-model-load text and SSML structure inspector.
 
 Generated audio edge handling can be tuned with `pad_duration` and `fade_duration` on `/tts/generate`, `/tts/convert`, `/tts/stream`, `/tts/stream-chunks`, and `/v1/audio/speech`. `pad_duration` adds silence before and after the clip; `fade_duration` fades the clip in and out to reduce clicks. Both default to `0.1` seconds and can be set to `0` to disable.
 
@@ -282,7 +300,9 @@ The optional `duration` field is an audio-token budget expressed in seconds, not
 
 Before inference, attached ASCII question and exclamation marks at sentence boundaries are automatically separated from the preceding word. This maps inputs such as `Jesteśmy gotowi do ofiary?` to the model-compatible token form `Jesteśmy gotowi do ofiary ?`, which avoids an observed final-syllable truncation case. This is text-token normalization, not audio silence padding; compact CJK punctuation is left unchanged.
 
-Docker images default to `OMNIVOICE_MAX_CONCURRENT_GENERATIONS=1`, so concurrent API callers queue on each resolved device instead of overlapping GPU-heavy generation. `/tts/status` reports CUDA `allocated`, `reserved`, and peak allocator counters. `POST /tts/cache/clear` releases unused PyTorch CUDA allocator blocks without unloading model weights or saved voice-prompt cache entries; `POST /tts/purge` unloads cached models and then performs the stronger CUDA allocator cleanup. `OMNIVOICE_EMPTY_CUDA_CACHE_AFTER_REQUEST=1` can force allocator cleanup after every request, but it is off by default because it may reduce throughput.
+Docker images default to `OMNIVOICE_MAX_CONCURRENT_GENERATIONS=1`, so concurrent API callers queue on each resolved device instead of overlapping GPU-heavy generation. `/tts/status` reports active/queued generation operations, completed/failed/cancelled totals, queue and generation timing aggregates, the last correlated request ID, plus CUDA `allocated`, `reserved`, and peak allocator counters. `POST /tts/cache/clear` releases unused PyTorch CUDA allocator blocks without unloading model weights or saved voice-prompt cache entries; `POST /tts/purge` unloads cached models and then performs the stronger CUDA allocator cleanup. `OMNIVOICE_EMPTY_CUDA_CACHE_AFTER_REQUEST=1` can force allocator cleanup after every request, but it is off by default because it may reduce throughput.
+
+Every HTTP response includes `X-Request-ID`. Clients may supply their own safe identifier in that header; otherwise the server generates one. Validation, HTTP, and internal failures return a structured `error` object containing the same request ID while retaining FastAPI's top-level `detail` field for compatibility.
 
 Interactive API documentation is available at **[http://localhost:7861/tts/docs](http://localhost:7861/tts/docs)**.
 
@@ -521,18 +541,6 @@ If you encounter bugs, have feature requests, or need help using Hangry Labs Omn
 
 ---
 
-## Planned Next
-
-Planned items for the next development cycle:
-
-- Add a model-aware readiness endpoint for orchestrators that need a stronger signal than the existing `/tts/ping` Docker healthcheck.
-- Add request IDs and structured error payloads to make issue reports easier to diagnose.
-- Add upload-based API support for reference audio plus optional transcript, so API users do not need to pass container-local file paths.
-- Add a text preflight/token estimate endpoint so clients can inspect character counts, tokenizer counts, chunking, and rough duration before sending generation requests.
-- Add generation timing and queue diagnostics to `/tts/status` for better performance and overload visibility.
-
----
-
 ## Version History
 
 Snapshot commands intentionally follow the rolling `latest` tags. Published-release commands retain their readable version tag and also pin Docker Hub's immutable top-level OCI digest; the digest is authoritative if a tag is ever changed.
@@ -543,6 +551,7 @@ The snapshot channel is the current Docker `latest` build after the latest tagge
 
 Current snapshot changes after `v0.3.0`:
 
+- Added model-aware `/tts/ready` readiness, request IDs and structured error envelopes, direct multipart reference-audio generation, tokenizer-backed `/tts/preflight` estimates, and per-device generation queue/timing diagnostics in `/tts/status`.
 - Added independently gated compact and advanced Streamable HTTP MCP endpoints, link-only generated audio, bounded reference inputs, expiring artifact storage, saved-voice discovery with descriptions, persistent System UI controls, and deterministic/live MCP validation tasks.
 - Added clone-reference quality diagnostics in the browser and API plus conservative in-memory edge repair: prompt preprocessing now supplies missing 100 ms leading and 200 ms trailing silence, preserves stored files and original speech samples, and pads tokenizer alignment instead of truncating the final partial frame. The three short Chinese reproductions from upstream issue #265 were validated against an intentionally edge-stripped trusted reference and independently transcribed with the intended words intact.
 - Added opt-in Vietnamese structured-text normalization for unambiguous numbers, decimals, currencies, percentages, units, ISO dates, and times, with source-relative preview and conservative protection for phones, identifiers, slash forms, and ambiguous punctuation.
