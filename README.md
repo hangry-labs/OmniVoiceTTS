@@ -298,7 +298,7 @@ Advanced output mastering keeps the established sound and timing defaults while 
 
 The optional `duration` field is an audio-token budget expressed in seconds, not an exact physical waveform length. It overrides `speed` for model generation, while codec decoding and output processing can still produce a slightly different final duration.
 
-Before inference, attached ASCII question and exclamation marks at sentence boundaries are automatically separated from the preceding word. This maps inputs such as `Jesteśmy gotowi do ofiary?` to the model-compatible token form `Jesteśmy gotowi do ofiary ?`, which avoids an observed final-syllable truncation case. This is text-token normalization, not audio silence padding; compact CJK punctuation is left unchanged.
+Before inference, attached ASCII question and exclamation marks at sentence boundaries are automatically separated from the preceding word. This maps inputs such as `JesteÅ›my gotowi do ofiary?` to the model-compatible token form `JesteÅ›my gotowi do ofiary ?`, which avoids an observed final-syllable truncation case. This is text-token normalization, not audio silence padding; compact CJK punctuation is left unchanged.
 
 Docker images default to `OMNIVOICE_MAX_CONCURRENT_GENERATIONS=1`, so concurrent API callers queue on each resolved device instead of overlapping GPU-heavy generation. `/tts/status` reports active/queued generation operations, completed/failed/cancelled totals, queue and generation timing aggregates, the last correlated request ID, plus CUDA `allocated`, `reserved`, and peak allocator counters. `POST /tts/cache/clear` releases unused PyTorch CUDA allocator blocks without unloading model weights or saved voice-prompt cache entries; `POST /tts/purge` unloads cached models and then performs the stronger CUDA allocator cleanup. `OMNIVOICE_EMPTY_CUDA_CACHE_AFTER_REQUEST=1` can force allocator cleanup after every request, but it is off by default because it may reduce throughput.
 
@@ -545,7 +545,7 @@ If you encounter bugs, have feature requests, or need help using Hangry Labs Omn
 
 Snapshot commands intentionally follow the rolling `latest` tags. Published-release commands retain their readable version tag and also pin Docker Hub's immutable top-level OCI digest; the digest is authoritative if a tag is ever changed.
 
-### v1.0 Snapshot
+### v1.0
 
 The snapshot channel is the current Docker `latest` build after the latest tagged release. It is installable with `hangrylabs/omnivoicetts:latest` and is useful for testing fixes and new features before the next immutable `vX.Y` or `vX.Y.Z` release, but it can change as `master` moves. Use versioned tags such as `v0.3.0` when you need reproducible deployments.
 
@@ -587,18 +587,18 @@ Current snapshot changes after `v0.3.0`:
 - Synced with upstream through `08be0b4`, preserving configured ASR model/device choices during lazy loading and avoiding unnecessary full reference-audio decoding during batch planning.
 - Hardened release automation with version consistency checks, unit/CodeQL/Dockerfile validation, lockfile refresh, synchronized-branch checks, next-snapshot preparation, and atomic push.
 
-The current development snapshot is published through the rolling tags from `master`:
+Run this release with either image variant:
 
 **Standard image**
 
 ```bash
-docker run --name omnivoicetts --restart unless-stopped -p 7861:7861 --gpus all -e CUDA_VISIBLE_DEVICES=0 -v omnivoicetts_data:/app/persistent hangrylabs/omnivoicetts:latest
+docker run --name omnivoicetts-v1-0 --restart unless-stopped -p 7861:7861 --gpus all -e CUDA_VISIBLE_DEVICES=0 -v omnivoicetts_data:/app/persistent hangrylabs/omnivoicetts:v1.0
 ```
 
 **Tiny image**
 
 ```bash
-docker run --name omnivoicetts-tiny --restart unless-stopped -p 7861:7861 --gpus all -e CUDA_VISIBLE_DEVICES=0 -e HF_HUB_OFFLINE=0 -e TRANSFORMERS_OFFLINE=0 -v omnivoicetts_data:/app/persistent hangrylabs/omnivoicetts:latest_tiny
+docker run --name omnivoicetts-v1-0-tiny --restart unless-stopped -p 7861:7861 --gpus all -e CUDA_VISIBLE_DEVICES=0 -e HF_HUB_OFFLINE=0 -e TRANSFORMERS_OFFLINE=0 -v omnivoicetts_data:/app/persistent hangrylabs/omnivoicetts:v1.0_tiny
 ```
 
 ### v0.3.0
