@@ -194,7 +194,9 @@ $nextSnapshotHeading = "### v$nextDisplayVersion Snapshot"
 $developmentImageNotice = 'The current development snapshot is published through the rolling tags from `master`:'
 $stableImageNotice = "Run this release with either image variant:"
 
-foreach ($doc in @("README.md", "docs/dockerhub.md")) {
+$releaseHistoryDocs = @("README.md")
+
+foreach ($doc in $releaseHistoryDocs) {
     $content = Get-Content -Raw -LiteralPath $doc
     if (-not $content.Contains($snapshotHeading)) {
         throw "$doc must contain the exact release-history heading '$snapshotHeading'."
@@ -253,7 +255,7 @@ Invoke-Step "Update release metadata for $releaseTag" {
     Set-ProjectVersion $releaseVersion
     Invoke-Native "Refresh uv.lock for release version" { uv lock }
 
-    foreach ($doc in @("README.md", "docs/dockerhub.md")) {
+    foreach ($doc in $releaseHistoryDocs) {
         $content = Get-Content -Raw -LiteralPath $doc
         $lineEnding = if ($content.Contains("`r`n")) { "`r`n" } else { "`n" }
         $rollingSection = Get-VersionHistoryDockerSection `
@@ -270,7 +272,7 @@ Invoke-Step "Update release metadata for $releaseTag" {
 }
 
 Invoke-Step "Commit release metadata when needed and tag $releaseTag" {
-    $releaseFiles = @("VERSION", "pyproject.toml", "uv.lock", "README.md", "docs/dockerhub.md")
+    $releaseFiles = @("VERSION", "pyproject.toml", "uv.lock", "README.md")
     $releaseChanges = git status --porcelain -- $releaseFiles
     if ($LASTEXITCODE -ne 0) { throw "Could not inspect release metadata changes." }
     if ($releaseChanges) {
@@ -287,7 +289,7 @@ Invoke-Step "Prepare $nextSnapshotVersion" {
     Set-ProjectVersion $nextProjectVersion
     Invoke-Native "Refresh uv.lock for next snapshot" { uv lock }
 
-    foreach ($doc in @("README.md", "docs/dockerhub.md")) {
+    foreach ($doc in $releaseHistoryDocs) {
         $content = Get-Content -Raw -LiteralPath $doc
         $lineEnding = if ($content.Contains("`r`n")) { "`r`n" } else { "`n" }
         $rollingSection = Get-VersionHistoryDockerSection `
@@ -298,7 +300,7 @@ Invoke-Step "Prepare $nextSnapshotVersion" {
         Add-NextSnapshotSection $doc $stableHeading $nextSnapshotHeading $rollingSection
     }
 
-    Invoke-Native "Stage next snapshot metadata" { git add -- VERSION pyproject.toml uv.lock README.md docs/dockerhub.md }
+    Invoke-Native "Stage next snapshot metadata" { git add -- VERSION pyproject.toml uv.lock README.md }
     Invoke-Native "Create next snapshot commit" { git commit -m "chore: start $nextSnapshotVersion" }
 }
 

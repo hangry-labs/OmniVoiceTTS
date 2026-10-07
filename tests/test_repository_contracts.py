@@ -132,6 +132,12 @@ class RepositoryContractTests(unittest.TestCase):
             taskfile,
         )
 
+    def test_release_history_is_managed_only_in_readme(self) -> None:
+        release_script = (ROOT / "scripts" / "release.ps1").read_text(encoding="utf-8")
+        self.assertIn('$releaseHistoryDocs = @("README.md")', release_script)
+        self.assertNotIn('@("README.md", "docs/dockerhub.md")', release_script)
+        self.assertNotIn("uv.lock README.md docs/dockerhub.md", release_script)
+
     def test_runtime_package_excludes_retired_gradio_demo(self) -> None:
         with (ROOT / "pyproject.toml").open("rb") as handle:
             config = tomllib.load(handle)
