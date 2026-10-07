@@ -32,6 +32,29 @@ EXAMPLE_LOCALES = (
     "ur",
     "vi",
 )
+EXPECTED_EXAMPLE_SEEK_LABELS = {
+    "en": "Seek within audio sample",
+    "nb": "Spol i lydklippet",
+    "pl": "Przewiń w próbce",
+    "ja": "音声サンプル内をシーク",
+    "zh": "在音频样本中定位",
+    "es": "Desplazarse por la muestra de audio",
+    "ar": "التنقل داخل العينة الصوتية",
+    "bn": "অডিও নমুনায় অবস্থান পরিবর্তন করুন",
+    "de": "In der Hörprobe spulen",
+    "fr": "Se déplacer dans l'échantillon audio",
+    "hi": "ऑडियो नमूने में आगे या पीछे जाएँ",
+    "id": "Geser posisi dalam sampel audio",
+    "it": "Spostati nel campione audio",
+    "ko": "오디오 샘플 내 위치 이동",
+    "nl": "Door het audiofragment spoelen",
+    "pt": "Navegar na amostra de áudio",
+    "ru": "Перемотать аудиообразец",
+    "th": "เลื่อนตำแหน่งในตัวอย่างเสียง",
+    "tr": "Ses örneğinde ileri veya geri sar",
+    "ur": "آڈیو نمونے میں آگے یا پیچھے جائیں",
+    "vi": "Tua trong mẫu âm thanh",
+}
 
 
 def placeholders(value: str) -> set[str]:
@@ -88,6 +111,33 @@ class LocalizationContractTests(unittest.TestCase):
                 self.assertEqual(set(messages), set(english))
                 for key, value in messages.items():
                     self.assertEqual(placeholders(value), placeholders(english[key]), key)
+
+        self.assertEqual(
+            {locale: messages["seekSample"] for locale, messages in catalog.items()},
+            EXPECTED_EXAMPLE_SEEK_LABELS,
+        )
+        for locale in ("bn", "hi", "ur"):
+            self.assertNotIn(" speech", catalog[locale]["intro"])
+
+    def test_reviewed_catalogs_exclude_known_translation_defects(self) -> None:
+        catalog_text = "\n".join(
+            path.read_text(encoding="utf-8")
+            for path in (ROOT / "omnivoice" / "standalone_ui" / "static" / "locales").glob("*.json")
+        )
+        script = (ROOT / "examples" / "i18n.js").read_text(encoding="utf-8")
+        prefix = "window.EXAMPLE_I18N = "
+        examples = json.loads(script.removeprefix(prefix).strip().removesuffix(";"))
+        translated_examples_text = "\n".join(
+            value
+            for locale, messages in examples.items()
+            if locale != "en"
+            for value in messages.values()
+        )
+
+        for defect in ("stødte", "instillinger"):
+            self.assertNotIn(defect, catalog_text)
+        for defect in ("_demo", "Odcisz dźwięk", "voice-variety samples"):
+            self.assertNotIn(defect, translated_examples_text)
 
     def test_examples_page_loads_localization_before_application_code(self) -> None:
         html = (ROOT / "examples" / "index.html").read_text(encoding="utf-8")

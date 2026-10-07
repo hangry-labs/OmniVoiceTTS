@@ -1,7 +1,7 @@
 {
   "app.title": "OmniVoiceTTS",
   "brand.mascotAlt": "Maskotka OmniVoiceTTS",
-  "brand.productAlt": "OmniVoiceTTS - głosowa AI dla 600+ języków",
+  "brand.productAlt": "OmniVoiceTTS - sztuczna inteligencja głosowa dla ponad 600 języków",
   "brand.poweredBy": "Oparte na",
   "nav.aria": "Linki aplikacji",
   "nav.examples": "Przykłady",
@@ -9,9 +9,9 @@
   "nav.voices": "Głosy",
   "nav.github": "GitHub",
   "locale.label": "Język interfejsu",
-  "runtime.starting": "Rozpoczynanie wnioskowania",
-  "runtime.ready": "Wnioskowanie gotowe",
-  "runtime.waiting": "Oczekiwanie na usługę wnioskowania",
+  "runtime.starting": "Uruchamianie inferencji",
+  "runtime.ready": "Inferencja gotowa",
+  "runtime.waiting": "Oczekiwanie na usługę inferencji",
   "runtime.openReleases": "Otwórz wydania OmniVoiceTTS",
   "hero.collapse": "Zwiń nagłówek",
   "hero.expand": "Rozwiń nagłówek",
@@ -50,7 +50,7 @@
   "design.englishAccent": "Akcent angielski",
   "design.chineseDialect": "Dialekt chiński",
   "design.noPreference": "Brak preferencji",
-  "clone.title": "Referencja głosu",
+  "clone.title": "Wzorzec głosu",
   "clone.audio": "Audio referencyjne",
   "clone.chooseAudio": "Wybierz lub upuść audio referencyjne",
   "clone.transcript": "Transkrypcja referencyjna",
@@ -80,7 +80,7 @@
   "generation.tempo": "Tempo",
   "generation.volume": "Głośność",
   "generation.normalize": "Normalizacja głośności",
-  "generation.normalizeText": "Mów tekst strukturalny",
+  "generation.normalizeText": "Odczytuj tekst strukturalny",
   "generation.denoise": "Redukcja szumu",
   "generation.preprocess": "Wyczyść audio referencyjne",
   "generation.postprocess": "Poprzetwarzaj wyjście",
@@ -228,4 +228,3 @@
   "gpu.pcie": "PCIe Gen {generation} x{width}",
   "gpu.powerLimit": "Limit zasilania {power} W"
 }
-

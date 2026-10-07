@@ -34,7 +34,7 @@
   "composer.text": "入力テキスト",
   "composer.input": "合成するテキストまたはマークアップ",
   "composer.inputType": "入力形式",
-  "composer.defaultText": "OmniVoice へようこそ。この Docker イメージにはブラウザ UI と HTTP API が含まれています。",
+  "composer.defaultText": "OmniVoice からこんにちは。この Docker イメージにはブラウザ UI と HTTP API が含まれています。",
   "composer.characters": "{count} 文字",
   "composer.spokenPreview": "音声プレビュー",
   "composer.normalizationChanges": "{count} 件の変更",
@@ -148,8 +148,8 @@
   "voices.profileDescriptionPlaceholder": "製品デモ用の温かいナレーター",
   "voices.profileDescriptionHelp": "音声の特徴とエージェントが使用するべき場面を記述してください。",
   "voices.noDescription": "説明なし。",
-  "voices.cloned": "クローン",
-  "voices.designed": "デザイン",
+  "voices.cloned": "クローン済み",
+  "voices.designed": "デザイン済み",
   "voices.savedAs": "{name} として保存",
   "voices.savedToast": "{name} を保存しました。",
   "voices.chooseAudio": "リファレンス音声を選択またはドラッグ＆ドロップ",
@@ -174,7 +174,7 @@
   "voices.requestLanguage": "リクエスト言語",
   "voices.randomSeedShort": "ランダムシード",
   "voices.fixedSeed": "シード {seed}",
-  "voices.transcriptSaved": "文字起こしを保存",
+  "voices.transcriptSaved": "文字起こし保存済み",
   "voices.asrRequired": "オンデマンド ASR",
   "voices.use": "使用",
   "voices.selected": "音声 {name} を選択しました。",
@@ -228,4 +228,3 @@
   "gpu.pcie": "PCIe Gen {generation} x{width}",
   "gpu.powerLimit": "電力制限 {power} W"
 }
-
