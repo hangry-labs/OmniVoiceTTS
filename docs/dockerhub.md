@@ -40,6 +40,14 @@ docker run --name omnivoicetts-tiny --restart unless-stopped -p 7861:7861 --gpus
 
 The full image incrementally seeds its pinned baked model cache into this volume at startup. Existing downloaded models, saved voices, and settings are preserved across image upgrades.
 
+## MCP
+
+Enable the compact local-agent endpoint in **System > MCP access**, then connect to `http://localhost:7861/mcp/`. It exposes five focused tools for health, languages, saved voices, speech inspection, and recommended simple generation.
+
+The separately controlled `http://localhost:7861/mcp/advanced/` endpoint adds SSML/SSML-H, voice design, one-off reference cloning, and saved-profile management. Keep it disabled unless an agent needs those larger schemas. Both endpoints are off by default, have no separate application authentication, and should be enabled only for trusted clients or behind an authenticated reverse proxy. UI choices persist in `omnivoicetts_data`.
+
+MCP generation returns expiring download links rather than embedding audio in model context. When connecting from another machine, set `OMNIVOICE_MCP_BASE_URL` to the externally reachable server origin. Advanced local reference files belong in `/app/persistent/mcp-input`.
+
 Use versioned `vX.Y.Z` and `vX.Y.Z_tiny` tags for reproducible deployments. Use `latest` and `latest_tiny` to test the current snapshot.
 
 ## What You Get
@@ -117,6 +125,8 @@ The unified `/app/persistent` volume contains:
 - `/app/persistent/models/huggingface` - model assets
 - `/app/persistent/app/settings.json` - persisted operator settings
 - `/app/persistent/voices/openai` - saved profiles and reference audio
+- `/app/persistent/mcp-input` - advanced MCP reference audio
+- `/app/persistent/mcp-output` - expiring generated MCP audio
 
 Path overrides are available through `HF_HOME`, `OMNIVOICE_SETTINGS_PATH`, and `OMNIVOICE_OPENAI_VOICE_PROFILE_DIR`. Device, eager ASR loading, concurrency, and other restart-bound controls remain environment variables.
 

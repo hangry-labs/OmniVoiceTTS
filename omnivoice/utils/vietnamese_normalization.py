@@ -399,6 +399,8 @@ def collect_vietnamese_candidates(
 
     identifier_spans = [
         match.span("value")
+        # Input is capped at MAX_NORMALIZATION_CHARACTERS by normalize_structured_text.
+        # codeql[py/polynomial-redos]
         for match in _IDENTIFIER_CONTEXT_RE.finditer(text)
         if not _overlaps(*match.span("value"), occupied)
     ]

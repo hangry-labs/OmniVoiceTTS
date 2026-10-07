@@ -96,6 +96,17 @@ license is bundled at `/app/third_party/licenses/openai-whisper/LICENSE`.
 
 ## Runtime Libraries
 
+### Model Context Protocol Python SDK
+
+- Project: [modelcontextprotocol/python-sdk](https://github.com/modelcontextprotocol/python-sdk)
+- Version currently used: 2.3.0
+- Copyright: the Model Context Protocol authors and contributors
+- License: MIT
+- Use here: opt-in Streamable HTTP MCP endpoints and protocol types for local
+  AI-agent integration.
+
+The installed distribution includes its MIT license text in package metadata.
+
 ### num2words
 
 - Version: `0.5.14`

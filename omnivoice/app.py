@@ -44,6 +44,7 @@ from omnivoice.service.paths import (
 from omnivoice.service.schemas import (
     MAX_RANDOM_SEED,
     CacheClearRequest,
+    MCPSettingsUpdate,
     OpenAISpeechRequest,
     PurgeRequest,
     ReferenceAudioAnalyzeRequest,
@@ -121,6 +122,8 @@ MAX_CONCURRENT_GENERATIONS = env_int("OMNIVOICE_MAX_CONCURRENT_GENERATIONS", 1)
 CPU_MEMORY_WARNING_INTERVAL_SECONDS = env_int("OMNIVOICE_CPU_MEMORY_WARNING_INTERVAL_SECONDS", 300)
 EMPTY_CUDA_CACHE_AFTER_REQUEST = env_bool("OMNIVOICE_EMPTY_CUDA_CACHE_AFTER_REQUEST", False)
 RESET_CUDA_PEAK_AFTER_CACHE_CLEAR = env_bool("OMNIVOICE_RESET_CUDA_PEAK_AFTER_CACHE_CLEAR", False)
+MCP_DEFAULT_ENABLED = env_bool("OMNIVOICE_ENABLE_MCP", False)
+MCP_ADVANCED_DEFAULT_ENABLED = env_bool("OMNIVOICE_ENABLE_ADVANCED_MCP", False)
 APP_VERSION = os.getenv("APP_VERSION", __version__)
 BUILD_ID = os.getenv("BUILD_ID", "stable")
 PACKAGE_DIR = Path(__file__).resolve().parent
@@ -218,6 +221,17 @@ STARTUP_PARAMETER_DEFAULTS = OrderedDict(
         ("OMNIVOICE_VOICE_PROMPT_CACHE_LIMIT", "32"),
         ("OMNIVOICE_RESAMPLE_BACKEND", "auto"),
         ("OMNIVOICE_UI_LOCALE", "en"),
+        ("OMNIVOICE_ENABLE_MCP", "0"),
+        ("OMNIVOICE_ENABLE_ADVANCED_MCP", "0"),
+        ("OMNIVOICE_MCP_BASE_URL", ""),
+        ("OMNIVOICE_MCP_INPUT_DIR", "/app/persistent/mcp-input"),
+        ("OMNIVOICE_MCP_OUTPUT_DIR", "/app/persistent/mcp-output"),
+        ("OMNIVOICE_MCP_ALLOWED_HOSTS", ""),
+        ("OMNIVOICE_MCP_ALLOWED_ORIGINS", ""),
+        ("OMNIVOICE_MCP_AUDIO_URL_ALLOWED_HOSTS", "*"),
+        ("OMNIVOICE_MCP_AUDIO_URL_TIMEOUT_SECONDS", "60"),
+        ("OMNIVOICE_MCP_AUDIO_URL_MAX_REDIRECTS", "3"),
+        ("OMNIVOICE_MCP_DNS_REBINDING_PROTECTION", "1"),
     ]
 )
 SENSITIVE_ENV_NAME_PARTS = ("TOKEN", "SECRET", "PASSWORD", "PASS", "KEY", "CREDENTIAL", "AUTH")
@@ -858,6 +872,8 @@ def save_openai_voice_profile(
     language: str | None = None,
     seed: int | float | str | None = 12345,
     randomize_seed: bool = False,
+    description: str | None = None,
+    profile_type: str = "cloned",
 ) -> str:
     return _save_openai_voice_profile(
         OPENAI_VOICE_PROFILE_DIR,
@@ -870,6 +886,8 @@ def save_openai_voice_profile(
         language,
         seed,
         randomize_seed,
+        description,
+        profile_type,
     )
 
 
@@ -1089,6 +1107,14 @@ def get_status_payload() -> dict:
             "entries": len(VOICE_CLONE_PROMPT_CACHE),
             "limit": VOICE_CLONE_PROMPT_CACHE_LIMIT,
         },
+        "mcp": {
+            "compact_enabled": RUNTIME_SETTINGS.mcp_enabled(default=MCP_DEFAULT_ENABLED),
+            "compact_endpoint": "/mcp/",
+            "advanced_enabled": RUNTIME_SETTINGS.mcp_advanced_enabled(
+                default=MCP_ADVANCED_DEFAULT_ENABLED
+            ),
+            "advanced_endpoint": "/mcp/advanced/",
+        },
         "persistent_storage": {
             "settings_path": str(RUNTIME_SETTINGS.path),
             "settings_exists": RUNTIME_SETTINGS.path.is_file(),
@@ -1155,6 +1181,10 @@ def get_startup_diagnostics_payload() -> dict[str, Any]:
             "voice_prompt_cache_limit": VOICE_CLONE_PROMPT_CACHE_LIMIT,
             "languages": len(LANG_IDS),
             "output_formats": sorted(OUTPUT_FORMATS),
+            "mcp_enabled": RUNTIME_SETTINGS.mcp_enabled(default=MCP_DEFAULT_ENABLED),
+            "mcp_advanced_enabled": RUNTIME_SETTINGS.mcp_advanced_enabled(
+                default=MCP_ADVANCED_DEFAULT_ENABLED
+            ),
         },
         "startup_parameters": startup_parameter_diagnostics(),
         "paths": {
@@ -1244,6 +1274,8 @@ def voice_profile_payloads() -> list[dict[str, Any]]:
             "seed": profile.get("seed") or None,
             "randomize_seed": bool(profile.get("randomize_seed", False)),
             "has_transcript": bool((profile.get("ref_text") or "").strip()),
+            "description": profile.get("description") or "",
+            "profile_type": profile.get("profile_type") or "cloned",
         }
         for name, profile in sorted(load_openai_voice_profiles().items())
     ]
@@ -1785,6 +1817,10 @@ def create_ssml_execution_session(
                 "language": item.sample_language or item.binding.language or "",
                 "seed": item.seed,
                 "replace": item.definition.replace,
+                "description": (
+                    f"Designed voice: {item.binding.instruct or item.definition.name}"
+                )[:240],
+                "profile_type": "designed",
             }
             for item in prepared
         ]
@@ -1982,6 +2018,37 @@ def synthesize_payload(payload: TTSRequest) -> tuple[str, int, np.ndarray, int]:
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"{type(exc).__name__}: {exc}") from exc
     return output_format, sample_rate, waveform, used_seed
+
+
+def synthesize_complete_payload(
+    payload: TTSRequest,
+) -> tuple[str, int, np.ndarray, int, list[str]]:
+    """Synthesize text or a complete SSML document for non-streaming callers."""
+    session: SSMLExecutionSession | None = None
+    try:
+        resolved = resolve_tts_compatible_voice(payload)
+        warn_if_cpu_memory_tight(resolved, "/mcp")
+        if resolved.input_type == "text":
+            output_format, sample_rate, waveform, used_seed = synthesize_payload(resolved)
+            return output_format, sample_rate, waveform, used_seed, []
+
+        output_format = normalize_output_format(resolved.output_format)
+        used_seed = resolve_generation_seed(resolved.seed, resolved.randomize_seed)
+        session = create_ssml_execution_session(resolved, used_seed)
+        sample_rate, waveform = session.render_array()
+        created_profiles = list(session.commit_profiles().values())
+        return output_format, sample_rate, waveform, used_seed, created_profiles
+    except HTTPException:
+        raise
+    except (ValueError, RuntimeError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"{type(exc).__name__}: {exc}") from exc
+    finally:
+        if session is not None:
+            session.close()
+        if EMPTY_CUDA_CACHE_AFTER_REQUEST:
+            clear_cuda_allocator_cache(RESET_CUDA_PEAK_AFTER_CACHE_CLEAR)
 
 
 def synthesize_payload_chunks(payload: TTSRequest) -> tuple[str, int, Iterator[np.ndarray], int]:
@@ -2249,6 +2316,8 @@ def create_voice_profile(payload: VoiceProfileCreateRequest) -> dict[str, Any]:
             payload.language,
             payload.seed,
             payload.randomize_seed,
+            payload.description,
+            "cloned",
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -2282,7 +2351,17 @@ def openai_calls() -> dict[str, Any]:
 
 @api.get("/system/settings", tags=["System"])
 def system_settings() -> dict[str, Any]:
-    return {"generation_defaults": get_ui_generation_defaults().model_dump()}
+    return {
+        "generation_defaults": get_ui_generation_defaults().model_dump(),
+        "mcp": {
+            "enabled": RUNTIME_SETTINGS.mcp_enabled(default=MCP_DEFAULT_ENABLED),
+            "advanced_enabled": RUNTIME_SETTINGS.mcp_advanced_enabled(
+                default=MCP_ADVANCED_DEFAULT_ENABLED
+            ),
+            "compact_endpoint": "/mcp/",
+            "advanced_endpoint": "/mcp/advanced/",
+        },
+    }
 
 
 @api.put("/system/settings/generation-defaults", tags=["System"])
@@ -2290,6 +2369,22 @@ def save_generation_defaults(payload: UIGenerationDefaults) -> dict[str, Any]:
     defaults = payload.model_dump()
     RUNTIME_SETTINGS.set("ui_generation_defaults", defaults)
     return {"generation_defaults": defaults}
+
+
+@api.put("/system/settings/mcp", tags=["System"])
+def save_mcp_settings(payload: MCPSettingsUpdate) -> dict[str, Any]:
+    RUNTIME_SETTINGS.set_mcp_access(
+        enabled=payload.enabled,
+        advanced_enabled=payload.advanced_enabled,
+    )
+    return {
+        "mcp": {
+            "enabled": payload.enabled,
+            "advanced_enabled": payload.advanced_enabled,
+            "compact_endpoint": "/mcp/",
+            "advanced_endpoint": "/mcp/advanced/",
+        }
+    }
 
 
 @api.get("/tts/status")
@@ -2524,7 +2619,10 @@ def purge_models(payload: PurgeRequest | None = Body(None)) -> dict:
     }
 
 
-app = attach_ui(api_app=api)
+from omnivoice.mcp_server import attach_mcp
+
+
+app = attach_ui(api_app=attach_mcp(api_app=api, runtime=sys.modules[__name__]))
 
 
 def main() -> None:

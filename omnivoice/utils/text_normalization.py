@@ -275,6 +275,9 @@ def normalize_structured_text(text: str, language: str | None = None) -> TextNor
         verbalize: Callable[[re.Match[str]], str],
         accept: Callable[[re.Match[str]], bool] | None = None,
     ) -> None:
+        # Input is capped at MAX_NORMALIZATION_CHARACTERS above. These conservative
+        # recognizers are retained to preserve normalization behavior.
+        # codeql[py/polynomial-redos]
         for match in pattern.finditer(text):
             if _overlaps(match.start(), match.end(), occupied):
                 continue

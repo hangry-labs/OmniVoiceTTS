@@ -12,6 +12,7 @@ from pathlib import Path
 
 
 EXPECTED_PACKAGES = {
+    "mcp": "2.3.0",
     "num2words": "0.5.14",
     "soxr": "1.1.0",
     "ssml-h-tools": "0.1.0",
@@ -36,6 +37,7 @@ REQUIRED_FILES = {
     "licenses/project/NOTICE",
     "licenses/browser/lucide-and-feather-LICENSE",
     "licenses/browser/wavesurfer-LICENSE",
+    "licenses/python/mcp/LICENSE",
     "licenses/python/num2words/COPYING",
     "licenses/python/soxr/COPYING.LGPL",
     "licenses/python/soxr/LICENSE-libsoxr.txt",

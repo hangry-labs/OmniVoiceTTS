@@ -82,7 +82,7 @@ def wait_ready(tts_url: str, asr_url: str) -> None:
                 request_json(url, timeout=5)
                 del pending[name]
             except Exception:
-                pass
+                continue
         if pending:
             time.sleep(2)
     if pending:

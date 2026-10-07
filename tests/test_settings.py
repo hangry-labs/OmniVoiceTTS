@@ -60,6 +60,19 @@ class RuntimeSettingsStoreTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "non-empty"):
                 store.set("", True)
 
+    def test_mcp_access_is_persisted_as_one_setting_update(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "settings.json"
+            store = RuntimeSettingsStore(path)
+
+            self.assertFalse(store.mcp_enabled())
+            self.assertFalse(store.mcp_advanced_enabled())
+            store.set_mcp_access(enabled=True, advanced_enabled=True)
+
+            restored = RuntimeSettingsStore(path)
+            self.assertTrue(restored.mcp_enabled())
+            self.assertTrue(restored.mcp_advanced_enabled())
+
 
 if __name__ == "__main__":
     unittest.main()

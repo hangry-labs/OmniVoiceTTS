@@ -337,6 +337,8 @@ def collect_malayalam_candidates(
     supported_fractions = {match.span() for match in _FRACTION_RE.finditer(text)}
     unsupported_fractions = [
         match.span()
+        # Input is capped at MAX_NORMALIZATION_CHARACTERS by normalize_structured_text.
+        # codeql[py/polynomial-redos]
         for match in _FRACTION_LIKE_RE.finditer(text)
         if match.span() not in supported_fractions
     ]

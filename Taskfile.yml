@@ -9,10 +9,20 @@ vars:
   HF_TOKEN: ''
   DATA_VOLUME: omnivoicetts_data
   DATA_ROOT: /app/persistent
+  MCP_ENABLED: '0'
+  MCP_ADVANCED_ENABLED: '0'
+  MCP_BASE_URL: 'http://localhost:{{.PORT}}'
+  LOCAL_MCP_URL: 'http://127.0.0.1:{{.PORT}}/mcp/'
+  LOCAL_ADVANCED_MCP_URL: 'http://127.0.0.1:{{.PORT}}/mcp/advanced/'
   RUNTIME_ENV: >-
     -e HF_HOME={{.DATA_ROOT}}/models/huggingface
     -e OMNIVOICE_SETTINGS_PATH={{.DATA_ROOT}}/app/settings.json
     -e OMNIVOICE_OPENAI_VOICE_PROFILE_DIR={{.DATA_ROOT}}/voices/openai
+    -e OMNIVOICE_ENABLE_MCP={{.MCP_ENABLED}}
+    -e OMNIVOICE_ENABLE_ADVANCED_MCP={{.MCP_ADVANCED_ENABLED}}
+    -e OMNIVOICE_MCP_BASE_URL={{.MCP_BASE_URL}}
+    -e OMNIVOICE_MCP_INPUT_DIR={{.DATA_ROOT}}/mcp-input
+    -e OMNIVOICE_MCP_OUTPUT_DIR={{.DATA_ROOT}}/mcp-output
     -v {{.DATA_VOLUME}}:{{.DATA_ROOT}}
   HF_HUB_OFFLINE: '1'
   TRANSFORMERS_OFFLINE: '1'
@@ -105,6 +115,18 @@ tasks:
     desc: Run the lightweight unit and repository-contract test suite
     cmds:
       - 'cmd /c ".venv\Scripts\python.exe" -m unittest discover -s tests -v'
+
+  mcp-test:
+    desc: Run deterministic MCP artifact, schema, transport, and remote-input tests
+    cmds:
+      - 'cmd /c ".venv\Scripts\python.exe" -m unittest tests.test_artifacts tests.test_mcp_server tests.test_remote_audio -v'
+
+  mcp-live-test:
+    desc: Verify both MCP tiers and generate downloadable audio through the live compact endpoint
+    cmds:
+      - 'cmd /c curl.exe -sS --retry 30 --retry-delay 2 --retry-all-errors http://localhost:{{.PORT}}/tts/ping >nul'
+      - 'cmd /c curl.exe -sS -X PUT http://localhost:{{.PORT}}/system/settings/mcp -H "Content-Type: application/json" -d "{\"enabled\":true,\"advanced_enabled\":true}" >nul'
+      - 'cmd /c "set LOCAL_MCP_URL={{.LOCAL_MCP_URL}}&& set LOCAL_ADVANCED_MCP_URL={{.LOCAL_ADVANCED_MCP_URL}}&& .venv\Scripts\python.exe tests\run_mcp_live_test.py"'
 
   validate:
     desc: Run local lightweight validation used before Docker and release work

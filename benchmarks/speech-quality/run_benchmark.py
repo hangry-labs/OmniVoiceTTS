@@ -68,7 +68,7 @@ def wait_ready(tts_url: str, asr_url: str) -> None:
                 request_json("GET", url, timeout=5)
                 del pending[name]
             except Exception:
-                pass
+                continue
         if pending:
             time.sleep(2)
     if pending:
@@ -767,8 +767,6 @@ def main() -> None:
     measurements: list[dict[str, Any]] = []
     progress = 0
     total_phase_calls = total_calls * 2 + (1 if total_calls else 0)
-    measured_tts_seconds = 0.0
-    measured_asr_seconds = 0.0
     asr_keepalive: dict[str, Any] | None = None
     with tempfile.TemporaryDirectory(prefix="omnivoicetts-quality-") as staging_root:
         staging_dir = Path(staging_root)

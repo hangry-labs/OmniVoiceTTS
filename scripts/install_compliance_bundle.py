@@ -334,7 +334,7 @@ def main() -> None:
     for item in DOWNLOADS:
         download(item, output)
 
-    for package in ("num2words", "soxr", "ssml-h-tools", "torch"):
+    for package in ("mcp", "num2words", "soxr", "ssml-h-tools", "torch"):
         copy_distribution_licenses(package, output)
     for package_distribution in distributions():
         name = package_distribution.metadata.get("Name", "")
@@ -368,4 +368,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

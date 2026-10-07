@@ -23,6 +23,8 @@ OPENAI_CALL_LOG_LOCK = threading.Lock()
 OPENAI_CALL_LOG_LIMIT = 50
 PROFILE_INDEX_LOCK = threading.RLock()
 LOGGER = logging.getLogger(__name__)
+PROFILE_DESCRIPTION_MAX_LENGTH = 240
+PROFILE_TYPES = {"cloned", "designed"}
 
 
 def normalize_profile_name(name: str | None) -> str:
@@ -33,6 +35,22 @@ def normalize_profile_name(name: str | None) -> str:
         raise ValueError("Voice profile name must contain at least one letter or number.")
     if len(value) > 48:
         raise ValueError("Voice profile name must be 48 characters or fewer.")
+    return value
+
+
+def normalize_profile_description(description: str | None) -> str:
+    value = (description or "").strip()
+    if len(value) > PROFILE_DESCRIPTION_MAX_LENGTH:
+        raise ValueError(
+            f"Voice profile description must be {PROFILE_DESCRIPTION_MAX_LENGTH} characters or fewer."
+        )
+    return value
+
+
+def normalize_profile_type(profile_type: str | None, *, default: str) -> str:
+    value = (profile_type or default).strip().casefold()
+    if value not in PROFILE_TYPES:
+        raise ValueError("Voice profile type must be 'cloned' or 'designed'.")
     return value
 
 
@@ -114,6 +132,8 @@ def load_openai_voice_profiles(profile_index: Path) -> dict[str, dict[str, Any]]
             "language": str(profile.get("language") or ""),
             "seed": "" if raw_seed is None or raw_seed == "" else str(raw_seed),
             "randomize_seed": bool(profile.get("randomize_seed", False)),
+            "description": str(profile.get("description") or "").strip(),
+            "profile_type": str(profile.get("profile_type") or "cloned").strip(),
         }
     if migrated_count:
         _write_profile_index(profile_index.parent, profile_index, profiles)
@@ -169,8 +189,12 @@ def save_openai_voice_profile(
     language: str | None = None,
     seed: int | float | str | None = 12345,
     randomize_seed: bool = False,
+    description: str | None = None,
+    profile_type: str = "cloned",
 ) -> str:
     profile_name = normalize_profile_name(name)
+    profile_description = normalize_profile_description(description)
+    normalized_profile_type = normalize_profile_type(profile_type, default="cloned")
     if not audio_path:
         raise ValueError("Upload a reference audio sample before saving the profile.")
     source = find_safe_file_by_name(
@@ -202,6 +226,8 @@ def save_openai_voice_profile(
                 "language": (language or "").strip(),
                 "seed": "" if randomize_seed else normalize_optional_seed(seed, max_seed),
                 "randomize_seed": bool(randomize_seed),
+                "description": profile_description,
+                "profile_type": normalized_profile_type,
             }
             save_openai_voice_profiles(profile_dir, profile_index, profiles)
         except Exception:
@@ -246,6 +272,8 @@ def commit_generated_voice_profiles(
             label="Generated SSML-H voice audio",
             allowed_extensions=AUDIO_EXTENSIONS,
         )
+        normalize_profile_description(str(item.get("description") or ""))
+        normalize_profile_type(str(item.get("profile_type") or "designed"), default="designed")
         normalized.append((profile_name, item, source))
 
     with PROFILE_INDEX_LOCK:
@@ -281,6 +309,12 @@ def commit_generated_voice_profiles(
                     "language": str(item.get("language") or "").strip(),
                     "seed": normalize_optional_seed(item.get("seed"), max_seed),
                     "randomize_seed": False,
+                    "description": normalize_profile_description(
+                        str(item.get("description") or "")
+                    ),
+                    "profile_type": normalize_profile_type(
+                        str(item.get("profile_type") or "designed"), default="designed"
+                    ),
                 }
                 published_names[str(item.get("name") or profile_name)] = profile_name
             save_openai_voice_profiles(profile_dir, profile_index, profiles)

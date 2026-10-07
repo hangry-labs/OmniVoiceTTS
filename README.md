@@ -96,6 +96,25 @@ The included standalone browser UI provides focused Generate, Stream, Voices, AP
 
 The responsive interface includes 60 display languages, uses bundled WebP assets, and is served directly by the local FastAPI application without a CDN or separate frontend service.
 
+## MCP For Local Agents
+
+OmniVoiceTTS provides two opt-in Streamable HTTP MCP endpoints on the existing application port. Open **System > MCP access** to enable either endpoint; the choices are stored in the persistent product volume and take effect immediately without restarting the container.
+
+- `http://localhost:7861/mcp/` is the recommended compact endpoint. Its five tools cover health, language search, saved-voice discovery, speech inspection, and simple speech generation. Use this endpoint for small models and routine text-to-speech so advanced schemas do not occupy their context.
+- `http://localhost:7861/mcp/advanced/` contains the same five tools plus advanced generation, one-off reference cloning, voice design, and saved-profile creation/deletion. Enable and connect it only when those capabilities are needed.
+
+`talk_simple` is the preferred generation tool and requires only `text`; language detection, automatic voice, MP3 output, a fixed seed, and a one-hour artifact lifetime are safe defaults. Agents may optionally provide a language, a saved `voice_id`, or another artifact lifetime. `get_cloned_voices_catalog` returns only profiles stored by this deployment, including their exact reusable IDs and human descriptions. An empty result simply means no custom voice has been saved yet.
+
+Generation tools return metadata and an expiring capability URL, never raw audio or base64 in the MCP response. Generated files live under `/app/persistent/mcp-output`. Advanced local-reference tools accept files only from `/app/persistent/mcp-input`, or bounded HTTP(S) URLs; neither the catalog nor MCP responses expose internal profile paths.
+
+Both endpoints are disabled by default and have no separate application authentication. Enable them only for trusted clients or behind your own authenticated reverse proxy. They can also be enabled at container startup:
+
+```bash
+docker run --name omnivoicetts --restart unless-stopped -p 7861:7861 --gpus all -e CUDA_VISIBLE_DEVICES=0 -e OMNIVOICE_ENABLE_MCP=1 -e OMNIVOICE_ENABLE_ADVANCED_MCP=0 -e OMNIVOICE_MCP_BASE_URL=http://localhost:7861 -v omnivoicetts_data:/app/persistent hangrylabs/omnivoicetts:latest
+```
+
+Set `OMNIVOICE_MCP_BASE_URL` to the externally reachable origin when the MCP client runs on another machine; generated download links are built from this value. The environment flags are startup defaults, while values saved from the System UI take precedence afterward. Run `task mcp-live-test` against a local deployment to verify both tool tiers and real linked-audio generation.
+
 ## API Usage Example
 
 Default API behavior returns WAV:
@@ -159,7 +178,7 @@ Model discovery through `/v1/models` reports the local `omnivoice` model. For cl
 
 For OpenAI-compatible TTS, standard voice aliases use a local built-in clone reference by default so sentence-by-sentence playback stays closer to the same speaker identity. Advanced clients may also pass OmniVoice extensions such as `language`, `seed`, `randomize_seed`, `normalize_text`, `voice_profile`, `ref_audio`, and `ref_text` in the request body.
 
-The browser UI includes a **Voices** tab where you can upload or drop a reference sample, inspect or trim its waveform, and save it as a named local voice profile. The workflow previews the normalized profile id, warns before an existing id is replaced, identifies profiles that need on-demand ASR, and provides search, use, and guarded delete actions. The profile stores its default language, seed, seed-randomization behavior, copied reference audio, and optional transcript. In OpenWebUI, set the TTS voice to the saved profile name, for example `my-voice`.
+The browser UI includes a **Voices** tab where you can upload or drop a reference sample, inspect or trim its waveform, and save it as a named local voice profile. The workflow previews the normalized profile id, warns before an existing id is replaced, identifies profiles that need on-demand ASR, and provides search, use, and guarded delete actions. The profile stores a short human description, its clone/design type, default language, seed, seed-randomization behavior, copied reference audio, and optional transcript. Descriptions let people use short stable IDs while giving MCP agents enough context to select the correct voice. In OpenWebUI, set the TTS voice to the saved profile name, for example `my-voice`.
 
 OpenAI-compatible clients can also select or override that profile through additional request parameters:
 
@@ -250,6 +269,7 @@ Useful endpoints:
 - `POST /tts/purge`
 - `GET /system/settings`
 - `PUT /system/settings/generation-defaults`
+- `PUT /system/settings/mcp`
 - `GET /system/gpu`
 
 `/tts/generate` and `/tts/convert` return complete generated audio. `/tts/stream` and `/tts/stream-chunks` progressively return encoded audio after each generated long-text chunk and support the same `voice`/`voice_profile` profile resolution; WAV stream requests are returned as MP3 for live playback compatibility.
@@ -359,6 +379,8 @@ The single `omnivoicetts_data` volume is mounted at `/app/persistent` and owns d
 - `/app/persistent/models/huggingface` - baked or downloaded model assets
 - `/app/persistent/app/settings.json` - atomic operator settings used by the current and future System UI
 - `/app/persistent/voices/openai` - saved voice profiles and their reference audio
+- `/app/persistent/mcp-input` - operator-provided audio available to advanced MCP tools
+- `/app/persistent/mcp-output` - expiring generated MCP audio artifacts
 
 The relevant path overrides are `HF_HOME`, `OMNIVOICE_SETTINGS_PATH`, and `OMNIVOICE_OPENAI_VOICE_PROFILE_DIR`. Restart-bound deployment controls such as model, device, ASR loading, and generation concurrency remain environment variables. `OMNIVOICE_ASR_MODEL` selects the ASR checkpoint used by eager and lazy reference transcription; optional `OMNIVOICE_ASR_DEVICE` can place it on a different device such as `cpu` or `cuda:1`.
 
@@ -503,7 +525,6 @@ If you encounter bugs, have feature requests, or need help using Hangry Labs Omn
 
 Planned items for the next development cycle:
 
-- Add MCP support so local agents can discover OmniVoiceTTS capabilities, generate speech, inspect voices/profiles, and query runtime status through a local tool interface.
 - Add a model-aware readiness endpoint for orchestrators that need a stronger signal than the existing `/tts/ping` Docker healthcheck.
 - Add request IDs and structured error payloads to make issue reports easier to diagnose.
 - Add upload-based API support for reference audio plus optional transcript, so API users do not need to pass container-local file paths.
@@ -522,6 +543,7 @@ The snapshot channel is the current Docker `latest` build after the latest tagge
 
 Current snapshot changes after `v0.3.0`:
 
+- Added independently gated compact and advanced Streamable HTTP MCP endpoints, link-only generated audio, bounded reference inputs, expiring artifact storage, saved-voice discovery with descriptions, persistent System UI controls, and deterministic/live MCP validation tasks.
 - Added clone-reference quality diagnostics in the browser and API plus conservative in-memory edge repair: prompt preprocessing now supplies missing 100 ms leading and 200 ms trailing silence, preserves stored files and original speech samples, and pads tokenizer alignment instead of truncating the final partial frame. The three short Chinese reproductions from upstream issue #265 were validated against an intentionally edge-stripped trusted reference and independently transcribed with the intended words intact.
 - Added opt-in Vietnamese structured-text normalization for unambiguous numbers, decimals, currencies, percentages, units, ISO dates, and times, with source-relative preview and conservative protection for phones, identifiers, slash forms, and ambiguous punctuation.
 - Added opt-in Malayalam structured-text normalization for numbers, decimals, currencies, percentages, units, times, fractions, ordinals, and uppercase acronyms, with browser/API preview, source-relative change reporting, and conservative ambiguity handling.

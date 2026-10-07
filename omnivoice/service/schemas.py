@@ -169,6 +169,14 @@ class CacheClearRequest(BaseModel):
     )
 
 
+class MCPSettingsUpdate(BaseModel):
+    enabled: bool = Field(..., description="Whether the compact MCP endpoint is available.")
+    advanced_enabled: bool = Field(
+        ...,
+        description="Whether the complete advanced MCP endpoint is available.",
+    )
+
+
 class TextNormalizationRequest(BaseModel):
     text: str = Field(..., min_length=1, max_length=MAX_NORMALIZATION_CHARACTERS)
     language: str | None = Field(
@@ -219,6 +227,7 @@ class UIGenerationDefaults(BaseModel):
 
 class VoiceProfileCreateRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=48)
+    description: str = Field("", max_length=240)
     upload_token: str = Field(..., min_length=1, max_length=64)
     ref_text: str = ""
     language: str = ""

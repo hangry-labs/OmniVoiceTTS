@@ -58,6 +58,11 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     OMNIVOICE_OPENAI_VOICE_PROFILE_DIR=/app/persistent/voices/openai \
     OMNIVOICE_UI_UPLOAD_DIR=/tmp/omnivoicetts-ui \
     OMNIVOICE_UI_UPLOAD_LIMIT_MIB=64 \
+    OMNIVOICE_ENABLE_MCP=0 \
+    OMNIVOICE_ENABLE_ADVANCED_MCP=0 \
+    OMNIVOICE_MCP_INPUT_DIR=/app/persistent/mcp-input \
+    OMNIVOICE_MCP_OUTPUT_DIR=/app/persistent/mcp-output \
+    OMNIVOICE_MCP_DNS_REBINDING_PROTECTION=1 \
     HF_HUB_OFFLINE=1 \
     TRANSFORMERS_OFFLINE=1 \
     OMNIVOICE_DEVICE=auto \
@@ -77,7 +82,7 @@ WORKDIR /app
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ffmpeg \
-    && mkdir -p /app/persistent/models/huggingface /app/persistent/app /app/persistent/voices/openai /tmp/omnivoicetts-ui \
+    && mkdir -p /app/persistent/models/huggingface /app/persistent/app /app/persistent/voices/openai /app/persistent/mcp-input /app/persistent/mcp-output /tmp/omnivoicetts-ui \
     && rm -rf /var/lib/apt/lists/*
 
 EXPOSE 7861

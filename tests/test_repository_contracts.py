@@ -113,6 +113,25 @@ class RepositoryContractTests(unittest.TestCase):
         self.assertNotIn("OPENAI_PROFILE_VOLUME:", taskfile)
         self.assertNotIn("HF_CACHE_VOLUME:", taskfile)
 
+    def test_taskfile_defines_mcp_values_before_composed_runtime_environment(self) -> None:
+        taskfile = (ROOT / "Taskfile.yml").read_text(encoding="utf-8")
+        runtime_environment = taskfile.index("  RUNTIME_ENV:")
+        for expected in (
+            "  MCP_ENABLED: '0'",
+            "  MCP_ADVANCED_ENABLED: '0'",
+            "  MCP_BASE_URL: 'http://localhost:{{.PORT}}'",
+        ):
+            self.assertLess(
+                taskfile.index(expected),
+                runtime_environment,
+                msg=f"{expected.strip()} must be resolved before RUNTIME_ENV is composed",
+            )
+        self.assertIn("-e OMNIVOICE_ENABLE_MCP={{.MCP_ENABLED}}", taskfile)
+        self.assertIn(
+            "-e OMNIVOICE_ENABLE_ADVANCED_MCP={{.MCP_ADVANCED_ENABLED}}",
+            taskfile,
+        )
+
     def test_runtime_package_excludes_retired_gradio_demo(self) -> None:
         with (ROOT / "pyproject.toml").open("rb") as handle:
             config = tomllib.load(handle)

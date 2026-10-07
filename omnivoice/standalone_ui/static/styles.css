@@ -456,6 +456,7 @@ pre { margin: 10px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 .profile-card { display: flex; align-items: center; justify-content: space-between; gap: 14px; min-height: 64px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 5px; background: var(--surface); }
 .profile-card > div { display: grid; min-width: 0; gap: 5px; }
 .profile-card strong { font-size: 0.82rem; overflow-wrap: anywhere; }
+.profile-description { margin: 0; color: var(--muted); font-size: 0.69rem; line-height: 1.4; overflow-wrap: anywhere; }
 .profile-metadata { display: flex !important; flex-wrap: wrap; gap: 5px !important; }
 .profile-badge { padding: 3px 6px; border: 1px solid #41444c; border-radius: 3px; background: #202126; color: #bfc1c8; font-size: 0.62rem; line-height: 1.2; }
 .profile-badge.warning { border-color: #6b482e; background: #2a1b12; color: #ffbd8d; }
@@ -470,6 +471,7 @@ pre { margin: 10px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 .json-output { white-space: pre-wrap; overflow-wrap: anywhere; }
 .system-default-summary { margin-top: 12px; padding: 11px; border: 1px solid var(--line-soft); border-radius: 4px; background: #121315; color: #c9cbd1; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 0.68rem; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
 .system-action-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 14px; }
+.mcp-settings-card code { color: #e5e6e9; font-size: 0.68rem; }
 .danger-button { display: inline-flex; align-items: center; justify-content: center; min-height: 40px; padding: 0 14px; border: 1px solid #7f3d43; border-radius: 5px; background: #371b1e; color: #ffc2c6; font-size: 0.78rem; font-weight: 750; }
 .danger-button:hover { background: #502328; color: #fff; }
 

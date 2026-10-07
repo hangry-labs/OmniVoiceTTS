@@ -59,8 +59,7 @@ def safe_existing_file_path(
         raise ValueError(f"{label} must use one of these extensions: {supported}.")
     candidate = Path(allowed_path)
     # allowed_path is canonicalized and constrained to one of allowed_roots above.
-    # codeql[py/path-injection]
-    if not candidate.is_file():
+    if not candidate.is_file():  # codeql[py/path-injection]
         raise ValueError(f"{label} must be an existing file.")
     return candidate
 

@@ -853,7 +853,9 @@ function openDeleteProfileDialog(profile) {
 function renderProfileList() {
   const list = $('#profile-list')
   const query = $('#profile-filter').value.trim().toLowerCase()
-  const profiles = state.profiles.filter((profile) => profile.id.toLowerCase().includes(query))
+  const profiles = state.profiles.filter((profile) => (
+    `${profile.id} ${profile.description || ''} ${profile.profile_type || ''}`.toLowerCase().includes(query)
+  ))
   if (!state.profiles.length) {
     const empty = document.createElement('div')
     empty.className = 'empty-profile-list'
@@ -874,20 +876,24 @@ function renderProfileList() {
     const copy = document.createElement('div')
     const title = document.createElement('strong')
     title.textContent = profile.id
+    const description = document.createElement('p')
+    description.className = 'profile-description'
+    description.textContent = profile.description || t('voices.noDescription', {}, 'No description provided.')
     const details = document.createElement('div')
     details.className = 'profile-metadata'
     const badges = [
+      profile.profile_type === 'designed' ? t('voices.designed', {}, 'Designed') : t('voices.cloned', {}, 'Cloned'),
       profile.language || t('voices.requestLanguage', {}, 'Request language'),
       profile.randomize_seed ? t('voices.randomSeedShort', {}, 'Random seed') : t('voices.fixedSeed', { seed: profile.seed ?? 12345 }, `Seed ${profile.seed ?? 12345}`),
       profile.has_transcript ? t('voices.transcriptSaved', {}, 'Transcript saved') : t('voices.asrRequired', {}, 'ASR on demand'),
     ]
     badges.forEach((label, index) => {
       const badge = document.createElement('span')
-      badge.className = index === 2 && !profile.has_transcript ? 'profile-badge warning' : 'profile-badge'
+      badge.className = index === 3 && !profile.has_transcript ? 'profile-badge warning' : 'profile-badge'
       badge.textContent = label
       details.append(badge)
     })
-    copy.append(title, details)
+    copy.append(title, description, details)
     const actions = document.createElement('div')
     actions.className = 'profile-actions'
     const use = document.createElement('button')
@@ -938,7 +944,7 @@ $('#voice-form').addEventListener('submit', async (event) => {
     const payload = await fetchJson('/tts/voice-profiles', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        name, upload_token: upload.token, ref_text: $('#profile-transcript').value.trim(),
+        name, description: $('#profile-description').value.trim(), upload_token: upload.token, ref_text: $('#profile-transcript').value.trim(),
         language: $('#profile-language').value, seed: Number($('#profile-seed').value),
         randomize_seed: $('#profile-randomize').checked,
       }),
@@ -1052,7 +1058,31 @@ async function refreshSystem() {
   const [status, settings] = await Promise.all([fetchJson('/tts/status'), fetchJson('/system/settings')])
   $('#readiness-output').textContent = JSON.stringify(status, null, 2)
   $('#system-default-summary').textContent = JSON.stringify(settings.generation_defaults || {}, null, 2)
+  $('#mcp-enabled').checked = Boolean(settings.mcp?.enabled)
+  $('#mcp-advanced-enabled').checked = Boolean(settings.mcp?.advanced_enabled)
 }
+
+async function saveMcpSettings() {
+  const controls = [$('#mcp-enabled'), $('#mcp-advanced-enabled')]
+  controls.forEach((control) => { control.disabled = true })
+  try {
+    const result = await fetchJson('/system/settings/mcp', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled: controls[0].checked, advanced_enabled: controls[1].checked }),
+    })
+    controls[0].checked = Boolean(result.mcp.enabled)
+    controls[1].checked = Boolean(result.mcp.advanced_enabled)
+    showToast(t('system.mcpSaved', {}, 'MCP access settings saved.'), 'success')
+  } catch (error) {
+    showToast(errorMessage(error))
+    await refreshSystem().catch(() => {})
+  } finally {
+    controls.forEach((control) => { control.disabled = false })
+  }
+}
+
+$('#mcp-enabled').addEventListener('change', saveMcpSettings)
+$('#mcp-advanced-enabled').addEventListener('change', saveMcpSettings)
 
 $('#api-refresh').addEventListener('click', () => refreshApiStatus().catch((error) => showToast(errorMessage(error))))
 $('#save-defaults').addEventListener('click', async (event) => {

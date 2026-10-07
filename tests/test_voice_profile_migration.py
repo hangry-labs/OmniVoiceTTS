@@ -73,6 +73,8 @@ class VoiceProfileMigrationTests(unittest.TestCase):
             self.assertEqual(profiles["example"]["ref_audio"], expected)
             persisted = json.loads(profile_index.read_text(encoding="utf-8"))
             self.assertEqual(persisted["example"]["ref_audio"], expected)
+            self.assertEqual(profiles["example"]["description"], "")
+            self.assertEqual(profiles["example"]["profile_type"], "cloned")
             self.assertFalse(any(profile_dir.glob(".profiles.json.*.tmp")))
 
     def test_replacing_profile_removes_only_previous_copied_audio(self) -> None:
@@ -111,6 +113,8 @@ class VoiceProfileMigrationTests(unittest.TestCase):
                 "English",
                 54321,
                 False,
+                "Clear product narrator.",
+                "designed",
             )
             replaced = PROFILES_MODULE.load_openai_voice_profiles(profile_index)["example-voice"]
             second_copy = Path(replaced["ref_audio"])
@@ -119,6 +123,8 @@ class VoiceProfileMigrationTests(unittest.TestCase):
             self.assertTrue(second_copy.exists())
             self.assertEqual(second_copy.read_bytes(), b"RIFF-second")
             self.assertEqual(replaced["ref_text"], "Second transcript.")
+            self.assertEqual(replaced["description"], "Clear product narrator.")
+            self.assertEqual(replaced["profile_type"], "designed")
             self.assertTrue(first_source.exists())
             self.assertTrue(second_source.exists())
 
