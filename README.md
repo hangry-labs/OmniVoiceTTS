@@ -608,13 +608,13 @@ Run this release with either image variant:
 **Standard image**
 
 ```bash
-docker run --name omnivoicetts-v1-0 --restart unless-stopped -p 7861:7861 --gpus all -e CUDA_VISIBLE_DEVICES=0 -v omnivoicetts_data:/app/persistent hangrylabs/omnivoicetts:v1.0
+docker run --name omnivoicetts-v1-0 --restart unless-stopped -p 7861:7861 --gpus all -e CUDA_VISIBLE_DEVICES=0 -v omnivoicetts_data:/app/persistent hangrylabs/omnivoicetts:v1.0@sha256:f25ac241784a0133842e8a983808ed0ca8d6d2dd942b7fc02c37eecb7cf5c012
 ```
 
 **Tiny image**
 
 ```bash
-docker run --name omnivoicetts-v1-0-tiny --restart unless-stopped -p 7861:7861 --gpus all -e CUDA_VISIBLE_DEVICES=0 -e HF_HUB_OFFLINE=0 -e TRANSFORMERS_OFFLINE=0 -v omnivoicetts_data:/app/persistent hangrylabs/omnivoicetts:v1.0_tiny
+docker run --name omnivoicetts-v1-0-tiny --restart unless-stopped -p 7861:7861 --gpus all -e CUDA_VISIBLE_DEVICES=0 -e HF_HUB_OFFLINE=0 -e TRANSFORMERS_OFFLINE=0 -v omnivoicetts_data:/app/persistent hangrylabs/omnivoicetts:v1.0_tiny@sha256:b2bd5dbf6f861bbf5cc3591c3e4658995f62befad1acb65610f8369f538394a6
 ```
 
 ### v0.3.0
