@@ -51,6 +51,8 @@ docker run --name omnivoicetts --restart unless-stopped -p 7861:7861 --gpus all 
 
 `omnivoicetts_data` ボリュームには、コンテナーの交換やイメージ更新後もモデル、設定、保存済み音声が保持されます。完全版イメージには必要なモデル資産が含まれ、ダウンロード後はオフラインで実行できます。
 
+公開済みの GitHub Release と対応する Git タグは変更できません。バージョン付き Docker イメージタグも変更不可で、`latest` と `latest_tiny` のみが意図的に最新スナップショットへ更新されます。
+
 ## 詳細情報
 
 [日本語の製品説明とインストールガイド](https://hangrylabs.app/ja/software/omnivoicetts)をご覧ください。完全な技術資料は[英語版 README](README.md)で管理しています。不具合や提案は [GitHub Issues](https://github.com/Hangry-Labs/OmniVoiceTTS/issues) へ報告してください。

@@ -98,6 +98,8 @@ Later image versions reuse the same `omnivoicetts_data` volume, so downloaded mo
 - `vX.Y` or `vX.Y.Z` - immutable full release, for example `v1.0`
 - `vX.Y_tiny` or `vX.Y.Z_tiny` - immutable tiny release, for example `v1.0_tiny`
 
+Published GitHub Releases and their Git tags are immutable. Versioned Docker image tags are likewise immutable and cannot be reassigned to a different image; `latest` and `latest_tiny` intentionally remain movable snapshot channels.
+
 Snapshot or development version tags are intentionally not published. Release tags are created only when the project is ready for a release.
 - Full and tiny images are published to Docker Hub and GitHub Container Registry.
 

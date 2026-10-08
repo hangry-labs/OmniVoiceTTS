@@ -51,6 +51,8 @@ Kommandoen står på én linje og kan limes direkte inn i Bash, PowerShell eller
 
 Volumet `omnivoicetts_data` beholder modeller, innstillinger og lagrede stemmer når containeren erstattes eller bildet oppdateres. Det komplette bildet inkluderer de nødvendige modellressursene og kan brukes uten nett etter nedlasting.
 
+Publiserte GitHub-utgivelser og tilhørende Git-tagger er uforanderlige. Versjonerte Docker-tagger er også uforanderlige, mens `latest` og `latest_tiny` med vilje peker på det nyeste øyeblikksbildet.
+
 ## Mer informasjon
 
 Les den [komplette norske produkt- og installasjonsveiledningen](https://hangrylabs.app/nb/software/omnivoicetts). Den fullstendige tekniske referansen vedlikeholdes i den [engelske README-filen](README.md). Feil og forslag kan rapporteres i [GitHub Issues](https://github.com/Hangry-Labs/OmniVoiceTTS/issues).

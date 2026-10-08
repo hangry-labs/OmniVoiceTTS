@@ -51,6 +51,8 @@ Después, abre:
 
 El volumen `omnivoicetts_data` conserva modelos, ajustes y voces guardadas cuando se sustituye el contenedor o se actualiza la imagen. La imagen completa incluye los recursos del modelo y puede ejecutarse sin conexión después de descargarla.
 
+Las versiones publicadas en GitHub y sus etiquetas Git son inmutables. Las etiquetas versionadas de las imágenes Docker también son inmutables; `latest` y `latest_tiny` se actualizan deliberadamente para apuntar a la instantánea más reciente.
+
 ## Más información
 
 Consulta la [página completa del producto y la guía de instalación en español](https://hangrylabs.app/es/software/omnivoicetts). La referencia técnica completa se mantiene en el [README en inglés](README.md). Los errores y sugerencias pueden notificarse en [GitHub Issues](https://github.com/Hangry-Labs/OmniVoiceTTS/issues).

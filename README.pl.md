@@ -51,6 +51,8 @@ Następnie otwórz:
 
 Wolumin `omnivoicetts_data` zachowuje modele, ustawienia i zapisane głosy po wymianie kontenera lub aktualizacji obrazu. Pełny obraz zawiera wymagane zasoby modeli i po pobraniu może działać offline.
 
+Opublikowane wydania GitHub i powiązane z nimi tagi Git są niezmienne. Wersjonowane tagi obrazów Docker również są niezmienne, natomiast `latest` i `latest_tiny` celowo wskazują najnowszą wersję rozwojową.
+
 ## Więcej informacji
 
 Przeczytaj [pełny polski opis produktu i instrukcję instalacji](https://hangrylabs.app/pl/software/omnivoicetts). Pełna dokumentacja techniczna jest utrzymywana w [angielskim pliku README](README.md). Błędy i propozycje można zgłaszać w [GitHub Issues](https://github.com/Hangry-Labs/OmniVoiceTTS/issues).

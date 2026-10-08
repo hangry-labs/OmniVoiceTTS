@@ -57,7 +57,7 @@ The separately controlled `http://localhost:7861/mcp/advanced/` endpoint adds SS
 
 MCP generation returns expiring download links rather than embedding audio in model context. When connecting from another machine, set `OMNIVOICE_MCP_BASE_URL` to the externally reachable server origin. Advanced local reference files belong in `/app/persistent/mcp-input`.
 
-Use versioned `vX.Y.Z` and `vX.Y.Z_tiny` tags for reproducible deployments. Use `latest` and `latest_tiny` to test the current snapshot.
+Published GitHub Releases and their Git tags are immutable. Versioned Docker tags such as `vX.Y.Z` and `vX.Y.Z_tiny` are also immutable and cannot be reassigned; use them for reproducible deployments. The movable `latest` and `latest_tiny` tags intentionally track the current snapshot.
 
 ## What You Get
 

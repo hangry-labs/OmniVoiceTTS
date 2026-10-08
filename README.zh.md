@@ -51,6 +51,8 @@ docker run --name omnivoicetts --restart unless-stopped -p 7861:7861 --gpus all 
 
 `omnivoicetts_data` 卷会在容器替换或镜像更新后继续保留模型、设置和已保存声音。完整镜像包含所需模型资源，下载后可以离线运行。
 
+已发布的 GitHub Release 及其 Git 标签不可更改。带版本号的 Docker 镜像标签同样不可更改；`latest` 和 `latest_tiny` 则会按设计持续指向最新快照。
+
 ## 更多信息
 
 请查看[完整的中文产品介绍和安装指南](https://hangrylabs.app/zh/software/omnivoicetts)。完整技术参考由[英文 README](README.md)维护。错误和建议可提交到 [GitHub Issues](https://github.com/Hangry-Labs/OmniVoiceTTS/issues)。
