@@ -2,6 +2,8 @@
 
 Benchmarks are manual release-engineering tools, not unit tests. They append comparable history only when run without `--no-write`, and they never run through `task test`, `task validate`, `task build`, or `task release`.
 
+See the [benchmark methodology](README.md) for canonical sample selection, warm-up policy, phase isolation, and interpretation limits.
+
 | Area | Official task | Services and isolation | Primary signal |
 |---|---|---|---|
 | [Inference speed](speed/BENCHMARKS.md) | `task benchmark-speed` | TTS on `:7861`; idle GPU | Warmed and prewarm latency for random, cached-profile, and direct-reference generation |

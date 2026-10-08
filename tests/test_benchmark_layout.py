@@ -26,6 +26,21 @@ ssml = load_script("benchmark_ssml", "benchmarks/ssml/run_benchmark.py")
 
 
 class BenchmarkLayoutTests(unittest.TestCase):
+    def test_landing_page_documents_reproducible_methodology(self) -> None:
+        readme = (ROOT / "benchmarks" / "README.md").read_text(encoding="utf-8")
+        for expected in (
+            "examples/assets/manifest.json",
+            "examples/original_clone.mp3",
+            "first two `random` entries",
+            "100 calls",
+            "180 measured calls",
+            "Qwen3-ASR is a stable comparative judge, not ground truth",
+            "2717518076",
+            "task benchmark-memory-cpu",
+        ):
+            with self.subTest(expected=expected):
+                self.assertIn(expected, readme)
+
     def test_every_suite_has_runner_summary_and_details(self) -> None:
         suites = (
             "speed",
