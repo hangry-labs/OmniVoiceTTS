@@ -3,6 +3,8 @@
   "brand.mascotAlt": "OmniVoiceTTS 吉祥物",
   "brand.productAlt": "OmniVoiceTTS - 支持 600 多种语言的语音 AI",
   "brand.poweredBy": "技术支持",
+  "brand.contactUs": "联系我们：",
+  "brand.contactEmail": "发送邮件至 Hangry Labs：contact@hangrylabs.app",
   "nav.aria": "应用导航链接",
   "nav.examples": "示例",
   "nav.apiDocs": "API 文档",

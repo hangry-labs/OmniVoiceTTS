@@ -3,6 +3,8 @@
   "brand.mascotAlt": "OmniVoiceTTS mascot",
   "brand.productAlt": "OmniVoiceTTS - voice AI for 600+ languages",
   "brand.poweredBy": "Powered by",
+  "brand.contactUs": "Contact us:",
+  "brand.contactEmail": "Email Hangry Labs at contact@hangrylabs.app",
   "nav.aria": "Application links",
   "nav.examples": "Examples",
   "nav.apiDocs": "API docs",
