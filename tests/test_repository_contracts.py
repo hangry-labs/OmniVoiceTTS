@@ -148,13 +148,17 @@ class RepositoryContractTests(unittest.TestCase):
             config = tomllib.load(handle)
         project = config["project"]
         self.assertNotIn("gradio==6.14.0", project["dependencies"])
-        self.assertNotIn("torchaudio==2.8.0", project["dependencies"])
+        self.assertFalse(any(item.startswith("torchaudio") for item in project["dependencies"]))
         self.assertNotIn("defusedxml==0.7.1", project["dependencies"])
         self.assertIn("ssml-h-tools==0.1.0", project["dependencies"])
-        self.assertEqual(project["optional-dependencies"]["torchaudio"], ["torchaudio==2.8.0"])
+        torch_dependency = next(item for item in project["dependencies"] if item.startswith("torch=="))
+        self.assertEqual(
+            project["optional-dependencies"]["torchaudio"],
+            [torch_dependency.replace("torch==", "torchaudio==", 1)],
+        )
         self.assertNotIn("omnivoice-demo", project["scripts"])
         self.assertFalse((ROOT / "omnivoice" / "cli" / "demo.py").exists())
-        self.assertIn("python-multipart==0.0.28", project["dependencies"])
+        self.assertTrue(any(item.startswith("python-multipart==") for item in project["dependencies"]))
         self.assertIn("VERSION", config["tool"]["hatch"]["build"]["targets"]["sdist"]["include"])
         self.assertIn("assets", config["tool"]["hatch"]["build"]["targets"]["sdist"]["include"])
         ssml_adapter = (ROOT / "omnivoice" / "service" / "ssml.py").read_text(encoding="utf-8")

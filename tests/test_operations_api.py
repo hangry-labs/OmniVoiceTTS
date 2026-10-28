@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import tempfile
 import unittest
+from contextvars import Context
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -39,6 +40,41 @@ class _StreamingModel(_ReadyModel):
 class OperationsApiTests(unittest.TestCase):
     def setUp(self) -> None:
         app_module.GENERATION_DIAGNOSTICS.reset()
+
+    def test_stream_request_context_survives_worker_context_changes(self) -> None:
+        observed = []
+
+        def chunks():
+            try:
+                for chunk in (b"first", b"second"):
+                    observed.append(app_module.REQUEST_ID_CONTEXT.get())
+                    yield chunk
+            finally:
+                observed.append(app_module.REQUEST_ID_CONTEXT.get())
+
+        stream = app_module._request_context_chunks(chunks(), "stream-request")
+        self.assertEqual(Context().run(next, stream), b"first")
+        self.assertEqual(Context().run(next, stream), b"second")
+        with self.assertRaises(StopIteration):
+            Context().run(next, stream)
+        self.assertEqual(observed, ["stream-request"] * 3)
+
+    def test_stream_close_restores_context_for_cleanup_without_leaking_it(self) -> None:
+        observed = []
+
+        def chunks():
+            try:
+                yield b"first"
+            finally:
+                observed.append(app_module.REQUEST_ID_CONTEXT.get())
+
+        parent_context = Context()
+        parent_context.run(app_module.REQUEST_ID_CONTEXT.set, "parent-request")
+        stream = app_module._request_context_chunks(chunks(), "stream-request")
+        self.assertEqual(parent_context.run(next, stream), b"first")
+        self.assertEqual(parent_context.run(app_module.REQUEST_ID_CONTEXT.get), "parent-request")
+        Context().run(stream.close)
+        self.assertEqual(observed, ["stream-request"])
 
     def test_request_id_is_returned_and_validation_errors_are_structured(self) -> None:
         with TestClient(app_module.api) as client:

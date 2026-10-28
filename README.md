@@ -570,7 +570,10 @@ Snapshot commands intentionally follow the rolling `latest` tags. Published-rele
 - Add a multilingual README-based project website with shared navigation,
   the 20-language voice gallery and SSML-H conversation showcase.
 
-- No changes yet.
+- Refresh security-sensitive dependencies, including multipart parsing, TLS trust,
+  Transformers, and the CUDA 12.8 PyTorch runtime. See the
+  [dependency security review](docs/dependency-security-review.md) for fixes,
+  verification, and outstanding upstream advisories.
 
 The current development snapshot is published through the rolling tags from `master`:
 

@@ -15,7 +15,7 @@ import time
 from uuid import uuid4
 from collections import OrderedDict
 from contextlib import asynccontextmanager, contextmanager
-from contextvars import ContextVar
+from contextvars import ContextVar, copy_context
 from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
@@ -2097,6 +2097,23 @@ def ssml_audio_response(payload: TTSRequest, route_name: str) -> StreamingRespon
             clear_cuda_allocator_cache(RESET_CUDA_PEAK_AFTER_CACHE_CLEAR)
 
 
+def _request_context_chunks(chunks: Iterator[bytes], request_id: str | None) -> Iterator[bytes]:
+    # Starlette may resume each chunk in a different worker context.
+    context = copy_context()
+    context.run(REQUEST_ID_CONTEXT.set, request_id)
+    try:
+        while True:
+            try:
+                chunk = context.run(next, chunks)
+            except StopIteration:
+                return
+            yield chunk
+    finally:
+        close = getattr(chunks, "close", None)
+        if close is not None:
+            context.run(close)
+
+
 def ssml_progressive_audio_response(payload: TTSRequest, route_name: str) -> StreamingResponse:
     try:
         requested_format = normalize_output_format(payload.output_format)
@@ -2113,7 +2130,6 @@ def ssml_progressive_audio_response(payload: TTSRequest, route_name: str) -> Str
 
     def body() -> Iterator[bytes]:
         completed = False
-        context_token = REQUEST_ID_CONTEXT.set(request_id)
         try:
             yield from encode_audio_stream(session.iter_chunks(), output_format, sample_rate)
             completed = True
@@ -2124,10 +2140,9 @@ def ssml_progressive_audio_response(payload: TTSRequest, route_name: str) -> Str
             session.close()
             if EMPTY_CUDA_CACHE_AFTER_REQUEST:
                 clear_cuda_allocator_cache(RESET_CUDA_PEAK_AFTER_CACHE_CLEAR)
-            REQUEST_ID_CONTEXT.reset(context_token)
 
     return StreamingResponse(
-        body(),
+        _request_context_chunks(body(), request_id),
         media_type=OUTPUT_FORMATS[output_format]["media_type"],
         headers=_ssml_headers(
             payload,
@@ -2331,13 +2346,11 @@ def progressive_audio_response(payload: TTSRequest, route_name: str) -> Streamin
     request_id = REQUEST_ID_CONTEXT.get()
 
     def body() -> Iterator[bytes]:
-        context_token = REQUEST_ID_CONTEXT.set(request_id)
         try:
             yield from encode_audio_stream(chunks, output_format, sample_rate)
         finally:
             if EMPTY_CUDA_CACHE_AFTER_REQUEST:
                 clear_cuda_allocator_cache(RESET_CUDA_PEAK_AFTER_CACHE_CLEAR)
-            REQUEST_ID_CONTEXT.reset(context_token)
 
     headers = {
         "Content-Disposition": f"inline; filename=omnivoicetts-stream.{extension}",
@@ -2351,7 +2364,9 @@ def progressive_audio_response(payload: TTSRequest, route_name: str) -> Streamin
         headers["X-OmniVoiceTTS-Requested-Voice"] = payload.voice
     if payload.voice_profile:
         headers["X-OmniVoiceTTS-Voice-Profile"] = payload.voice_profile
-    return StreamingResponse(body(), media_type=media_type, headers=headers)
+    return StreamingResponse(
+        _request_context_chunks(body(), request_id), media_type=media_type, headers=headers
+    )
 
 
 @api.get("/tts/ping")

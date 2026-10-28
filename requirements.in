@@ -9,10 +9,10 @@ numpy==2.4.4
 num2words==0.5.14
 pydub==0.25.1
 pydantic==2.13.4
-python-multipart==0.0.28
+python-multipart==0.0.32
 soundfile==0.13.1
 ssml-h-tools==0.1.0
-torch==2.8.0
-torchaudio==2.8.0
-transformers==5.8.0
+torch==2.10.0
+torchaudio==2.10.0
+transformers==5.17.0
 uvicorn[standard]==0.46.0

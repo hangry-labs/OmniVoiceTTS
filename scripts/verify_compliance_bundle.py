@@ -16,7 +16,7 @@ EXPECTED_PACKAGES = {
     "num2words": "0.5.14",
     "soxr": "1.1.0",
     "ssml-h-tools": "0.1.0",
-    "torch": "2.8.0+cu128",
+    "torch": "2.10.0+cu128",
 }
 
 EXPECTED_ARCHIVES = {
