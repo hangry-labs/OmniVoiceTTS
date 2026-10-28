@@ -21,3 +21,4 @@ Scenario shortcuts:
 | --- | ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: |
 | 02.07.2026 21:29:38 - 0.2.1-snapshot | 140 | 0.2.1-snapshot | 2 GB | 2 GB | 6 GB | 2 GB | 7 GB | 3 GB |
 | 06.10.2026 18:00:55 - 1.0-snapshot | 140 | 1.0-snapshot | 2 GB | 2 GB | 6 GB | 2 GB | 7 GB | 3 GB |
+| 28.10.2026 18:03:34 - 1.1-snapshot | 140 | 1.1-snapshot | 2 GB | 2 GB | 6 GB | 2 GB | 6 GB | 2 GB |

@@ -15,3 +15,4 @@ Use the same image, GPU, decode steps, output format, workload size, and otherwi
 | 02.07.2026 22:06:25 - 0.2.1-snapshot | NVIDIA GeForce RTX 5070 Ti | 100 | 24 | 1.111 | 1.186 | 1.683 | 2.353 | 1.394 | 1.349 | 398.007 | Historical migrated run |
 | 02.07.2026 22:29:04 - 0.2.1-snapshot | NVIDIA GeForce RTX 5070 Ti | 100 | 24 | 1.18 | 1.111 | 1.384 | 1.16 | 1.339 | 1.371 | 367.533 | Historical migrated run |
 | 06.10.2026 17:50:22 - 1.0-snapshot | NVIDIA GeForce RTX 5070 Ti | 100 | 24 | 1.047 | 1.013 | 1.317 | 1.012 | 1.81 | 1.321 | 337.704 | v1.0-snapshot RTX 5070 Ti baseline; Qwen3-ASR stopped; Windows desktop consumers present |
+| 28.10.2026 17:49:57 - 1.1-snapshot | NVIDIA GeForce RTX 5070 Ti | 100 | 24 | 1.127 | 1.107 | 1.374 | 1.02 | 1.045 | 1.543 | 360.798 | PR283 post-fix; 3481d51 plus local inference guard; Torch2.10-cu128 Transformers5.17; Windows desktop; remote ASR idle; same canonical 300-call workload; not isolated against older dependency baseline |

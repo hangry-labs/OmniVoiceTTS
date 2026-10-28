@@ -79,6 +79,23 @@ def wait_ready(base_url: str) -> None:
     raise RuntimeError(f"API did not become ready at {base_url}")
 
 
+def validate_predefined_voice(base_url: str, voice: str) -> dict[str, Any]:
+    profiles = request_json("GET", f"{base_url}/tts/voice-profiles").get("data", [])
+    profile = next((item for item in profiles if item.get("id") == voice), None)
+    if profile is None:
+        raise RuntimeError(
+            f"Benchmark voice '{voice}' is not a saved profile. Create it in the Voices tab "
+            "using examples/original_clone.mp3 and the documented reference transcript before "
+            "running this benchmark; an unknown voice can silently fall back to voice design."
+        )
+    if not profile.get("has_transcript"):
+        raise RuntimeError(
+            f"Benchmark voice '{voice}' has no reference transcript. Save the documented "
+            "transcript with the profile before running the cached-voice benchmark."
+        )
+    return profile
+
+
 def post_audio(base_url: str, route: str, payload: dict[str, Any], timeout: int = 900) -> tuple[int, dict[str, str]]:
     body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
     request = urllib.request.Request(
@@ -407,6 +424,7 @@ def main() -> None:
     args = parser.parse_args()
 
     wait_ready(args.base_url)
+    predefined_profile = validate_predefined_voice(args.base_url, args.voice)
     started = time.perf_counter()
     status_before = request_json("GET", f"{args.base_url}/tts/status")
     workload = load_workload(
@@ -531,6 +549,7 @@ def main() -> None:
         "num_step": args.num_step,
         "format": args.format,
         "predefined_voice": args.voice,
+        "predefined_profile": predefined_profile,
         "reference_audio": args.reference_audio,
         "samples_per_language": args.samples_per_language,
         "random_warmup": 0 if args.skip_prewarm else args.random_warmup,

@@ -4,6 +4,7 @@ import importlib.util
 import sys
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -78,6 +79,26 @@ class BenchmarkLayoutTests(unittest.TestCase):
         self.assertEqual(cpu_memory.recommendation_from_limit("1536m"), "2 GB")
         self.assertEqual(cpu_memory.recommendation_from_limit("2048m"), "3 GB")
         self.assertEqual(cpu_memory.recommendation_from_limit(None), "n/a")
+
+    def test_speed_requires_a_registered_profile_instead_of_voice_design_fallback(self) -> None:
+        with patch.object(speed, "request_json", return_value={"data": []}):
+            with self.assertRaisesRegex(RuntimeError, "not a saved profile"):
+                speed.validate_predefined_voice("http://testserver", "benchmark_original_clone")
+
+    def test_speed_requires_a_known_reference_transcript(self) -> None:
+        profile = {"id": "benchmark_original_clone", "has_transcript": False}
+        with patch.object(speed, "request_json", return_value={"data": [profile]}):
+            with self.assertRaisesRegex(RuntimeError, "no reference transcript"):
+                speed.validate_predefined_voice("http://testserver", profile["id"])
+
+    def test_speed_accepts_the_exact_registered_benchmark_profile(self) -> None:
+        profile = {"id": "benchmark_original_clone", "has_transcript": True}
+        with patch.object(speed, "request_json", return_value={"data": [profile]}) as request:
+            self.assertIs(
+                speed.validate_predefined_voice("http://testserver", profile["id"]),
+                profile,
+            )
+        request.assert_called_once_with("GET", "http://testserver/tts/voice-profiles")
 
     def test_cpu_runner_mounts_profiles_at_current_persistent_path(self) -> None:
         source = (ROOT / "benchmarks" / "memory" / "cpu" / "run_benchmark.py").read_text(encoding="utf-8")

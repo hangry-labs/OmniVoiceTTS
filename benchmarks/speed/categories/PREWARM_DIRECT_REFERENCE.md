@@ -2,7 +2,7 @@
 
 Warmup calls for the direct `ref_audio` path. These calls are tracked separately and are not mixed into the measured `direct_reference_audio` category.
 
-Baseline hardware: NVIDIA GeForce RTX 5060 Ti.
+Initial baseline hardware: NVIDIA GeForce RTX 5060 Ti. Current runs use RTX 5070 Ti; see the [per-run summary](../BENCHMARKS.md) for hardware and workload context.
 
 | Run | Calls | Total seconds | Avg seconds | Min | Max | Bytes |
 |---|---:|---:|---:|---:|---:|---:|
@@ -10,3 +10,4 @@ Baseline hardware: NVIDIA GeForce RTX 5060 Ti.
 | 02.07.2026 22:06:25 - 0.2.1-snapshot | 10 | 13.494 | 1.349 | 1.281 | 1.467 | 965720 |
 | 02.07.2026 22:29:04 - 0.2.1-snapshot | 10 | 13.707 | 1.371 | 1.295 | 1.6 | 965720 |
 | 06.10.2026 17:50:22 - 1.0-snapshot | 10 | 13.205 | 1.321 | 1.274 | 1.38 | 965720 |
+| 28.10.2026 17:49:57 - 1.1-snapshot | 10 | 15.435 | 1.543 | 1.275 | 2.516 | 950360 |

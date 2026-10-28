@@ -1107,5 +1107,470 @@
         ]
       }
     ]
+  },
+  {
+    "run": "28.10.2026 18:03:34 - 1.1-snapshot",
+    "timestamp": "2026-10-28T17:17:37+00:00",
+    "version": "1.1-snapshot",
+    "image": "omnivoicetts:security-check",
+    "docker": {
+      "server_version": "29.9.2",
+      "ncpu": 20,
+      "mem_total_bytes": 33509502976,
+      "operating_system": "Docker Desktop",
+      "ostype": "linux"
+    },
+    "text": "This CPU memory benchmark uses a realistic two-sentence request to estimate the RAM needed for local text to speech with common voice modes.",
+    "text_chars": 140,
+    "comment": "PR283 post-fix; source3481d51 plus guard; Torch2.10-cu128 Transformers5.17; existing tiny runtime image1f806c3d; canonical six-scenario140-char matrix; read-only cached models; isolated profiles/settings; no concurrent local inference",
+    "methodology": "One CPU-only Docker container per scenario and memory limit; OMNIVOICE_LOAD_ASR=0; temporary known-good saved profiles with and without ref_text; OpenAI-compatible /v1/audio/speech MP3 requests. Markdown scenario cells are conservative whole-GB recommendations derived from the lowest passing Docker memory limit.",
+    "recommendations": {
+      "RV": "2 GB",
+      "DV": "2 GB",
+      "CR-NT": "6 GB",
+      "CR-TX": "2 GB",
+      "SV-NT": "6 GB",
+      "SV-TX": "2 GB"
+    },
+    "scenarios": [
+      {
+        "code": "RV",
+        "label": "random_voice",
+        "description": "Random/no-prompt voice: no reference audio, no design instructions, no stored profile.",
+        "minimum_passing_limit": {
+          "limit": "1536m",
+          "limit_mib": 1536.0,
+          "container": "omnivoicetts_cpu_20261028_rv_1536m",
+          "port": 27870,
+          "result": "pass",
+          "http_status": 200,
+          "bytes": 167084,
+          "content_type": "audio/mpeg",
+          "seconds": 34.091667799977586,
+          "peak_mib": 883.2,
+          "notes": "status load_asr=False resolved_device=cpu",
+          "exit_code": 0,
+          "oom_killed": false
+        },
+        "recommendation": "2 GB",
+        "attempts": [
+          {
+            "limit": "1536m",
+            "limit_mib": 1536.0,
+            "container": "omnivoicetts_cpu_20261028_rv_1536m",
+            "port": 27870,
+            "result": "pass",
+            "http_status": 200,
+            "bytes": 167084,
+            "content_type": "audio/mpeg",
+            "seconds": 34.091667799977586,
+            "peak_mib": 883.2,
+            "notes": "status load_asr=False resolved_device=cpu",
+            "exit_code": 0,
+            "oom_killed": false
+          },
+          {
+            "limit": "2048m",
+            "limit_mib": 2048.0,
+            "container": "omnivoicetts_cpu_20261028_rv_2048m",
+            "port": 27871,
+            "result": "pass",
+            "http_status": 200,
+            "bytes": 167084,
+            "content_type": "audio/mpeg",
+            "seconds": 34.592180400155485,
+            "peak_mib": 869.6,
+            "notes": "status load_asr=False resolved_device=cpu",
+            "exit_code": 0,
+            "oom_killed": false
+          }
+        ]
+      },
+      {
+        "code": "DV",
+        "label": "design_voice",
+        "description": "Voice design/generate voice: explicit design instructions, no reference audio.",
+        "minimum_passing_limit": {
+          "limit": "1536m",
+          "limit_mib": 1536.0,
+          "container": "omnivoicetts_cpu_20261028_dv_1536m",
+          "port": 27970,
+          "result": "pass",
+          "http_status": 200,
+          "bytes": 177164,
+          "content_type": "audio/mpeg",
+          "seconds": 37.89829679997638,
+          "peak_mib": 874.0,
+          "notes": "status load_asr=False resolved_device=cpu",
+          "exit_code": 0,
+          "oom_killed": false
+        },
+        "recommendation": "2 GB",
+        "attempts": [
+          {
+            "limit": "1536m",
+            "limit_mib": 1536.0,
+            "container": "omnivoicetts_cpu_20261028_dv_1536m",
+            "port": 27970,
+            "result": "pass",
+            "http_status": 200,
+            "bytes": 177164,
+            "content_type": "audio/mpeg",
+            "seconds": 37.89829679997638,
+            "peak_mib": 874.0,
+            "notes": "status load_asr=False resolved_device=cpu",
+            "exit_code": 0,
+            "oom_killed": false
+          },
+          {
+            "limit": "2048m",
+            "limit_mib": 2048.0,
+            "container": "omnivoicetts_cpu_20261028_dv_2048m",
+            "port": 27971,
+            "result": "pass",
+            "http_status": 200,
+            "bytes": 177164,
+            "content_type": "audio/mpeg",
+            "seconds": 34.11805769987404,
+            "peak_mib": 948.8,
+            "notes": "status load_asr=False resolved_device=cpu",
+            "exit_code": 0,
+            "oom_killed": false
+          }
+        ]
+      },
+      {
+        "code": "CR-NT",
+        "label": "clone_reference_no_text",
+        "description": "Direct clone reference without transcript. This may lazy-load ASR.",
+        "minimum_passing_limit": {
+          "limit": "5120m",
+          "limit_mib": 5120.0,
+          "container": "omnivoicetts_cpu_20261028_cr_nt_5120m",
+          "port": 28075,
+          "result": "pass",
+          "http_status": 200,
+          "bytes": 158444,
+          "content_type": "audio/mpeg",
+          "seconds": 65.79834250011481,
+          "peak_mib": 4156.416,
+          "notes": "status load_asr=False resolved_device=cpu",
+          "exit_code": 0,
+          "oom_killed": false
+        },
+        "recommendation": "6 GB",
+        "attempts": [
+          {
+            "limit": "1536m",
+            "limit_mib": 1536.0,
+            "container": "omnivoicetts_cpu_20261028_cr_nt_1536m",
+            "port": 28070,
+            "result": "request-failed",
+            "seconds": 1.6530667999759316,
+            "peak_mib": 917.6,
+            "exit_code": 137,
+            "oom_killed": true,
+            "notes": "RemoteDisconnected: Remote end closed connection without response"
+          },
+          {
+            "limit": "2048m",
+            "limit_mib": 2048.0,
+            "container": "omnivoicetts_cpu_20261028_cr_nt_2048m",
+            "port": 28071,
+            "result": "request-failed",
+            "seconds": 1.7809927999041975,
+            "peak_mib": 1220.608,
+            "exit_code": 137,
+            "oom_killed": true,
+            "notes": "RemoteDisconnected: Remote end closed connection without response"
+          },
+          {
+            "limit": "2560m",
+            "limit_mib": 2560.0,
+            "container": "omnivoicetts_cpu_20261028_cr_nt_2560m",
+            "port": 28072,
+            "result": "request-failed",
+            "seconds": 1.9052667999640107,
+            "peak_mib": 1812.48,
+            "exit_code": 137,
+            "oom_killed": true,
+            "notes": "RemoteDisconnected: Remote end closed connection without response"
+          },
+          {
+            "limit": "3072m",
+            "limit_mib": 3072.0,
+            "container": "omnivoicetts_cpu_20261028_cr_nt_3072m",
+            "port": 28073,
+            "result": "request-failed",
+            "seconds": 1.8917530998587608,
+            "peak_mib": 802.9,
+            "exit_code": 137,
+            "oom_killed": true,
+            "notes": "RemoteDisconnected: Remote end closed connection without response"
+          },
+          {
+            "limit": "4096m",
+            "limit_mib": 4096.0,
+            "container": "omnivoicetts_cpu_20261028_cr_nt_4096m",
+            "port": 28074,
+            "result": "request-failed",
+            "seconds": 11.663526399992406,
+            "peak_mib": 3880.96,
+            "exit_code": 137,
+            "oom_killed": true,
+            "notes": "RemoteDisconnected: Remote end closed connection without response"
+          },
+          {
+            "limit": "5120m",
+            "limit_mib": 5120.0,
+            "container": "omnivoicetts_cpu_20261028_cr_nt_5120m",
+            "port": 28075,
+            "result": "pass",
+            "http_status": 200,
+            "bytes": 158444,
+            "content_type": "audio/mpeg",
+            "seconds": 65.79834250011481,
+            "peak_mib": 4156.416,
+            "notes": "status load_asr=False resolved_device=cpu",
+            "exit_code": 0,
+            "oom_killed": false
+          },
+          {
+            "limit": "6144m",
+            "limit_mib": 6144.0,
+            "container": "omnivoicetts_cpu_20261028_cr_nt_6144m",
+            "port": 28076,
+            "result": "pass",
+            "http_status": 200,
+            "bytes": 158444,
+            "content_type": "audio/mpeg",
+            "seconds": 64.73644160013646,
+            "peak_mib": 4168.704,
+            "notes": "status load_asr=False resolved_device=cpu",
+            "exit_code": 0,
+            "oom_killed": false
+          }
+        ]
+      },
+      {
+        "code": "CR-TX",
+        "label": "clone_reference_with_text",
+        "description": "Direct clone reference with transcript.",
+        "minimum_passing_limit": {
+          "limit": "1536m",
+          "limit_mib": 1536.0,
+          "container": "omnivoicetts_cpu_20261028_cr_tx_1536m",
+          "port": 28170,
+          "result": "pass",
+          "http_status": 200,
+          "bytes": 158444,
+          "content_type": "audio/mpeg",
+          "seconds": 52.302218900062144,
+          "peak_mib": 1047.552,
+          "notes": "status load_asr=False resolved_device=cpu",
+          "exit_code": 0,
+          "oom_killed": false
+        },
+        "recommendation": "2 GB",
+        "attempts": [
+          {
+            "limit": "1536m",
+            "limit_mib": 1536.0,
+            "container": "omnivoicetts_cpu_20261028_cr_tx_1536m",
+            "port": 28170,
+            "result": "pass",
+            "http_status": 200,
+            "bytes": 158444,
+            "content_type": "audio/mpeg",
+            "seconds": 52.302218900062144,
+            "peak_mib": 1047.552,
+            "notes": "status load_asr=False resolved_device=cpu",
+            "exit_code": 0,
+            "oom_killed": false
+          },
+          {
+            "limit": "2048m",
+            "limit_mib": 2048.0,
+            "container": "omnivoicetts_cpu_20261028_cr_tx_2048m",
+            "port": 28171,
+            "result": "pass",
+            "http_status": 200,
+            "bytes": 158444,
+            "content_type": "audio/mpeg",
+            "seconds": 51.012864999938756,
+            "peak_mib": 1020.0,
+            "notes": "status load_asr=False resolved_device=cpu",
+            "exit_code": 0,
+            "oom_killed": false
+          }
+        ]
+      },
+      {
+        "code": "SV-NT",
+        "label": "stored_voice_no_transcript",
+        "description": "Stored voice profile without transcript. This may lazy-load ASR.",
+        "minimum_passing_limit": {
+          "limit": "5120m",
+          "limit_mib": 5120.0,
+          "container": "omnivoicetts_cpu_20261028_sv_nt_5120m",
+          "port": 28275,
+          "result": "pass",
+          "http_status": 200,
+          "bytes": 158444,
+          "content_type": "audio/mpeg",
+          "seconds": 65.2888215999119,
+          "peak_mib": 4167.68,
+          "notes": "status load_asr=False resolved_device=cpu",
+          "exit_code": 0,
+          "oom_killed": false
+        },
+        "recommendation": "6 GB",
+        "attempts": [
+          {
+            "limit": "1536m",
+            "limit_mib": 1536.0,
+            "container": "omnivoicetts_cpu_20261028_sv_nt_1536m",
+            "port": 28270,
+            "result": "request-failed",
+            "seconds": 1.7704780998174101,
+            "peak_mib": 1188.864,
+            "exit_code": 137,
+            "oom_killed": true,
+            "notes": "RemoteDisconnected: Remote end closed connection without response"
+          },
+          {
+            "limit": "2048m",
+            "limit_mib": 2048.0,
+            "container": "omnivoicetts_cpu_20261028_sv_nt_2048m",
+            "port": 28271,
+            "result": "request-failed",
+            "seconds": 1.753618499962613,
+            "peak_mib": 1225.728,
+            "exit_code": 137,
+            "oom_killed": true,
+            "notes": "RemoteDisconnected: Remote end closed connection without response"
+          },
+          {
+            "limit": "2560m",
+            "limit_mib": 2560.0,
+            "container": "omnivoicetts_cpu_20261028_sv_nt_2560m",
+            "port": 28272,
+            "result": "request-failed",
+            "seconds": 1.7230708999559283,
+            "peak_mib": 0.0,
+            "exit_code": 137,
+            "oom_killed": true,
+            "notes": "RemoteDisconnected: Remote end closed connection without response"
+          },
+          {
+            "limit": "3072m",
+            "limit_mib": 3072.0,
+            "container": "omnivoicetts_cpu_20261028_sv_nt_3072m",
+            "port": 28273,
+            "result": "request-failed",
+            "seconds": 2.1486745001748204,
+            "peak_mib": 638.3,
+            "exit_code": 137,
+            "oom_killed": true,
+            "notes": "RemoteDisconnected: Remote end closed connection without response"
+          },
+          {
+            "limit": "4096m",
+            "limit_mib": 4096.0,
+            "container": "omnivoicetts_cpu_20261028_sv_nt_4096m",
+            "port": 28274,
+            "result": "request-failed",
+            "seconds": 11.130861300043762,
+            "peak_mib": 3880.96,
+            "exit_code": 137,
+            "oom_killed": true,
+            "notes": "RemoteDisconnected: Remote end closed connection without response"
+          },
+          {
+            "limit": "5120m",
+            "limit_mib": 5120.0,
+            "container": "omnivoicetts_cpu_20261028_sv_nt_5120m",
+            "port": 28275,
+            "result": "pass",
+            "http_status": 200,
+            "bytes": 158444,
+            "content_type": "audio/mpeg",
+            "seconds": 65.2888215999119,
+            "peak_mib": 4167.68,
+            "notes": "status load_asr=False resolved_device=cpu",
+            "exit_code": 0,
+            "oom_killed": false
+          },
+          {
+            "limit": "6144m",
+            "limit_mib": 6144.0,
+            "container": "omnivoicetts_cpu_20261028_sv_nt_6144m",
+            "port": 28276,
+            "result": "pass",
+            "http_status": 200,
+            "bytes": 158444,
+            "content_type": "audio/mpeg",
+            "seconds": 64.56721120001748,
+            "peak_mib": 4147.2,
+            "notes": "status load_asr=False resolved_device=cpu",
+            "exit_code": 0,
+            "oom_killed": false
+          }
+        ]
+      },
+      {
+        "code": "SV-TX",
+        "label": "stored_voice_with_transcript",
+        "description": "Stored voice profile with transcript.",
+        "minimum_passing_limit": {
+          "limit": "1536m",
+          "limit_mib": 1536.0,
+          "container": "omnivoicetts_cpu_20261028_sv_tx_1536m",
+          "port": 28370,
+          "result": "pass",
+          "http_status": 200,
+          "bytes": 158444,
+          "content_type": "audio/mpeg",
+          "seconds": 55.259031699970365,
+          "peak_mib": 1019.0,
+          "notes": "status load_asr=False resolved_device=cpu",
+          "exit_code": 0,
+          "oom_killed": false
+        },
+        "recommendation": "2 GB",
+        "attempts": [
+          {
+            "limit": "1536m",
+            "limit_mib": 1536.0,
+            "container": "omnivoicetts_cpu_20261028_sv_tx_1536m",
+            "port": 28370,
+            "result": "pass",
+            "http_status": 200,
+            "bytes": 158444,
+            "content_type": "audio/mpeg",
+            "seconds": 55.259031699970365,
+            "peak_mib": 1019.0,
+            "notes": "status load_asr=False resolved_device=cpu",
+            "exit_code": 0,
+            "oom_killed": false
+          },
+          {
+            "limit": "2048m",
+            "limit_mib": 2048.0,
+            "container": "omnivoicetts_cpu_20261028_sv_tx_2048m",
+            "port": 28371,
+            "result": "pass",
+            "http_status": 200,
+            "bytes": 158444,
+            "content_type": "audio/mpeg",
+            "seconds": 52.81372780003585,
+            "peak_mib": 1028.096,
+            "notes": "status load_asr=False resolved_device=cpu",
+            "exit_code": 0,
+            "oom_killed": false
+          }
+        ]
+      }
+    ]
   }
 ]

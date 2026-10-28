@@ -2,7 +2,7 @@
 
 Warmup calls for the no-reference path. These calls are tracked separately and are not mixed into the measured `random_voice` category.
 
-Baseline hardware: NVIDIA GeForce RTX 5060 Ti.
+Initial baseline hardware: NVIDIA GeForce RTX 5060 Ti. Current runs use RTX 5070 Ti; see the [per-run summary](../BENCHMARKS.md) for hardware and workload context.
 
 | Run | Calls | Total seconds | Avg seconds | Min | Max | Bytes |
 |---|---:|---:|---:|---:|---:|---:|
@@ -10,3 +10,4 @@ Baseline hardware: NVIDIA GeForce RTX 5060 Ti.
 | 02.07.2026 22:06:25 - 0.2.1-snapshot | 10 | 23.535 | 2.353 | 1.029 | 6.006 | 986840 |
 | 02.07.2026 22:29:04 - 0.2.1-snapshot | 10 | 11.602 | 1.16 | 1.021 | 1.314 | 986840 |
 | 06.10.2026 17:50:22 - 1.0-snapshot | 10 | 10.118 | 1.012 | 0.953 | 1.141 | 986840 |
+| 28.10.2026 17:49:57 - 1.1-snapshot | 10 | 10.204 | 1.02 | 0.926 | 1.102 | 987320 |

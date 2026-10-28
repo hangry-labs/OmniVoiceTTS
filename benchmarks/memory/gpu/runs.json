@@ -205,11 +205,216 @@
           ]
         }
       ]
+    },
+    {
+      "started_at": "2026-10-28T16:43:10+00:00",
+      "version": "1.1-snapshot",
+      "build_id": "stable",
+      "base_url": "http://127.0.0.1:7861",
+      "hardware": {
+        "index": 0,
+        "name": "NVIDIA GeForce RTX 5070 Ti",
+        "driver": "610.88",
+        "total_mib": 16303,
+        "used_mib": 4651
+      },
+      "text": "This GPU memory benchmark uses a realistic two-sentence request to measure warmed inference for the voice modes commonly used through the OmniVoiceTTS API.",
+      "text_chars": 155,
+      "calls_per_scenario": 5,
+      "warmup_calls": 1,
+      "sample_interval_seconds": 0.1,
+      "comment": "PR283 post-fix; source-mounted 3481d51 plus local inference guard; Torch2.10-cu128 Transformers5.17; remote ASR; Windows desktop present; warmed short-reference workload, not cold15s peak test",
+      "initial_pytorch": {
+        "device": "cuda:0",
+        "name": "NVIDIA GeForce RTX 5070 Ti",
+        "allocated_mib": 1946.3,
+        "reserved_mib": 2136.0,
+        "max_allocated_mib": 2025.9,
+        "max_reserved_mib": 2136.0
+      },
+      "final_pytorch": {
+        "device": "cuda:0",
+        "name": "NVIDIA GeForce RTX 5070 Ti",
+        "allocated_mib": 1955.4,
+        "reserved_mib": 2340.0,
+        "max_allocated_mib": 2115.1,
+        "max_reserved_mib": 2340.0
+      },
+      "scenarios": [
+        {
+          "code": "RV",
+          "label": "random_voice",
+          "description": "Random voice without prompt or reference audio.",
+          "calls": 5,
+          "average_seconds": 1.959,
+          "total_seconds": 9.794,
+          "bytes": 2237020,
+          "pytorch_allocated_mib": 1946.3,
+          "pytorch_reserved_mib": 2304.0,
+          "pytorch_max_allocated_mib": 2107.6,
+          "pytorch_max_reserved_mib": 2304.0,
+          "device_peak_mib": 4822,
+          "device_samples": 59,
+          "measurements": [
+            {
+              "seconds": 1.977,
+              "bytes": 447404,
+              "content_type": "audio/wav"
+            },
+            {
+              "seconds": 1.884,
+              "bytes": 447404,
+              "content_type": "audio/wav"
+            },
+            {
+              "seconds": 1.904,
+              "bytes": 447404,
+              "content_type": "audio/wav"
+            },
+            {
+              "seconds": 2.008,
+              "bytes": 447404,
+              "content_type": "audio/wav"
+            },
+            {
+              "seconds": 2.021,
+              "bytes": 447404,
+              "content_type": "audio/wav"
+            }
+          ]
+        },
+        {
+          "code": "DV",
+          "label": "design_voice",
+          "description": "Voice design from a fixed instruction.",
+          "calls": 5,
+          "average_seconds": 1.816,
+          "total_seconds": 9.081,
+          "bytes": 2361820,
+          "pytorch_allocated_mib": 1955.4,
+          "pytorch_reserved_mib": 2304.0,
+          "pytorch_max_allocated_mib": 2116.7,
+          "pytorch_max_reserved_mib": 2304.0,
+          "device_peak_mib": 4831,
+          "device_samples": 55,
+          "measurements": [
+            {
+              "seconds": 1.93,
+              "bytes": 472364,
+              "content_type": "audio/wav"
+            },
+            {
+              "seconds": 1.658,
+              "bytes": 472364,
+              "content_type": "audio/wav"
+            },
+            {
+              "seconds": 1.696,
+              "bytes": 472364,
+              "content_type": "audio/wav"
+            },
+            {
+              "seconds": 1.727,
+              "bytes": 472364,
+              "content_type": "audio/wav"
+            },
+            {
+              "seconds": 2.07,
+              "bytes": 472364,
+              "content_type": "audio/wav"
+            }
+          ]
+        },
+        {
+          "code": "CR",
+          "label": "direct_clone",
+          "description": "Direct clone reference with a known transcript; prompt caching disabled.",
+          "calls": 5,
+          "average_seconds": 1.729,
+          "total_seconds": 8.645,
+          "bytes": 2239420,
+          "pytorch_allocated_mib": 1955.4,
+          "pytorch_reserved_mib": 2202.0,
+          "pytorch_max_allocated_mib": 2120.1,
+          "pytorch_max_reserved_mib": 2202.0,
+          "device_peak_mib": 4728,
+          "device_samples": 52,
+          "measurements": [
+            {
+              "seconds": 1.583,
+              "bytes": 447884,
+              "content_type": "audio/wav"
+            },
+            {
+              "seconds": 1.599,
+              "bytes": 447884,
+              "content_type": "audio/wav"
+            },
+            {
+              "seconds": 1.722,
+              "bytes": 447884,
+              "content_type": "audio/wav"
+            },
+            {
+              "seconds": 1.791,
+              "bytes": 447884,
+              "content_type": "audio/wav"
+            },
+            {
+              "seconds": 1.95,
+              "bytes": 447884,
+              "content_type": "audio/wav"
+            }
+          ]
+        },
+        {
+          "code": "CC",
+          "label": "cached_clone",
+          "description": "Direct clone reference with the same known transcript and prompt caching enabled.",
+          "calls": 5,
+          "average_seconds": 1.58,
+          "total_seconds": 7.901,
+          "bytes": 2239420,
+          "pytorch_allocated_mib": 1955.4,
+          "pytorch_reserved_mib": 2340.0,
+          "pytorch_max_allocated_mib": 2115.1,
+          "pytorch_max_reserved_mib": 2340.0,
+          "device_peak_mib": 4864,
+          "device_samples": 48,
+          "measurements": [
+            {
+              "seconds": 1.658,
+              "bytes": 447884,
+              "content_type": "audio/wav"
+            },
+            {
+              "seconds": 1.538,
+              "bytes": 447884,
+              "content_type": "audio/wav"
+            },
+            {
+              "seconds": 1.565,
+              "bytes": 447884,
+              "content_type": "audio/wav"
+            },
+            {
+              "seconds": 1.542,
+              "bytes": 447884,
+              "content_type": "audio/wav"
+            },
+            {
+              "seconds": 1.598,
+              "bytes": 447884,
+              "content_type": "audio/wav"
+            }
+          ]
+        }
+      ]
     }
   ],
   "latest": {
-    "started_at": "2026-10-06T15:43:51+00:00",
-    "version": "1.0-snapshot",
+    "started_at": "2026-10-28T16:43:10+00:00",
+    "version": "1.1-snapshot",
     "build_id": "stable",
     "base_url": "http://127.0.0.1:7861",
     "hardware": {
@@ -217,29 +422,29 @@
       "name": "NVIDIA GeForce RTX 5070 Ti",
       "driver": "610.88",
       "total_mib": 16303,
-      "used_mib": 2115
+      "used_mib": 4651
     },
     "text": "This GPU memory benchmark uses a realistic two-sentence request to measure warmed inference for the voice modes commonly used through the OmniVoiceTTS API.",
     "text_chars": 155,
     "calls_per_scenario": 5,
     "warmup_calls": 1,
     "sample_interval_seconds": 0.1,
-    "comment": "v1.0-snapshot baseline; Qwen3-ASR stopped; clean OmniVoice container; Windows desktop consumers present",
+    "comment": "PR283 post-fix; source-mounted 3481d51 plus local inference guard; Torch2.10-cu128 Transformers5.17; remote ASR; Windows desktop present; warmed short-reference workload, not cold15s peak test",
     "initial_pytorch": {
       "device": "cuda:0",
       "name": "NVIDIA GeForce RTX 5070 Ti",
-      "allocated_mib": 0.0,
-      "reserved_mib": 0.0,
-      "max_allocated_mib": 0.0,
-      "max_reserved_mib": 0.0
+      "allocated_mib": 1946.3,
+      "reserved_mib": 2136.0,
+      "max_allocated_mib": 2025.9,
+      "max_reserved_mib": 2136.0
     },
     "final_pytorch": {
       "device": "cuda:0",
       "name": "NVIDIA GeForce RTX 5070 Ti",
-      "allocated_mib": 1955.7,
-      "reserved_mib": 2358.0,
-      "max_allocated_mib": 2115.2,
-      "max_reserved_mib": 2358.0
+      "allocated_mib": 1955.4,
+      "reserved_mib": 2340.0,
+      "max_allocated_mib": 2115.1,
+      "max_reserved_mib": 2340.0
     },
     "scenarios": [
       {
@@ -247,39 +452,39 @@
         "label": "random_voice",
         "description": "Random voice without prompt or reference audio.",
         "calls": 5,
-        "average_seconds": 1.857,
-        "total_seconds": 9.286,
-        "bytes": 2239420,
-        "pytorch_allocated_mib": 1955.7,
-        "pytorch_reserved_mib": 2302.0,
-        "pytorch_max_allocated_mib": 2116.9,
-        "pytorch_max_reserved_mib": 2302.0,
-        "device_peak_mib": 4706,
-        "device_samples": 55,
+        "average_seconds": 1.959,
+        "total_seconds": 9.794,
+        "bytes": 2237020,
+        "pytorch_allocated_mib": 1946.3,
+        "pytorch_reserved_mib": 2304.0,
+        "pytorch_max_allocated_mib": 2107.6,
+        "pytorch_max_reserved_mib": 2304.0,
+        "device_peak_mib": 4822,
+        "device_samples": 59,
         "measurements": [
           {
-            "seconds": 1.874,
-            "bytes": 447884,
+            "seconds": 1.977,
+            "bytes": 447404,
             "content_type": "audio/wav"
           },
           {
-            "seconds": 1.875,
-            "bytes": 447884,
+            "seconds": 1.884,
+            "bytes": 447404,
             "content_type": "audio/wav"
           },
           {
-            "seconds": 1.795,
-            "bytes": 447884,
+            "seconds": 1.904,
+            "bytes": 447404,
             "content_type": "audio/wav"
           },
           {
-            "seconds": 1.856,
-            "bytes": 447884,
+            "seconds": 2.008,
+            "bytes": 447404,
             "content_type": "audio/wav"
           },
           {
-            "seconds": 1.886,
-            "bytes": 447884,
+            "seconds": 2.021,
+            "bytes": 447404,
             "content_type": "audio/wav"
           }
         ]
@@ -289,38 +494,38 @@
         "label": "design_voice",
         "description": "Voice design from a fixed instruction.",
         "calls": 5,
-        "average_seconds": 1.775,
-        "total_seconds": 8.876,
+        "average_seconds": 1.816,
+        "total_seconds": 9.081,
         "bytes": 2361820,
-        "pytorch_allocated_mib": 1955.7,
-        "pytorch_reserved_mib": 2302.0,
-        "pytorch_max_allocated_mib": 2116.9,
-        "pytorch_max_reserved_mib": 2302.0,
-        "device_peak_mib": 4706,
-        "device_samples": 53,
+        "pytorch_allocated_mib": 1955.4,
+        "pytorch_reserved_mib": 2304.0,
+        "pytorch_max_allocated_mib": 2116.7,
+        "pytorch_max_reserved_mib": 2304.0,
+        "device_peak_mib": 4831,
+        "device_samples": 55,
         "measurements": [
           {
-            "seconds": 1.738,
+            "seconds": 1.93,
             "bytes": 472364,
             "content_type": "audio/wav"
           },
           {
-            "seconds": 1.734,
+            "seconds": 1.658,
             "bytes": 472364,
             "content_type": "audio/wav"
           },
           {
-            "seconds": 1.733,
+            "seconds": 1.696,
             "bytes": 472364,
             "content_type": "audio/wav"
           },
           {
-            "seconds": 1.8,
+            "seconds": 1.727,
             "bytes": 472364,
             "content_type": "audio/wav"
           },
           {
-            "seconds": 1.871,
+            "seconds": 2.07,
             "bytes": 472364,
             "content_type": "audio/wav"
           }
@@ -331,39 +536,39 @@
         "label": "direct_clone",
         "description": "Direct clone reference with a known transcript; prompt caching disabled.",
         "calls": 5,
-        "average_seconds": 1.619,
-        "total_seconds": 8.095,
-        "bytes": 2270620,
-        "pytorch_allocated_mib": 1955.7,
+        "average_seconds": 1.729,
+        "total_seconds": 8.645,
+        "bytes": 2239420,
+        "pytorch_allocated_mib": 1955.4,
         "pytorch_reserved_mib": 2202.0,
-        "pytorch_max_allocated_mib": 2118.9,
+        "pytorch_max_allocated_mib": 2120.1,
         "pytorch_max_reserved_mib": 2202.0,
-        "device_peak_mib": 4608,
-        "device_samples": 48,
+        "device_peak_mib": 4728,
+        "device_samples": 52,
         "measurements": [
           {
-            "seconds": 1.557,
-            "bytes": 454124,
+            "seconds": 1.583,
+            "bytes": 447884,
             "content_type": "audio/wav"
           },
           {
-            "seconds": 1.603,
-            "bytes": 454124,
+            "seconds": 1.599,
+            "bytes": 447884,
             "content_type": "audio/wav"
           },
           {
-            "seconds": 1.588,
-            "bytes": 454124,
+            "seconds": 1.722,
+            "bytes": 447884,
             "content_type": "audio/wav"
           },
           {
-            "seconds": 1.638,
-            "bytes": 454124,
+            "seconds": 1.791,
+            "bytes": 447884,
             "content_type": "audio/wav"
           },
           {
-            "seconds": 1.709,
-            "bytes": 454124,
+            "seconds": 1.95,
+            "bytes": 447884,
             "content_type": "audio/wav"
           }
         ]
@@ -373,39 +578,39 @@
         "label": "cached_clone",
         "description": "Direct clone reference with the same known transcript and prompt caching enabled.",
         "calls": 5,
-        "average_seconds": 1.549,
-        "total_seconds": 7.744,
-        "bytes": 2270620,
-        "pytorch_allocated_mib": 1955.7,
-        "pytorch_reserved_mib": 2358.0,
-        "pytorch_max_allocated_mib": 2115.2,
-        "pytorch_max_reserved_mib": 2358.0,
-        "device_peak_mib": 4764,
-        "device_samples": 46,
+        "average_seconds": 1.58,
+        "total_seconds": 7.901,
+        "bytes": 2239420,
+        "pytorch_allocated_mib": 1955.4,
+        "pytorch_reserved_mib": 2340.0,
+        "pytorch_max_allocated_mib": 2115.1,
+        "pytorch_max_reserved_mib": 2340.0,
+        "device_peak_mib": 4864,
+        "device_samples": 48,
         "measurements": [
           {
-            "seconds": 1.53,
-            "bytes": 454124,
+            "seconds": 1.658,
+            "bytes": 447884,
             "content_type": "audio/wav"
           },
           {
-            "seconds": 1.505,
-            "bytes": 454124,
+            "seconds": 1.538,
+            "bytes": 447884,
             "content_type": "audio/wav"
           },
           {
-            "seconds": 1.524,
-            "bytes": 454124,
+            "seconds": 1.565,
+            "bytes": 447884,
             "content_type": "audio/wav"
           },
           {
-            "seconds": 1.608,
-            "bytes": 454124,
+            "seconds": 1.542,
+            "bytes": 447884,
             "content_type": "audio/wav"
           },
           {
-            "seconds": 1.577,
-            "bytes": 454124,
+            "seconds": 1.598,
+            "bytes": 447884,
             "content_type": "audio/wav"
           }
         ]

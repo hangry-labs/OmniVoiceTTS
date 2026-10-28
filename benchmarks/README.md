@@ -48,6 +48,8 @@ The speed workload uses 24 decoding steps and MP3 output. It performs 10 warm-up
 - `predefined_voice`: the named `benchmark_original_clone` saved profile, whose prompt is cached during warm-up.
 - `direct_reference_audio`: the same reference path is supplied on every request without storing its prompt in the profile cache.
 
+Before the speed suite, create the saved profile `benchmark_original_clone` in the Voices tab using `examples/original_clone.mp3` and the fixed reference transcript above (seed `12345`, random seed disabled). The runner checks that this exact profile exists and has a transcript before measuring anything; a missing profile must not silently turn the cached-voice category into voice design. Set `SPEED_BENCHMARK_VOICE` when intentionally using another prepared profile and record that changed workload in the run comment.
+
 ### CPU memory
 
 Each CPU scenario runs in a fresh Docker container with equal memory and swap limits. Limits start at 1536 MiB and increase through a fixed practical sequence up to 12 GiB; sub-gigabyte configurations are intentionally not tested. The six paths are random voice, designed voice, direct clone with and without a transcript, and stored voice with and without a transcript.
@@ -60,11 +62,15 @@ Random voice, designed voice, direct clone, and cached clone are each warmed onc
 
 Qwen3-ASR and unrelated GPU workloads must be stopped for this suite. Whole-device VRAM includes the desktop and every other process, so the dedicated GPU-memory suite is authoritative for clean TTS comparisons.
 
+For a clean-process comparison, restart the TTS container before this suite if previous requests loaded ASR or exercised other models. Preserve the data volume. Clearing allocator blocks or purging/reloading model references is not equivalent to restarting the process; record baseline live allocation as well as peaks. Do not silently mix post-ASR and fresh-process measurements.
+
 ### Speech quality
 
 The quality runner generates and stages every WAV before transcription begins. Qwen3-ASR is warmed only after the TTS phase, then transcribes the staged files. TTS generation and ASR judging are never interleaved on the shared GPU.
 
 The runner uses 32 decoding steps and fixed per-sentence seeds. Transcript comparison applies Unicode compatibility normalization, case folding, and removal of punctuation and whitespace before calculating exact matches and character similarity. It records repeat consistency, generation time, real-time factor, ASR time, memory diagnostics, and hashes. Non-exact or failed audio is retained under the git-ignored `.ai/benchmark-speech-quality` directory for listening.
+
+The judge may run on a separate host through the `QUALITY_BENCHMARK_ASR_URL` task variable (and `SSML_BENCHMARK_ASR_URL` for dialogue tests). Keep the two phases separate even then. Record the judge deployment/model identity and endpoint in run evidence; a matching public model name alone does not prove identical judge software, weights, or decoding settings. With remote ASR, all local GPU snapshots describe TTS plus desktop consumers, not the remote judge's VRAM. Do not interpret the ASR-phase baseline/endpoint labels as measurements of remote ASR memory or compare local and remote ASR latency as TTS performance.
 
 Qwen3-ASR is a stable comparative judge, not ground truth. Its transcript can be wrong even when the generated audio is correct. These metrics are intended to reveal changes between equivalent runs; they do not measure objective pronunciation accuracy or replace human listening.
 
@@ -79,7 +85,7 @@ A call passes when its normalized word sequence contains the complete expected d
 1. Record the image tag or digest, repository revision, driver, runtime settings, hardware, and intended change in each task's comment variable.
 2. Stop unrelated GPU work. Start only OmniVoiceTTS and run `task benchmark-memory-gpu`.
 3. Keep that TTS deployment running and run `task benchmark-speed`.
-4. Start the locked Qwen3-ASR service on port `8000`, then run `task benchmark-speech-quality` and `task benchmark-ssml`.
+4. Use a fixed remote Qwen3-ASR deployment or start the local judge on port `8000`, then run `task benchmark-speech-quality` and `task benchmark-ssml`. Override the task's ASR URL for a remote judge.
 5. Run `task benchmark-memory-cpu` separately. It creates and removes its own constrained CPU containers and takes substantially longer.
 6. Review the generated `BENCHMARKS.md`, `DETAILS.md`, and `runs.json` changes before committing an official baseline.
 

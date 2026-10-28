@@ -802,6 +802,7 @@ class OmniVoice(PreTrainedModel):
             long_task = full_task.slice_task(long_idx)
             yield from self._generate_chunked_stream(long_task, gen_config)
 
+    @torch.inference_mode()
     def create_voice_clone_prompt(
         self,
         ref_audio: Union[str, tuple[torch.Tensor, int]],

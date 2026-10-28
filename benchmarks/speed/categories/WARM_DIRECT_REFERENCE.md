@@ -2,7 +2,7 @@
 
 The caller sends direct `ref_audio` with each request instead of selecting a saved voice. This is the original ad hoc voice-cloning path and intentionally does not use the stored-voice cache.
 
-Baseline hardware: NVIDIA GeForce RTX 5060 Ti.
+Initial baseline hardware: NVIDIA GeForce RTX 5060 Ti. Current runs use RTX 5070 Ti; see the [per-run summary](../BENCHMARKS.md) for hardware and workload context.
 
 | Run | Calls | Total seconds | Avg seconds | Min | Max | Bytes |
 |---|---:|---:|---:|---:|---:|---:|
@@ -10,3 +10,4 @@ Baseline hardware: NVIDIA GeForce RTX 5060 Ti.
 | 02.07.2026 22:06:25 - 0.2.1-snapshot | 100 | 168.265 | 1.683 | 1.265 | 3.057 | 8623760 |
 | 02.07.2026 22:29:04 - 0.2.1-snapshot | 100 | 138.353 | 1.384 | 1.265 | 1.674 | 8623760 |
 | 06.10.2026 17:50:22 - 1.0-snapshot | 100 | 131.74 | 1.317 | 1.234 | 1.583 | 8623760 |
+| 28.10.2026 17:49:57 - 1.1-snapshot | 100 | 137.396 | 1.374 | 1.255 | 1.829 | 8536400 |

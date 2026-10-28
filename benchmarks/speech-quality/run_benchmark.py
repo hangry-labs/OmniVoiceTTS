@@ -696,7 +696,7 @@ def ensure_output_documents(summary_path: Path, details_path: Path) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Benchmark multilingual OmniVoiceTTS generation quality through a fixed local Qwen3-ASR judge."
+        description="Benchmark multilingual OmniVoiceTTS generation through a fixed local or remote Qwen3-ASR judge."
     )
     parser.add_argument("--tts-url", default=DEFAULT_TTS_URL)
     parser.add_argument("--asr-url", default=DEFAULT_ASR_URL)
@@ -932,8 +932,9 @@ def main() -> None:
             "tts_pytorch_before_warmup": tts_cuda_memory(tts_status_before, args.gpu_index),
             "tts_pytorch_after_benchmark": tts_cuda_memory(tts_status_after, args.gpu_index),
             "scope": (
-                "TTS generation and ASR transcription run in separate phases. TTS snapshots still include the "
-                "resident ASR process and Windows GPU consumers; benchmarks/memory/gpu is authoritative for clean TTS VRAM."
+                "TTS generation and ASR transcription run in separate phases. Snapshots cover the selected "
+                "local GPU and all its consumers, not a remote ASR host. "
+                "benchmarks/memory/gpu is authoritative for controlled TTS VRAM comparisons."
             ),
         },
         "artifacts_dir": str(args.artifacts_dir / run_id),

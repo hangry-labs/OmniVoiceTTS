@@ -34,3 +34,34 @@ The first deterministic seed is a known pre-fix failure case. Every measured cal
 | 18 | 3146820204 | pass | 4.368 | 0.068 | 3.600 | 172858 | Are we ready? Yes, all preparations are complete. | `c659aa2a624e27e97a3c7293507da7af12c9837f9676c7c14b005fac8fb49b7b` |
 | 19 | 1593680337 | pass | 4.479 | 0.069 | 3.552 | 170534 | Are we ready? Yes, all preparations are complete. | `fbeee0a1b13a00328995557f1de93b9168310871d1f008e3792396b51499ddbe` |
 | 20 | 2593145086 | pass | 4.369 | 0.063 | 3.667 | 176054 | Are we ready? Yes, all preparations are complete. | `3b1f3aaa65bfe20a7dcb8f5c95b8932bbebede70b69ed81dcca0645bf79e4fcb` |
+
+## 28.10.2026 17:55:32 - 1.1-snapshot
+
+- Hardware: `NVIDIA GeForce RTX 5070 Ti`
+- Policy: fixed internal sample + stable contiguous prosody turn + bounded retry
+- Expected transcript: `Are we ready? Yes, all preparations are complete.`
+- Warmup transcript: `Are we ready? Yes, all preparations are complete.`
+- Comment: PR283 post-fix; source3481d51 plus inference guard; Torch2.10-cu128 Transformers5.17; remote Qwen0.6B; fixed20 seeds; staged generation then ASR; older baseline has different dependency and judge deployment
+
+| Call | Seed | Result | TTS seconds | ASR seconds | Audio seconds | Bytes | Transcript | SHA-256 |
+|---:|---:|---|---:|---:|---:|---:|---|---|
+| 1 | 2717518076 | pass | 4.977 | 0.094 | 3.209 | 154096 | Are we ready? Yes, all preparations are complete. | `8d55f2d1af90218ca701268485222606c06d6d8f84b2e591fa476c8c0a9f9533` |
+| 2 | 2717518077 | pass | 4.479 | 0.076 | 3.209 | 154096 | Are we ready? Yes, all preparations are complete. | `8d55f2d1af90218ca701268485222606c06d6d8f84b2e591fa476c8c0a9f9533` |
+| 3 | 2717518078 | pass | 4.699 | 0.074 | 3.209 | 154096 | Are we ready? Yes, all preparations are complete. | `8d55f2d1af90218ca701268485222606c06d6d8f84b2e591fa476c8c0a9f9533` |
+| 4 | 412095174 | pass | 4.462 | 0.094 | 3.209 | 154096 | Are we ready? Yes, all preparations are complete. | `8d55f2d1af90218ca701268485222606c06d6d8f84b2e591fa476c8c0a9f9533` |
+| 5 | 3888510638 | pass | 4.694 | 0.087 | 3.209 | 154096 | Are we ready? Yes, all preparations are complete. | `8d55f2d1af90218ca701268485222606c06d6d8f84b2e591fa476c8c0a9f9533` |
+| 6 | 1485887814 | pass | 4.732 | 0.088 | 3.209 | 154096 | Are we ready? Yes, all preparations are complete. | `8d55f2d1af90218ca701268485222606c06d6d8f84b2e591fa476c8c0a9f9533` |
+| 7 | 2163181999 | pass | 4.431 | 0.075 | 3.209 | 154096 | Are we ready? Yes, all preparations are complete. | `8d55f2d1af90218ca701268485222606c06d6d8f84b2e591fa476c8c0a9f9533` |
+| 8 | 3432834366 | pass | 4.668 | 0.086 | 3.209 | 154096 | Are we ready? Yes, all preparations are complete. | `8d55f2d1af90218ca701268485222606c06d6d8f84b2e591fa476c8c0a9f9533` |
+| 9 | 1257281928 | pass | 4.536 | 0.074 | 3.209 | 154096 | Are we ready? Yes, all preparations are complete. | `8d55f2d1af90218ca701268485222606c06d6d8f84b2e591fa476c8c0a9f9533` |
+| 10 | 3509819213 | pass | 4.601 | 0.086 | 3.209 | 154096 | Are we ready? Yes, all preparations are complete. | `8d55f2d1af90218ca701268485222606c06d6d8f84b2e591fa476c8c0a9f9533` |
+| 11 | 992516492 | pass | 4.359 | 0.077 | 3.209 | 154096 | Are we ready? Yes, all preparations are complete. | `8d55f2d1af90218ca701268485222606c06d6d8f84b2e591fa476c8c0a9f9533` |
+| 12 | 2908409029 | pass | 4.582 | 0.074 | 3.209 | 154096 | Are we ready? Yes, all preparations are complete. | `8d55f2d1af90218ca701268485222606c06d6d8f84b2e591fa476c8c0a9f9533` |
+| 13 | 1816140917 | pass | 4.562 | 0.098 | 3.209 | 154096 | Are we ready? Yes, all preparations are complete. | `8d55f2d1af90218ca701268485222606c06d6d8f84b2e591fa476c8c0a9f9533` |
+| 14 | 3707527105 | pass | 4.417 | 0.090 | 3.209 | 154096 | Are we ready? Yes, all preparations are complete. | `8d55f2d1af90218ca701268485222606c06d6d8f84b2e591fa476c8c0a9f9533` |
+| 15 | 635817482 | pass | 4.587 | 0.085 | 3.209 | 154096 | Are we ready? Yes, all preparations are complete. | `8d55f2d1af90218ca701268485222606c06d6d8f84b2e591fa476c8c0a9f9533` |
+| 16 | 2342177711 | pass | 4.397 | 0.088 | 3.209 | 154096 | Are we ready? Yes, all preparations are complete. | `8d55f2d1af90218ca701268485222606c06d6d8f84b2e591fa476c8c0a9f9533` |
+| 17 | 1074398955 | pass | 4.490 | 0.075 | 3.209 | 154096 | Are we ready? Yes, all preparations are complete. | `8d55f2d1af90218ca701268485222606c06d6d8f84b2e591fa476c8c0a9f9533` |
+| 18 | 3146820204 | pass | 4.589 | 0.085 | 3.209 | 154096 | Are we ready? Yes, all preparations are complete. | `8d55f2d1af90218ca701268485222606c06d6d8f84b2e591fa476c8c0a9f9533` |
+| 19 | 1593680337 | pass | 4.483 | 0.075 | 3.209 | 154096 | Are we ready? Yes, all preparations are complete. | `8d55f2d1af90218ca701268485222606c06d6d8f84b2e591fa476c8c0a9f9533` |
+| 20 | 2593145086 | pass | 4.540 | 0.080 | 3.209 | 154096 | Are we ready? Yes, all preparations are complete. | `8d55f2d1af90218ca701268485222606c06d6d8f84b2e591fa476c8c0a9f9533` |

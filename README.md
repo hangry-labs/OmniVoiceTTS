@@ -567,6 +567,12 @@ Snapshot commands intentionally follow the rolling `latest` tags. Published-rele
 
 ### v1.1 Snapshot
 
+- Run clone-prompt preparation in inference mode, including first-use saved voices
+  and SSML-H dynamic voices, avoiding unnecessary gradient intermediates. A focused
+  RTX 5070 Ti comparison reduced extra peak allocation for a 15-second reference
+  from 4.36 GiB to 0.51 GiB with identical prompt tokens and fixed-seed speech.
+  See the [validation details](benchmarks/memory/gpu/DETAILS.md#clone-prompt-inference-guard-28-october-2026).
+
 - Add a multilingual README-based project website with shared navigation,
   the 20-language voice gallery and SSML-H conversation showcase.
 

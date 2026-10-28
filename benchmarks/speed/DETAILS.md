@@ -35,3 +35,19 @@ The historical tables were created before this unified detail log and therefore 
 | prewarm_predefined | 10 | 18.105s | 1.81s | 1.037s | 7.858s | 977720 |
 | prewarm_random | 10 | 10.118s | 1.012s | 0.953s | 1.141s | 986840 |
 | random_voice | 100 | 104.663s | 1.047s | 0.931s | 1.393s | 8811920 |
+
+## 28.10.2026 17:49:57 - 1.1-snapshot
+
+- Hardware: `NVIDIA GeForce RTX 5070 Ti`
+- Workload: `100` calls per measured category across `20` languages
+- Decode steps / format: `24` / `mp3`
+- Comment: PR283 post-fix; 3481d51 plus local inference guard; Torch2.10-cu128 Transformers5.17; Windows desktop; remote ASR idle; same canonical 300-call workload; not isolated against older dependency baseline
+
+| Stage | Calls | Total | Average | Minimum | Maximum | Bytes |
+|---|---:|---:|---:|---:|---:|---:|
+| direct_reference_audio | 100 | 137.396s | 1.374s | 1.255s | 1.829s | 8536400 |
+| predefined_voice | 100 | 110.731s | 1.107s | 0.921s | 2.339s | 8570960 |
+| prewarm_direct_reference | 10 | 15.435s | 1.543s | 1.275s | 2.516s | 950360 |
+| prewarm_predefined | 10 | 10.451s | 1.045s | 0.934s | 1.262s | 960440 |
+| prewarm_random | 10 | 10.204s | 1.02s | 0.926s | 1.102s | 987320 |
+| random_voice | 100 | 112.671s | 1.127s | 0.946s | 1.591s | 8811920 |

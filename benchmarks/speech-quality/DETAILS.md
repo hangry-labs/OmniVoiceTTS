@@ -553,3 +553,353 @@ No TTS or ASR request errors were recorded.
 - `turkish_random_02_r3` - `88.33%` - expected: Kahve o kadar güçlüydü ki, neredeyse benim yerime toplantıya girecekti. - transcript: KV o kadar güçlüydü ki neredeyse benim yerime dopantiyaya girecek tete.
 - `turkish_random_02_r4` - `88.33%` - expected: Kahve o kadar güçlüydü ki, neredeyse benim yerime toplantıya girecekti. - transcript: KV o kadar güçlüydü ki neredeyse benim yerime dopantiyaya girecek tete.
 - `turkish_random_02_r5` - `88.33%` - expected: Kahve o kadar güçlüydü ki, neredeyse benim yerime toplantıya girecekti. - transcript: KV o kadar güçlüydü ki neredeyse benim yerime dopantiyaya girecek tete.
+
+## 28.10.2026 17:50:02 - 1.1-snapshot
+
+- TTS build: `stable`
+- ASR model: `Qwen/Qwen3-ASR-0.6B-hf`
+- Workload: `18` languages, `2` sentences per language, `5` repeats
+- Measured calls: `180/180` completed
+- Exact normalized transcripts: `69.44%`
+- Repeat-consistent sentence cases: `34/36` (`94.44%`)
+- Mean normalized character similarity: `98.48%`
+- Measured TTS time: `245.221s`; RTF `0.3250` (`3.08x` realtime)
+- Benchmark wall time including ASR and diagnostics: `317.387s`
+- TTS PyTorch peak allocated / reserved: `2937.9 MiB / 3378.0 MiB`
+- Peak observed whole-device VRAM during the TTS phase: `5941 MiB` (diagnostic only; use the dedicated GPU-memory suite for clean TTS VRAM)
+- ASR baseline after warmup / endpoint after final keepalive: `5941 MiB / 5876 MiB`
+- Retained non-exact/error WAV files: `.ai\benchmark-speech-quality\20261028-175002` (local, git-ignored)
+- Comment: PR283 post-fix; source 3481d51 plus inference guard; Torch2.10-cu128 Transformers5.17; remote Qwen0.6B; clean TTS reload; staged generation then ASR; dependency and judge environment differ from October6
+
+### Languages
+
+| Language | Qwen judge | Exact | Consistent cases | Mean similarity | Avg TTS | P95 TTS | RTF | Errors |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+| English | forced | 10/10 | 2/2 | 100.00% | 1.473s | 1.736s | 0.2609 | 0 |
+| Chinese | forced | 10/10 | 2/2 | 100.00% | 1.374s | 1.458s | 0.3084 | 0 |
+| Hindi | forced | 9/10 | 1/2 | 99.69% | 1.349s | 1.471s | 0.3019 | 0 |
+| Spanish | forced | 10/10 | 2/2 | 100.00% | 1.391s | 1.536s | 0.2953 | 0 |
+| French | forced | 6/10 | 1/2 | 98.69% | 1.332s | 1.434s | 0.3218 | 0 |
+| Standard Arabic | forced | 5/10 | 2/2 | 97.19% | 1.397s | 1.486s | 0.3028 | 0 |
+| Russian | forced | 10/10 | 2/2 | 100.00% | 1.334s | 1.477s | 0.3147 | 0 |
+| Portuguese | forced | 5/10 | 2/2 | 99.58% | 1.298s | 1.400s | 0.3434 | 0 |
+| Polish | forced | 5/10 | 2/2 | 96.97% | 1.310s | 1.353s | 0.3196 | 0 |
+| Thai | forced | 0/10 | 2/2 | 96.11% | 1.252s | 1.327s | 0.3218 | 0 |
+| Japanese | forced | 5/10 | 2/2 | 98.08% | 1.319s | 1.361s | 0.2978 | 0 |
+| German | forced | 10/10 | 2/2 | 100.00% | 1.382s | 1.577s | 0.3211 | 0 |
+| Indonesian | forced | 10/10 | 2/2 | 100.00% | 1.287s | 1.412s | 0.3282 | 0 |
+| Turkish | forced | 0/10 | 2/2 | 94.33% | 1.282s | 1.350s | 0.3232 | 0 |
+| Korean | forced | 10/10 | 2/2 | 100.00% | 1.354s | 1.507s | 0.3476 | 0 |
+| Vietnamese | forced | 5/10 | 2/2 | 93.61% | 1.299s | 1.379s | 0.3865 | 0 |
+| Italian | forced | 5/10 | 2/2 | 98.35% | 1.414s | 1.792s | 0.3621 | 0 |
+| Dutch | forced | 10/10 | 2/2 | 100.00% | 1.675s | 3.256s | 0.4614 | 0 |
+
+### Request Errors
+
+No TTS or ASR request errors were recorded.
+
+### Warmup Observations
+
+- `chinese_clone_01_warmup` scored `98.48%`: 你好，这里是来自 Angry Labs 的 Omni Voice TTS。我们打造本地运行简单易用的语音工具，让人们能用自己的语言私私密离线地生成语音。
+- `hindi_clone_01_warmup` scored `87.06%`: नमस्ते, यह Hangry Labs का अपनी वॉइस टीटीएस है। हम स्थानीय और आसानी से चलने वाले वॉइस टूल बनाते हैं, ताकि लोग अपनी भाषा में निजी और ऑफलाइन तरीके से आवाज बना सकें।
+- `spanish_clone_01_warmup` scored `99.32%`: Hola, esto es OmniVoice TTS de Hungry Labs. Creamos herramientas de voz locales y fáciles de usar para que la gente pueda crear voz de forma privada, sin conexión y en su propio idioma.
+- `french_clone_01_warmup` scored `99.67%`: Bonjour, ici Omnivoice TTS de Angry Labs. Nous créons des outils vocaux locaux et faciles à lancer pour que chacun puisse générer de la parole en privé, hors ligne, et dans sa propre langue.
+- `standard_arabic_clone_01_warmup` scored `95.58%`: مرحبًا، هذا هو آمني voice tts من hungry labs. نصنع أدوات صوت محلية وسهلة التشغيل كي يتمكن الناس من إنشاء الكلام بخصوصية ومن دون اتصال وبلغتهم.
+- `russian_clone_01_warmup` scored `95.34%`: Здравствуйте, это OmniVoice TTS от Hangry Labs. Мы создаем локальные и простые голосовые инструменты, чтобы люди могли создавать речь приватно, offline и на своем языке.
+- `portuguese_clone_01_warmup` scored `99.66%`: Olá, este é o Omni Voice TTS da Angry Labs. Criamos ferramentas de voz locais e fáceis de usar para que as pessoas possam gerar fala com privacidade offline e em seu próprio idioma.
+- `polish_clone_01_warmup` scored `98.91%`: Cześć, tu OmniVoice TTS od Hangry Labs. Tworzymy lokalne, łatwe w uruchomieniu narzędzia głosowe, żeby ludzie mogli tworzyć mowy prywatnie offline i w własnym języku.
+- `thai_clone_01_warmup` scored `93.70%`: สวัสดีนี่คือ OmniVoice TTS จาก Henry Labs เราสร้างเครื่องมือเสียงที่รันในเครื่องและใช้งานง่าย เพื่อให้ผู้คนสร้างเสียงพูดได้อย่างเป็นส่วนตัว offline และเป็นภาษาของตัวเอง
+- `japanese_clone_01_warmup` scored `98.81%`: こんにちは、Hengry Labs の Omni Voice TTS です。私たちは誰でも自分の言葉でプライベートに、オフラインで音声を作れるローカルで簡単に動く音声ツールを作っています。
+- `indonesian_clone_01_warmup` scored `99.00%`: Hello, ini OmniVoice TTS dari Hangry Labs. Kami membuat alat suara lokal yang mudah dijalankan agar orang dapat membuat ucapan secara privat, offline, dan dalam bahasa mereka sendiri.
+- `turkish_clone_01_warmup` scored `96.93%`: Merhaba, bu Henry Labs'den AmniVoice TTS. İnsanların kendi dillerinde özel olarak ve çevrimdışı konuşma üretilmesi için yerel ve kolay çalışan ses araçları geliştiriyoruz.
+- `italian_clone_01_warmup` scored `99.66%`: Ciao, questo è OmniVoice TTS di Angry Labs. Costruiamo strumenti vocali locali e facili da usare, così le persone possono creare parlato in privato offline e nella propria lingua.
+- `dutch_clone_01_warmup` scored `99.63%`: Hallo, dit is OmniVoice TTS van Hangry Labs. We bouwen lokale, eenvoudig te gebruiken stemtools, zodat mensen privé, offline en in hun eigen taal sprak kunnen maken.
+
+### Mismatches And Inconsistent Cases
+
+#### hindi_random_02
+
+- Expected: चाय इतनी अच्छी थी कि बिस्कुट ने भी उसमें डुबकी लगाकर मोक्ष पा लिया।
+- Exact repeats: `4/5`
+- Repeat consistent: `no`
+- Mean / minimum similarity: `99.38% / 96.88%`
+- Transcript (`4x`): चाय इतनी अच्छी थी कि बिस्कुट ने भी उसमें डुबकी लगाकर मोक्ष पालिया.
+- Transcript (`1x`): चाय इतनी अच्छी थी कि बिस्कुट ने भी उसमें डब्बी लगाकर मोक्ष पालिया.
+
+#### french_random_02
+
+- Expected: Le croissant était si croustillant que même le silence a fait des miettes.
+- Exact repeats: `1/5`
+- Repeat consistent: `no`
+- Mean / minimum similarity: `97.38% / 96.72%`
+- Transcript (`4x`): Le croissant était si croustillant que même le silence a fait des miautes.
+- Transcript (`1x`): Le croissant était si croustillant que même le silence a fait des miettes.
+
+#### standard_arabic_random_01
+
+- Expected: قلت سأعود بعد خمس دقائق، فضحكت الساعة وقالت: نعرف هذه القصة.
+- Exact repeats: `0/5`
+- Repeat consistent: `yes`
+- Mean / minimum similarity: `94.38% / 94.38%`
+- Transcript (`5x`): قل سأود بعد خمس دقائق فضحت ساعة وقالت نعرف هذه القصة.
+
+#### portuguese_random_01
+
+- Expected: Eu disse que chegava em cinco minutos; o relógio ouviu e pediu paciência.
+- Exact repeats: `0/5`
+- Repeat consistent: `yes`
+- Mean / minimum similarity: `99.15% / 99.15%`
+- Transcript (`5x`): Eu disse que chegavem cinco minutos. O relógio ouviu e pediu paciência.
+
+#### polish_random_01
+
+- Expected: Powiedziałem, że będę za pięć minut; zegarek tylko spojrzał po polsku i westchnął.
+- Exact repeats: `0/5`
+- Repeat consistent: `yes`
+- Mean / minimum similarity: `93.94% / 93.94%`
+- Transcript (`5x`): Powiedziałam, że będę za pięć minut. Zegarek tylko spojrzał po Polsku i wezgnął.
+
+#### thai_random_01
+
+- Expected: บอกว่าจะถึงในห้านาที แต่นาฬิกาหันมามองเหมือนรู้ความจริงแล้ว
+- Exact repeats: `0/5`
+- Repeat consistent: `yes`
+- Mean / minimum similarity: `96.70% / 96.70%`
+- Transcript (`5x`): บอกว่าจะถึงใน 5 นาที แต่นาฬิกาหันมามองเหมือนรู้ความจริงแล้ว
+
+#### thai_random_02
+
+- Expected: กาแฟแก้วนี้เข้มจนเหมือนพร้อมไปประชุมแทนฉัน
+- Exact repeats: `0/5`
+- Repeat consistent: `yes`
+- Mean / minimum similarity: `95.52% / 95.52%`
+- Transcript (`5x`): กาแฟแก้วนี้คิมจนเหมือนพร้อมไปประชุมแทนฉัน
+
+#### japanese_random_01
+
+- Expected: 五分で行きますと言ったら、時計が静かに首をかしげました。
+- Exact repeats: `0/5`
+- Repeat consistent: `yes`
+- Mean / minimum similarity: `96.15% / 96.15%`
+- Transcript (`5x`): 5分で行きますと言ったら、時計が静かに首をかしげました。
+
+#### turkish_random_01
+
+- Expected: Beş dakikaya geliyorum dedim; saat bana Türk kahvesi falı gibi baktı.
+- Exact repeats: `0/5`
+- Repeat consistent: `yes`
+- Mean / minimum similarity: `94.64% / 94.64%`
+- Transcript (`5x`): 5 dakikaya geliyorum derim. Saat bana Türk kahvesi falı gibi baktı.
+
+#### turkish_random_02
+
+- Expected: Kahve o kadar güçlüydü ki, neredeyse benim yerime toplantıya girecekti.
+- Exact repeats: `0/5`
+- Repeat consistent: `yes`
+- Mean / minimum similarity: `94.02% / 94.02%`
+- Transcript (`5x`): Kafe o kadar güçlüydü ki ne reysi benim yerime toplantıya girecekti.
+
+#### vietnamese_random_02
+
+- Expected: Ly cà phê sáng nay mạnh đến mức suýt trả lời email thay tôi.
+- Exact repeats: `0/5`
+- Repeat consistent: `yes`
+- Mean / minimum similarity: `87.23% / 87.23%`
+- Transcript (`5x`): Lý cà phê sáng nay, mạnh đến mức switch trả lời email thay đổi.
+
+#### italian_random_02
+
+- Expected: Il caffè era così forte che quasi ha parlato al posto mio.
+- Exact repeats: `0/5`
+- Repeat consistent: `yes`
+- Mean / minimum similarity: `96.70% / 96.70%`
+- Transcript (`5x`): Il caffè era così forte che quasi ha parlato apostomia.
+
+
+### Hardest ASR-Judged Calls
+
+- `vietnamese_random_02_r1` - `87.23%` - expected: Ly cà phê sáng nay mạnh đến mức suýt trả lời email thay tôi. - transcript: Lý cà phê sáng nay, mạnh đến mức switch trả lời email thay đổi.
+- `vietnamese_random_02_r2` - `87.23%` - expected: Ly cà phê sáng nay mạnh đến mức suýt trả lời email thay tôi. - transcript: Lý cà phê sáng nay, mạnh đến mức switch trả lời email thay đổi.
+- `vietnamese_random_02_r3` - `87.23%` - expected: Ly cà phê sáng nay mạnh đến mức suýt trả lời email thay tôi. - transcript: Lý cà phê sáng nay, mạnh đến mức switch trả lời email thay đổi.
+- `vietnamese_random_02_r4` - `87.23%` - expected: Ly cà phê sáng nay mạnh đến mức suýt trả lời email thay tôi. - transcript: Lý cà phê sáng nay, mạnh đến mức switch trả lời email thay đổi.
+- `vietnamese_random_02_r5` - `87.23%` - expected: Ly cà phê sáng nay mạnh đến mức suýt trả lời email thay tôi. - transcript: Lý cà phê sáng nay, mạnh đến mức switch trả lời email thay đổi.
+- `polish_random_01_r1` - `93.94%` - expected: Powiedziałem, że będę za pięć minut; zegarek tylko spojrzał po polsku i westchnął. - transcript: Powiedziałam, że będę za pięć minut. Zegarek tylko spojrzał po Polsku i wezgnął.
+- `polish_random_01_r2` - `93.94%` - expected: Powiedziałem, że będę za pięć minut; zegarek tylko spojrzał po polsku i westchnął. - transcript: Powiedziałam, że będę za pięć minut. Zegarek tylko spojrzał po Polsku i wezgnął.
+- `polish_random_01_r3` - `93.94%` - expected: Powiedziałem, że będę za pięć minut; zegarek tylko spojrzał po polsku i westchnął. - transcript: Powiedziałam, że będę za pięć minut. Zegarek tylko spojrzał po Polsku i wezgnął.
+- `polish_random_01_r4` - `93.94%` - expected: Powiedziałem, że będę za pięć minut; zegarek tylko spojrzał po polsku i westchnął. - transcript: Powiedziałam, że będę za pięć minut. Zegarek tylko spojrzał po Polsku i wezgnął.
+- `polish_random_01_r5` - `93.94%` - expected: Powiedziałem, że będę za pięć minut; zegarek tylko spojrzał po polsku i westchnął. - transcript: Powiedziałam, że będę za pięć minut. Zegarek tylko spojrzał po Polsku i wezgnął.
+
+## 28.10.2026 17:57:59 - 1.1-snapshot
+
+- TTS build: `stable`
+- ASR model: `Qwen/Qwen3-ASR-0.6B-hf`
+- Workload: `18` languages, `2` sentences per language, `5` repeats
+- Measured calls: `180/180` completed
+- Exact normalized transcripts: `69.44%`
+- Repeat-consistent sentence cases: `34/36` (`94.44%`)
+- Mean normalized character similarity: `98.48%`
+- Measured TTS time: `234.115s`; RTF `0.3103` (`3.22x` realtime)
+- Benchmark wall time including ASR and diagnostics: `304.875s`
+- TTS PyTorch peak allocated / reserved: `2159.8 MiB / 2596.0 MiB`
+- Peak observed whole-device VRAM during the TTS phase: `5135 MiB` (diagnostic only; use the dedicated GPU-memory suite for clean TTS VRAM)
+- ASR baseline after warmup / endpoint after final keepalive: `5130 MiB / 5130 MiB`
+- Retained non-exact/error WAV files: `.ai\benchmark-speech-quality\20261028-175759` (local, git-ignored)
+- Comment: PR283 clean-process repeat; actual Docker restart after ASR use; source3481d51 plus inference guard; Torch2.10-cu128 Transformers5.17; remote Qwen0.6B; same180-call canonical workload; TTS and ASR sequential
+
+### Languages
+
+| Language | Qwen judge | Exact | Consistent cases | Mean similarity | Avg TTS | P95 TTS | RTF | Errors |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+| English | forced | 10/10 | 2/2 | 100.00% | 1.405s | 1.582s | 0.2490 | 0 |
+| Chinese | forced | 10/10 | 2/2 | 100.00% | 1.319s | 1.410s | 0.2960 | 0 |
+| Hindi | forced | 9/10 | 1/2 | 99.69% | 1.312s | 1.469s | 0.2935 | 0 |
+| Spanish | forced | 10/10 | 2/2 | 100.00% | 1.295s | 1.453s | 0.2749 | 0 |
+| French | forced | 6/10 | 1/2 | 98.69% | 1.278s | 1.420s | 0.3088 | 0 |
+| Standard Arabic | forced | 5/10 | 2/2 | 97.19% | 1.341s | 1.414s | 0.2906 | 0 |
+| Russian | forced | 10/10 | 2/2 | 100.00% | 1.303s | 1.472s | 0.3072 | 0 |
+| Portuguese | forced | 5/10 | 2/2 | 99.58% | 1.264s | 1.321s | 0.3343 | 0 |
+| Polish | forced | 5/10 | 2/2 | 96.97% | 1.288s | 1.358s | 0.3140 | 0 |
+| Thai | forced | 0/10 | 2/2 | 96.11% | 1.213s | 1.261s | 0.3117 | 0 |
+| Japanese | forced | 5/10 | 2/2 | 98.08% | 1.312s | 1.378s | 0.2963 | 0 |
+| German | forced | 10/10 | 2/2 | 100.00% | 1.327s | 1.455s | 0.3083 | 0 |
+| Indonesian | forced | 10/10 | 2/2 | 100.00% | 1.254s | 1.340s | 0.3200 | 0 |
+| Turkish | forced | 0/10 | 2/2 | 94.33% | 1.255s | 1.378s | 0.3164 | 0 |
+| Korean | forced | 10/10 | 2/2 | 100.00% | 1.346s | 1.515s | 0.3457 | 0 |
+| Vietnamese | forced | 5/10 | 2/2 | 93.61% | 1.365s | 1.474s | 0.4064 | 0 |
+| Italian | forced | 5/10 | 2/2 | 98.35% | 1.305s | 1.367s | 0.3342 | 0 |
+| Dutch | forced | 10/10 | 2/2 | 100.00% | 1.229s | 1.253s | 0.3385 | 0 |
+
+### Request Errors
+
+No TTS or ASR request errors were recorded.
+
+### Warmup Observations
+
+- `chinese_clone_01_warmup` scored `98.48%`: 你好，这里是来自 Angry Labs 的 Omni Voice TTS。我们打造本地运行简单易用的语音工具，让人们能用自己的语言私私密离线地生成语音。
+- `hindi_clone_01_warmup` scored `87.06%`: नमस्ते, यह Hangry Labs का अपनी वॉइस टीटीएस है। हम स्थानीय और आसानी से चलने वाले वॉइस टूल बनाते हैं, ताकि लोग अपनी भाषा में निजी और ऑफलाइन तरीके से आवाज बना सकें।
+- `spanish_clone_01_warmup` scored `99.32%`: Hola, esto es OmniVoice TTS de Hungry Labs. Creamos herramientas de voz locales y fáciles de usar para que la gente pueda crear voz de forma privada, sin conexión y en su propio idioma.
+- `french_clone_01_warmup` scored `99.67%`: Bonjour, ici Omnivoice TTS de Angry Labs. Nous créons des outils vocaux locaux et faciles à lancer pour que chacun puisse générer de la parole en privé, hors ligne, et dans sa propre langue.
+- `standard_arabic_clone_01_warmup` scored `95.58%`: مرحبًا، هذا هو آمني voice tts من hungry labs. نصنع أدوات صوت محلية وسهلة التشغيل كي يتمكن الناس من إنشاء الكلام بخصوصية ومن دون اتصال وبلغتهم.
+- `russian_clone_01_warmup` scored `95.34%`: Здравствуйте, это OmniVoice TTS от Hangry Labs. Мы создаем локальные и простые голосовые инструменты, чтобы люди могли создавать речь приватно, offline и на своем языке.
+- `portuguese_clone_01_warmup` scored `99.66%`: Olá, este é o Omni Voice TTS da Angry Labs. Criamos ferramentas de voz locais e fáceis de usar para que as pessoas possam gerar fala com privacidade offline e em seu próprio idioma.
+- `polish_clone_01_warmup` scored `98.91%`: Cześć, tu OmniVoice TTS od Hangry Labs. Tworzymy lokalne, łatwe w uruchomieniu narzędzia głosowe, żeby ludzie mogli tworzyć mowy prywatnie offline i w własnym języku.
+- `thai_clone_01_warmup` scored `93.70%`: สวัสดีนี่คือ OmniVoice TTS จาก Henry Labs เราสร้างเครื่องมือเสียงที่รันในเครื่องและใช้งานง่าย เพื่อให้ผู้คนสร้างเสียงพูดได้อย่างเป็นส่วนตัว offline และเป็นภาษาของตัวเอง
+- `japanese_clone_01_warmup` scored `98.81%`: こんにちは、Hengry Labs の Omni Voice TTS です。私たちは誰でも自分の言葉でプライベートに、オフラインで音声を作れるローカルで簡単に動く音声ツールを作っています。
+- `indonesian_clone_01_warmup` scored `99.00%`: Hello, ini OmniVoice TTS dari Hangry Labs. Kami membuat alat suara lokal yang mudah dijalankan agar orang dapat membuat ucapan secara privat, offline, dan dalam bahasa mereka sendiri.
+- `turkish_clone_01_warmup` scored `96.93%`: Merhaba, bu Henry Labs'den AmniVoice TTS. İnsanların kendi dillerinde özel olarak ve çevrimdışı konuşma üretilmesi için yerel ve kolay çalışan ses araçları geliştiriyoruz.
+- `italian_clone_01_warmup` scored `99.66%`: Ciao, questo è OmniVoice TTS di Angry Labs. Costruiamo strumenti vocali locali e facili da usare, così le persone possono creare parlato in privato offline e nella propria lingua.
+- `dutch_clone_01_warmup` scored `99.63%`: Hallo, dit is OmniVoice TTS van Hangry Labs. We bouwen lokale, eenvoudig te gebruiken stemtools, zodat mensen privé, offline en in hun eigen taal sprak kunnen maken.
+
+### Mismatches And Inconsistent Cases
+
+#### hindi_random_02
+
+- Expected: चाय इतनी अच्छी थी कि बिस्कुट ने भी उसमें डुबकी लगाकर मोक्ष पा लिया।
+- Exact repeats: `4/5`
+- Repeat consistent: `no`
+- Mean / minimum similarity: `99.38% / 96.88%`
+- Transcript (`4x`): चाय इतनी अच्छी थी कि बिस्कुट ने भी उसमें डुबकी लगाकर मोक्ष पालिया.
+- Transcript (`1x`): चाय इतनी अच्छी थी कि बिस्कुट ने भी उसमें डब्बी लगाकर मोक्ष पालिया.
+
+#### french_random_02
+
+- Expected: Le croissant était si croustillant que même le silence a fait des miettes.
+- Exact repeats: `1/5`
+- Repeat consistent: `no`
+- Mean / minimum similarity: `97.38% / 96.72%`
+- Transcript (`4x`): Le croissant était si croustillant que même le silence a fait des miautes.
+- Transcript (`1x`): Le croissant était si croustillant que même le silence a fait des miettes.
+
+#### standard_arabic_random_01
+
+- Expected: قلت سأعود بعد خمس دقائق، فضحكت الساعة وقالت: نعرف هذه القصة.
+- Exact repeats: `0/5`
+- Repeat consistent: `yes`
+- Mean / minimum similarity: `94.38% / 94.38%`
+- Transcript (`5x`): قل سأود بعد خمس دقائق فضحت ساعة وقالت نعرف هذه القصة.
+
+#### portuguese_random_01
+
+- Expected: Eu disse que chegava em cinco minutos; o relógio ouviu e pediu paciência.
+- Exact repeats: `0/5`
+- Repeat consistent: `yes`
+- Mean / minimum similarity: `99.15% / 99.15%`
+- Transcript (`5x`): Eu disse que chegavem cinco minutos. O relógio ouviu e pediu paciência.
+
+#### polish_random_01
+
+- Expected: Powiedziałem, że będę za pięć minut; zegarek tylko spojrzał po polsku i westchnął.
+- Exact repeats: `0/5`
+- Repeat consistent: `yes`
+- Mean / minimum similarity: `93.94% / 93.94%`
+- Transcript (`5x`): Powiedziałam, że będę za pięć minut. Zegarek tylko spojrzał po Polsku i wezgnął.
+
+#### thai_random_01
+
+- Expected: บอกว่าจะถึงในห้านาที แต่นาฬิกาหันมามองเหมือนรู้ความจริงแล้ว
+- Exact repeats: `0/5`
+- Repeat consistent: `yes`
+- Mean / minimum similarity: `96.70% / 96.70%`
+- Transcript (`5x`): บอกว่าจะถึงใน 5 นาที แต่นาฬิกาหันมามองเหมือนรู้ความจริงแล้ว
+
+#### thai_random_02
+
+- Expected: กาแฟแก้วนี้เข้มจนเหมือนพร้อมไปประชุมแทนฉัน
+- Exact repeats: `0/5`
+- Repeat consistent: `yes`
+- Mean / minimum similarity: `95.52% / 95.52%`
+- Transcript (`5x`): กาแฟแก้วนี้คิมจนเหมือนพร้อมไปประชุมแทนฉัน
+
+#### japanese_random_01
+
+- Expected: 五分で行きますと言ったら、時計が静かに首をかしげました。
+- Exact repeats: `0/5`
+- Repeat consistent: `yes`
+- Mean / minimum similarity: `96.15% / 96.15%`
+- Transcript (`5x`): 5分で行きますと言ったら、時計が静かに首をかしげました。
+
+#### turkish_random_01
+
+- Expected: Beş dakikaya geliyorum dedim; saat bana Türk kahvesi falı gibi baktı.
+- Exact repeats: `0/5`
+- Repeat consistent: `yes`
+- Mean / minimum similarity: `94.64% / 94.64%`
+- Transcript (`5x`): 5 dakikaya geliyorum derim. Saat bana Türk kahvesi falı gibi baktı.
+
+#### turkish_random_02
+
+- Expected: Kahve o kadar güçlüydü ki, neredeyse benim yerime toplantıya girecekti.
+- Exact repeats: `0/5`
+- Repeat consistent: `yes`
+- Mean / minimum similarity: `94.02% / 94.02%`
+- Transcript (`5x`): Kafe o kadar güçlüydü ki ne reysi benim yerime toplantıya girecekti.
+
+#### vietnamese_random_02
+
+- Expected: Ly cà phê sáng nay mạnh đến mức suýt trả lời email thay tôi.
+- Exact repeats: `0/5`
+- Repeat consistent: `yes`
+- Mean / minimum similarity: `87.23% / 87.23%`
+- Transcript (`5x`): Lý cà phê sáng nay, mạnh đến mức switch trả lời email thay đổi.
+
+#### italian_random_02
+
+- Expected: Il caffè era così forte che quasi ha parlato al posto mio.
+- Exact repeats: `0/5`
+- Repeat consistent: `yes`
+- Mean / minimum similarity: `96.70% / 96.70%`
+- Transcript (`5x`): Il caffè era così forte che quasi ha parlato apostomia.
+
+
+### Hardest ASR-Judged Calls
+
+- `vietnamese_random_02_r1` - `87.23%` - expected: Ly cà phê sáng nay mạnh đến mức suýt trả lời email thay tôi. - transcript: Lý cà phê sáng nay, mạnh đến mức switch trả lời email thay đổi.
+- `vietnamese_random_02_r2` - `87.23%` - expected: Ly cà phê sáng nay mạnh đến mức suýt trả lời email thay tôi. - transcript: Lý cà phê sáng nay, mạnh đến mức switch trả lời email thay đổi.
+- `vietnamese_random_02_r3` - `87.23%` - expected: Ly cà phê sáng nay mạnh đến mức suýt trả lời email thay tôi. - transcript: Lý cà phê sáng nay, mạnh đến mức switch trả lời email thay đổi.
+- `vietnamese_random_02_r4` - `87.23%` - expected: Ly cà phê sáng nay mạnh đến mức suýt trả lời email thay tôi. - transcript: Lý cà phê sáng nay, mạnh đến mức switch trả lời email thay đổi.
+- `vietnamese_random_02_r5` - `87.23%` - expected: Ly cà phê sáng nay mạnh đến mức suýt trả lời email thay tôi. - transcript: Lý cà phê sáng nay, mạnh đến mức switch trả lời email thay đổi.
+- `polish_random_01_r1` - `93.94%` - expected: Powiedziałem, że będę za pięć minut; zegarek tylko spojrzał po polsku i westchnął. - transcript: Powiedziałam, że będę za pięć minut. Zegarek tylko spojrzał po Polsku i wezgnął.
+- `polish_random_01_r2` - `93.94%` - expected: Powiedziałem, że będę za pięć minut; zegarek tylko spojrzał po polsku i westchnął. - transcript: Powiedziałam, że będę za pięć minut. Zegarek tylko spojrzał po Polsku i wezgnął.
+- `polish_random_01_r3` - `93.94%` - expected: Powiedziałem, że będę za pięć minut; zegarek tylko spojrzał po polsku i westchnął. - transcript: Powiedziałam, że będę za pięć minut. Zegarek tylko spojrzał po Polsku i wezgnął.
+- `polish_random_01_r4` - `93.94%` - expected: Powiedziałem, że będę za pięć minut; zegarek tylko spojrzał po polsku i westchnął. - transcript: Powiedziałam, że będę za pięć minut. Zegarek tylko spojrzał po Polsku i wezgnął.
+- `polish_random_01_r5` - `93.94%` - expected: Powiedziałem, że będę za pięć minut; zegarek tylko spojrzał po polsku i westchnął. - transcript: Powiedziałam, że będę za pięć minut. Zegarek tylko spojrzał po Polsku i wezgnął.
