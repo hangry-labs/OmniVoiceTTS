@@ -67,6 +67,12 @@ docker run --name omnivoicetts --restart unless-stopped -p 7861:7861 -e OMNIVOIC
 
 CPU mode is supported as a fallback, but it still needs enough system memory. For a 140-character CPU benchmark request, conservative rounded Docker RAM recommendations were: 2 GB for random/no-prompt voice, voice design, and direct clone with transcript; 3 GB for a stored voice profile with transcript; 6 GB for direct clone without transcript; and 7 GB for a stored voice profile without transcript. The no-transcript paths may lazy-load ASR, which is why they need much more RAM. Use more for longer text, concurrent requests, larger outputs, or host environments with tighter memory behavior.
 
+CPU TTS now defaults to **FP16**. Enable **System > CPU precision > Use FP32 on CPU** to opt into FP32 for all server-side CPU generation, including native, OpenAI-compatible, and MCP requests. This preference persists in the product volume. Alternatively, `OMNIVOICE_CPU_FP32=1` sets the startup default; an explicitly saved System preference takes precedence. GPU precision is unchanged, and this control does not alter the separately loaded audio tokenizer or Whisper ASR precision. FP32 can be substantially faster on some CPUs but uses more RAM for TTS weights; performance and generated samples may differ between modes.
+
+The settings API exposes this preference through `GET /system/settings` and `PUT /system/settings/cpu-precision` with `{"cpu_fp32":true}` or `false`. A change unloads CPU model/prompt-cache entries so the next CPU generation loads the selected precision; saved voice files and GPU caches remain intact. A busy CPU returns `409` with retry guidance rather than changing an active model. `/tts/status` reports the configured `cpu_precision` and actual `loaded_model_dtypes`.
+
+Earlier CPU memory baselines used FP32. Compare like-for-like precision settings when interpreting their RAM recommendations; current per-attempt precision is recorded in benchmark details.
+
 When running on CPU, `/tts/status` reports container/system memory diagnostics and per-scenario RAM recommendations. If a CPU request appears close to the available memory limit, the container logs a warning and still tries to continue; Docker or the OS may still kill the process if RAM is exhausted.
 
 If a CPU container exits after `Loading weights` during a cloned-voice `/v1/audio/speech` request, it is usually an out-of-memory kill rather than a Python exception. The TTS model already needs significant RAM on CPU, and clone/profile requests without a transcript can lazy-load Whisper ASR to transcribe the reference audio. Recent snapshots reduce the default footprint by keeping eager ASR off on CPU, but no-transcript clone paths still need more memory. To lower RAM use: run `latest` or a current version tag, keep `OMNIVOICE_LOAD_ASR=0`, do not set `OMNIVOICE_ALLOW_CPU_EAGER_ASR=1`, save voice profiles with a reference transcript, include `ref_text` when sending direct `ref_audio`, keep concurrency at the default `OMNIVOICE_MAX_CONCURRENT_GENERATIONS=1`, and prefer GPU mode when available. See [`benchmarks/memory/cpu/BENCHMARKS.md`](benchmarks/memory/cpu/BENCHMARKS.md) for measured scenario recommendations and run `task benchmark-memory-cpu` on your host if you need local numbers.
@@ -537,6 +543,8 @@ omnivoice-infer-batch --model k2-fsa/OmniVoice --test_list test.jsonl --res_dir 
 
 Both CLIs support WAV, MP3, FLAC, and OGG through the same encoder used by the server. Single-file inference infers the format from the output extension unless `--format` is supplied; an explicit format adjusts the extension. Batch inference defaults to WAV and applies the selected format to every result. Files are replaced atomically, and a batch codec failure is reported with a non-zero exit instead of leaving partially encoded files from that batch.
 
+Both CLIs default to FP16 on CPU. Add `--cpu-fp32` (alias `--cpu_fp32`) to opt into FP32 CPU TTS weights. These standalone commands do not inherit the browser/server's persisted preference, and the flag does not change CUDA or MPS precision.
+
 Batch JSONL entries may omit `speed` or set it to `null` to use the default `1.0` for that item, even when other entries specify a speed. Python batching similarly accepts lists such as `speed=[None, 1.25]`. A per-item `duration` still overrides that item's speed and controls its audio-token budget rather than guaranteeing the exact postprocessed waveform duration.
 
 This fork intentionally removes upstream training, data-preparation, benchmark-evaluation, and the superseded Gradio demo from the runtime-focused package. The maintained browser experience is the standalone UI included with `omnivoice-serve` and the Docker images. For model training or research reproduction, use the original [k2-fsa/OmniVoice](https://github.com/k2-fsa/OmniVoice) repository.
@@ -568,6 +576,10 @@ If you encounter bugs, have feature requests, or need help using Hangry Labs Omn
 Snapshot commands intentionally follow the rolling `latest` tags. Published-release commands retain their readable version tag and also pin Docker Hub's immutable top-level OCI digest; the digest is authoritative if a tag is ever changed.
 
 ### v1.1 Snapshot
+
+- Add opt-in FP32 CPU inference: `--cpu-fp32` for both CLIs and a persisted System
+  toggle shared by all server-side CPU APIs. CPU TTS defaults to FP16; changing
+  precision safely invalidates idle CPU caches without unloading GPU models.
 
 - Fix mixed per-item batch speeds: omitted or `None`/JSON `null` speeds now use
   `1.0` during duration estimation instead of crashing Python and JSONL CLI batches.

@@ -1,5 +1,20 @@
 # CPU Memory Benchmark Details
 
+## CPU Precision Opt-In Validation: 28 October 2026
+
+The FP32 option changes CPU TTS weight precision only. CPU TTS now defaults to FP16; the earlier memory-limit matrix used FP32 and remains historical evidence, not a new FP16 minimum-memory measurement.
+
+A bounded live check used the existing Docker runtime, the saved `benchmark_original_clone` profile with its known reference transcript, native CPU execution through `/v1/audio/speech`, seed `4242`, and 16 generation steps. The text was `CPU speech is ready for this test.` One cold HTTP request was made per mode; changing the preference unloaded the CPU model and prompt cache first, while the CUDA model remained loaded in FP16.
+
+| CPU TTS weights | Cold request seconds | Output seconds | Expected words recovered by remote ASR |
+|---|---:|---:|---|
+| FP16 (default) | 51.824 | 2.09 | Yes |
+| FP32 (opt-in) | 15.927 | 2.08 | Yes |
+
+This single short-request comparison is functional validation, not a repeated speed benchmark, universal speedup claim, or memory-limit recommendation. Both outputs contained the intended words; numerical precision changes may produce different waveforms. FP32 uses more storage for the affected TTS weights, but total process RAM need not double. No new full CPU memory matrix was run for this feature.
+
+The installed single-file CPU CLI also generated a valid WAV at its default FP16 setting, and the installed batch CLI generated two valid WAVs with `--cpu-fp32`; all three transcripts matched their requested words. System UI persistence was checked across a container restart, and the local preference was restored to FP16 afterward. GPU precision and separately loaded tokenizer/ASR precision are unchanged.
+
 Each scenario starts in a fresh CPU-only Docker container for every configured memory limit. Docker memory and swap limits are identical, preventing host swap from hiding an out-of-memory condition. The runner records startup failures, request failures, OOM state, peak container memory, request duration, and the first passing limit.
 
 The published recommendation adds 512 MiB to the first passing limit and rounds up to a whole GiB. This is deliberate operational headroom, not a guarantee for longer text or concurrent requests. Direct and stored clone cases without a transcript may lazy-load ASR and therefore require substantially more memory.

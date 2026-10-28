@@ -1,4 +1,8 @@
 {
+  "system.cpuPrecision": "CPU-presisjon",
+  "system.cpuFp32": "Bruk FP32 på CPU",
+  "system.cpuFp32Help": "Høyere presisjon, kan være raskere på enkelte CPU-er, men bruker mer RAM. Standard: FP16.",
+  "system.cpuPrecisionSaved": "CPU-presisjon lagret.",
   "app.title": "OmniVoiceTTS",
   "brand.mascotAlt": "OmniVoiceTTS-maskoten",
   "brand.productAlt": "OmniVoiceTTS - stemme-AI for over 600 språk",

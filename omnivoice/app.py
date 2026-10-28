@@ -14,7 +14,7 @@ import threading
 import time
 from uuid import uuid4
 from collections import OrderedDict
-from contextlib import asynccontextmanager, contextmanager
+from contextlib import ExitStack, asynccontextmanager, contextmanager
 from contextvars import ContextVar, copy_context
 from dataclasses import replace
 from datetime import datetime
@@ -51,6 +51,7 @@ from omnivoice.service.runtime_diagnostics import GenerationDiagnostics
 from omnivoice.service.schemas import (
     MAX_RANDOM_SEED,
     CacheClearRequest,
+    CPUPrecisionSettingsUpdate,
     MCPSettingsUpdate,
     OpenAISpeechRequest,
     PurgeRequest,
@@ -83,7 +84,7 @@ from omnivoice.service.voice_profiles import (
     openai_call_log_payload,
     save_openai_voice_profile as _save_openai_voice_profile,
 )
-from omnivoice.settings import RuntimeSettingsStore
+from omnivoice.settings import CPU_FP32_KEY, RuntimeSettingsStore
 from omnivoice.standalone_ui.gpu import GPU_MONITOR
 from omnivoice.standalone_ui.server import ASSET_DIR, attach_ui
 from omnivoice.utils.audio import analyze_reference_audio_file, get_resample_backend
@@ -124,6 +125,7 @@ DEFAULT_ASR_MODEL_REVISION = os.getenv(
 ).strip() or None
 DEFAULT_ASR_DEVICE = os.getenv("OMNIVOICE_ASR_DEVICE", "").strip() or None
 LOAD_ASR = env_bool("OMNIVOICE_LOAD_ASR", False)
+CPU_FP32_DEFAULT = env_bool("OMNIVOICE_CPU_FP32", False)
 ALLOW_CPU_EAGER_ASR = env_bool("OMNIVOICE_ALLOW_CPU_EAGER_ASR", False)
 MAX_CONCURRENT_GENERATIONS = env_int("OMNIVOICE_MAX_CONCURRENT_GENERATIONS", 1)
 CPU_MEMORY_WARNING_INTERVAL_SECONDS = env_int("OMNIVOICE_CPU_MEMORY_WARNING_INTERVAL_SECONDS", 300)
@@ -218,6 +220,7 @@ STARTUP_PARAMETER_DEFAULTS = OrderedDict(
         ("OMNIVOICE_ASR_MODEL_REVISION", "41f01f3fe87f28c78e2fbf8b568835947dd65ed9"),
         ("OMNIVOICE_ASR_DEVICE", ""),
         ("OMNIVOICE_LOAD_ASR", "0"),
+        ("OMNIVOICE_CPU_FP32", "0"),
         ("OMNIVOICE_ALLOW_CPU_EAGER_ASR", "0"),
         ("OMNIVOICE_MAX_CONCURRENT_GENERATIONS", "1"),
         ("OMNIVOICE_EMPTY_CUDA_CACHE_AFTER_REQUEST", "0"),
@@ -276,6 +279,7 @@ VOICE_DESIGN_BRACKET_TOKEN_MESSAGE = (
 
 MODEL_CACHE: dict[str, OmniVoice] = {}
 MODEL_LOCK = threading.Lock()
+CPU_PRECISION_LOCK = threading.Lock()
 GENERATION_SEMAPHORES: dict[str, threading.BoundedSemaphore] = {}
 GENERATION_SEMAPHORE_LOCK = threading.Lock()
 GENERATION_DIAGNOSTICS = GenerationDiagnostics(MAX_CONCURRENT_GENERATIONS)
@@ -464,11 +468,19 @@ def validate_ref_audio_path(ref_audio: str | None) -> str | None:
     )
 
 
+def cpu_precision_payload() -> dict[str, Any]:
+    enabled = RUNTIME_SETTINGS.cpu_fp32_enabled(default=CPU_FP32_DEFAULT)
+    return {"cpu_fp32": enabled, "dtype": "float32" if enabled else "float16"}
+
+
 def get_model(device: str) -> OmniVoice:
     resolved_device = normalize_device(device)
     with MODEL_LOCK:
         if resolved_device not in MODEL_CACHE:
-            dtype = torch.float16 if resolved_device.startswith("cuda") else torch.float32
+            if resolved_device == "cpu":
+                dtype = torch.float32 if cpu_precision_payload()["cpu_fp32"] else torch.float16
+            else:
+                dtype = torch.float16 if resolved_device.startswith("cuda") else torch.float32
             load_asr = should_eager_load_asr(resolved_device)
             MODEL_CACHE[resolved_device] = OmniVoice.from_pretrained(
                 DEFAULT_MODEL,
@@ -1124,6 +1136,7 @@ def get_status_payload() -> dict:
         "load_asr": effective_load_asr,
         "requested_load_asr": LOAD_ASR,
         "allow_cpu_eager_asr": ALLOW_CPU_EAGER_ASR,
+        "cpu_precision": cpu_precision_payload(),
         "asr_model": DEFAULT_ASR_MODEL if effective_load_asr else None,
         "asr_model_revision": DEFAULT_ASR_MODEL_REVISION if effective_load_asr else None,
         "asr_device": DEFAULT_ASR_DEVICE or default_device,
@@ -1141,6 +1154,10 @@ def get_status_payload() -> dict:
             "to OmniVoice auto/design/clone generation; unknown Kokoro speaker ids are ignored."
         ),
         "loaded_model_devices": list(MODEL_CACHE),
+        "loaded_model_dtypes": {
+            device: str(getattr(model, "dtype", "unknown")).removeprefix("torch.")
+            for device, model in list(MODEL_CACHE.items())
+        },
         "voice_prompt_cache": {
             "entries": len(VOICE_CLONE_PROMPT_CACHE),
             "limit": VOICE_CLONE_PROMPT_CACHE_LIMIT,
@@ -1216,6 +1233,7 @@ def get_startup_diagnostics_payload() -> dict[str, Any]:
             "empty_cuda_cache_after_request": EMPTY_CUDA_CACHE_AFTER_REQUEST,
             "reset_cuda_peak_after_cache_clear": RESET_CUDA_PEAK_AFTER_CACHE_CLEAR,
             "cpu_memory_warning_interval_seconds": CPU_MEMORY_WARNING_INTERVAL_SECONDS,
+            "cpu_precision": cpu_precision_payload(),
             "voice_prompt_cache_limit": VOICE_CLONE_PROMPT_CACHE_LIMIT,
             "languages": len(LANG_IDS),
             "output_formats": sorted(OUTPUT_FORMATS),
@@ -2551,6 +2569,7 @@ def openai_calls() -> dict[str, Any]:
 def system_settings() -> dict[str, Any]:
     return {
         "generation_defaults": get_ui_generation_defaults().model_dump(),
+        "cpu_precision": cpu_precision_payload(),
         "mcp": {
             "enabled": RUNTIME_SETTINGS.mcp_enabled(default=MCP_DEFAULT_ENABLED),
             "advanced_enabled": RUNTIME_SETTINGS.mcp_advanced_enabled(
@@ -2567,6 +2586,40 @@ def save_generation_defaults(payload: UIGenerationDefaults) -> dict[str, Any]:
     defaults = payload.model_dump()
     RUNTIME_SETTINGS.set("ui_generation_defaults", defaults)
     return {"generation_defaults": defaults}
+
+
+@api.put("/system/settings/cpu-precision", tags=["System"])
+def save_cpu_precision(payload: CPUPrecisionSettingsUpdate) -> dict[str, Any]:
+    with CPU_PRECISION_LOCK:
+        changed = cpu_precision_payload()["cpu_fp32"] != payload.cpu_fp32
+        purged_devices = []
+        purged_prompts = 0
+        with ExitStack() as permits:
+            if changed:
+                semaphore = get_generation_semaphore("cpu")
+                # Drain every CPU slot without waiting or evicting an active model.
+                for _ in range(MAX_CONCURRENT_GENERATIONS):
+                    if not semaphore.acquire(blocking=False):
+                        raise HTTPException(
+                            status_code=409,
+                            detail="CPU generation is busy. Wait for CPU requests to finish, then retry the precision change.",
+                        )
+                    permits.callback(semaphore.release)
+            with MODEL_LOCK:
+                RUNTIME_SETTINGS.set(CPU_FP32_KEY, payload.cpu_fp32)
+                if changed:
+                    if "cpu" in MODEL_CACHE:
+                        del MODEL_CACHE["cpu"]
+                        purged_devices.append("cpu")
+                    purged_prompts = clear_voice_clone_prompt_cache("cpu")
+            if changed:
+                gc.collect()
+        return {
+            "cpu_precision": cpu_precision_payload(),
+            "changed": changed,
+            "purged_model_devices": purged_devices,
+            "purged_voice_prompts": purged_prompts,
+        }
 
 
 @api.put("/system/settings/mcp", tags=["System"])

@@ -249,10 +249,14 @@ def get_parser():
         help="Language id to use when test_list JSONL entries do not contain "
         "a language_id field.",
     )
+    parser.add_argument(
+        "--cpu-fp32", "--cpu_fp32", action="store_true",
+        help="Use FP32 TTS weights on CPU instead of the default FP16. Ignored on GPUs; may increase RAM usage.",
+    )
     return parser
 
 
-def process_init(rank_queue, model_checkpoint, warmup=0):
+def process_init(rank_queue, model_checkpoint, warmup=0, cpu_fp32=False):
     """Initializer for each worker process.
 
     Loads model (with tokenizers and duration estimator) onto a specific GPU
@@ -278,12 +282,13 @@ def process_init(rank_queue, model_checkpoint, warmup=0):
     else:
         worker_device = f"cuda:{device_id}"
 
-    logging.info(f"Initializing worker on device: {worker_device}")
+    dtype = torch.float32 if cpu_fp32 and torch.device(worker_device).type == "cpu" else torch.float16
+    logging.info("Initializing worker on device: %s (dtype=%s)", worker_device, dtype)
 
     worker_model = OmniVoice.from_pretrained(
         model_checkpoint,
         device_map=worker_device,
-        dtype=torch.float16,
+        dtype=dtype,
     )
 
     if warmup > 0:
@@ -539,7 +544,7 @@ def main():
         with ProcessPoolExecutor(
             max_workers=num_processes,
             initializer=process_init,
-            initargs=(rank_queue, args.model, args.warmup),
+            initargs=(rank_queue, args.model, args.warmup, args.cpu_fp32),
         ) as executor:
             futures = []
 

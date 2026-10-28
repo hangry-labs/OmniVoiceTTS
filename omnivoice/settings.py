@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 DEFAULT_SETTINGS_PATH = "/app/persistent/app/settings.json"
 MCP_ENABLED_KEY = "mcp_enabled"
 MCP_ADVANCED_ENABLED_KEY = "mcp_advanced_enabled"
+CPU_FP32_KEY = "cpu_fp32"
 
 
 class RuntimeSettingsStore:
@@ -64,6 +65,10 @@ class RuntimeSettingsStore:
 
     def mcp_enabled(self, *, default: bool = False) -> bool:
         return bool(self.get(MCP_ENABLED_KEY, default))
+
+    def cpu_fp32_enabled(self, *, default: bool = False) -> bool:
+        value = self.get(CPU_FP32_KEY, default)
+        return value if isinstance(value, bool) else default
 
     def mcp_advanced_enabled(self, *, default: bool = False) -> bool:
         return bool(self.get(MCP_ADVANCED_ENABLED_KEY, default))

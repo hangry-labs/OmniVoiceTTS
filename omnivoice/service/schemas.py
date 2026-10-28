@@ -177,6 +177,13 @@ class MCPSettingsUpdate(BaseModel):
     )
 
 
+class CPUPrecisionSettingsUpdate(BaseModel):
+    cpu_fp32: bool = Field(
+        ..., strict=True,
+        description="Opt into FP32 TTS weights on CPU instead of the default FP16. GPU precision is unchanged.",
+    )
+
+
 class TextNormalizationRequest(BaseModel):
     text: str = Field(..., min_length=1, max_length=MAX_NORMALIZATION_CHARACTERS)
     language: str | None = Field(

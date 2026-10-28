@@ -1,4 +1,8 @@
 {
+  "system.cpuPrecision": "Precisión de CPU",
+  "system.cpuFp32": "Usar FP32 en CPU",
+  "system.cpuFp32Help": "Mayor precisión y posible mejora de velocidad en algunas CPU, con mayor uso de RAM. Predeterminado: FP16.",
+  "system.cpuPrecisionSaved": "Se ha guardado la precisión de CPU.",
   "app.title": "OmniVoiceTTS",
   "brand.mascotAlt": "Mascota de OmniVoiceTTS",
   "brand.productAlt": "OmniVoiceTTS - IA de voz para más de 600 idiomas",

@@ -231,6 +231,10 @@
               <p data-i18n="system.memoryHelp">Clear unused CUDA allocator blocks without unloading weights, or purge loaded models and cached voice prompts.</p>
               <div class="system-action-row"><button class="secondary-button" id="clear-cache" type="button" data-i18n="system.clearCache">Clear CUDA cache</button><button class="danger-button" id="purge-models" type="button" data-i18n="system.purge">Purge models</button></div>
             </section>
+            <section class="runtime-settings-card">
+              <div class="runtime-settings-heading"><div><i class="icon-sliders-horizontal"></i><strong data-i18n="system.cpuPrecision">CPU precision</strong></div></div>
+              <label class="switch-field"><span><strong data-i18n="system.cpuFp32">Use FP32 on CPU</strong><small data-i18n="system.cpuFp32Help">Higher precision, potentially faster on some CPUs, with higher RAM usage. Default: FP16.</small></span><input id="cpu-fp32" type="checkbox"></label>
+            </section>
             <section class="runtime-settings-card mcp-settings-card">
               <div class="runtime-settings-heading"><div><i class="icon-plug"></i><strong data-i18n="system.mcp">MCP access</strong></div></div>
               <p data-i18n="system.mcpHelp">Expose compact or advanced local-agent tools. Enable them only on trusted networks because these endpoints use no separate application authentication.</p>

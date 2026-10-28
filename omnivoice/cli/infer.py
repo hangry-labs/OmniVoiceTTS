@@ -156,6 +156,10 @@ def get_parser() -> argparse.ArgumentParser:
         default=None,
         help="Device to use for inference. Auto-detected if not specified.",
     )
+    parser.add_argument(
+        "--cpu-fp32", "--cpu_fp32", action="store_true",
+        help="Use FP32 TTS weights on CPU instead of the default FP16. Ignored on GPUs; may increase RAM usage.",
+    )
     return parser
 
 
@@ -166,9 +170,10 @@ def main():
     args = get_parser().parse_args()
 
     device = args.device or get_best_device()
-    logging.info(f"Loading model from {args.model} on {device} ...")
+    dtype = torch.float32 if args.cpu_fp32 and torch.device(device).type == "cpu" else torch.float16
+    logging.info("Loading model from %s on %s (dtype=%s) ...", args.model, device, dtype)
     model = OmniVoice.from_pretrained(
-        args.model, device_map=device, dtype=torch.float16
+        args.model, device_map=device, dtype=dtype,
     )
 
     logging.info(f"Generating audio for: {args.text[:80]}...")

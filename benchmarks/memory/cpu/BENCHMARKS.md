@@ -2,6 +2,8 @@
 
 CPU-only Docker memory-limit benchmark for OpenAI-compatible speech requests.
 
+The three historical rows ending with `28.10.2026 18:03:34` used FP32 CPU TTS. Later snapshots default to FP16 with optional FP32; check each new run's per-attempt precision in `DETAILS.md`/`runs.json` before comparing memory requirements. The main server's System toggle does not configure the separate CPU benchmark containers.
+
 Each run starts one CPU container per scenario and Docker memory limit, then records the lowest passing limit as a conservative whole-GB RAM recommendation. The recommendation adds 512 MiB headroom to the lowest passing limit before rounding up to whole GB. The detailed pass/fail attempts are stored in `runs.json` and summarized in `DETAILS.md`.
 
 The default task starts at 1536 MiB and uses practical steps up to 12 GiB; it intentionally skips obviously unusable sub-GB limits so the benchmark finishes faster.

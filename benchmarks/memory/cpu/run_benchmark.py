@@ -457,6 +457,7 @@ def run_attempt(
             return attempt
 
         status = request_json(f"{base_url}/tts/status", timeout=20)
+        attempt["cpu_precision"] = status.get("cpu_precision")
         start_time = time.monotonic()
         with MemoryMonitor(container) as monitor:
             try:
@@ -475,7 +476,10 @@ def run_attempt(
                         "content_type": content_type,
                         "seconds": seconds,
                         "peak_mib": monitor.peak_mib,
-                        "notes": f"status load_asr={status.get('load_asr')} resolved_device={status.get('resolved_device')}",
+                        "notes": (
+                            f"status load_asr={status.get('load_asr')} resolved_device={status.get('resolved_device')} "
+                            f"cpu_dtype={status.get('cpu_precision', {}).get('dtype', 'not reported')}"
+                        ),
                     }
                 )
             except Exception as exc:

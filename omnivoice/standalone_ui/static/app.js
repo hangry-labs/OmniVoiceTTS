@@ -1058,9 +1058,27 @@ async function refreshSystem() {
   const [status, settings] = await Promise.all([fetchJson('/tts/status'), fetchJson('/system/settings')])
   $('#readiness-output').textContent = JSON.stringify(status, null, 2)
   $('#system-default-summary').textContent = JSON.stringify(settings.generation_defaults || {}, null, 2)
+  $('#cpu-fp32').checked = Boolean(settings.cpu_precision?.cpu_fp32)
   $('#mcp-enabled').checked = Boolean(settings.mcp?.enabled)
   $('#mcp-advanced-enabled').checked = Boolean(settings.mcp?.advanced_enabled)
 }
+
+$('#cpu-fp32').addEventListener('change', async (event) => {
+  const control = event.currentTarget
+  control.disabled = true
+  try {
+    const result = await fetchJson('/system/settings/cpu-precision', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cpu_fp32: control.checked }),
+    })
+    control.checked = Boolean(result.cpu_precision.cpu_fp32)
+    showToast(t('system.cpuPrecisionSaved'), 'success')
+    await refreshSystem()
+  } catch (error) {
+    showToast(errorMessage(error))
+    await refreshSystem().catch(() => {})
+  } finally { control.disabled = false }
+})
 
 async function saveMcpSettings() {
   const controls = [$('#mcp-enabled'), $('#mcp-advanced-enabled')]

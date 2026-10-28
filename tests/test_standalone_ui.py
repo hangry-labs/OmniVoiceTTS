@@ -97,6 +97,7 @@ class StandaloneUiTests(unittest.TestCase):
         self.assertLess(index.text.index('id="advanced-generation"'), index.text.index('<section class="content-panel">'))
         self.assertIn('class="voice-form-grid"', index.text)
         self.assertIn('<div class="system-controls">', index.text)
+        self.assertIn('id="cpu-fp32"', index.text)
         system_grid = index.text[index.text.index('<div class="system-grid">'):]
         self.assertLess(system_grid.index('<div class="system-controls">'), system_grid.index('id="gpu-output"'))
         self.assertLess(system_grid.index('id="clear-cache"'), system_grid.index('id="save-defaults"'))

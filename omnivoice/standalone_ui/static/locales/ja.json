@@ -1,4 +1,8 @@
 {
+  "system.cpuPrecision": "CPUの計算精度",
+  "system.cpuFp32": "CPUでFP32を使用",
+  "system.cpuFp32Help": "精度が高く、一部のCPUでは高速になる場合がありますが、RAM使用量が増えます。既定値: FP16。",
+  "system.cpuPrecisionSaved": "CPUの精度設定を保存しました。",
   "app.title": "OmniVoiceTTS",
   "brand.mascotAlt": "OmniVoiceTTS のマスコット",
   "brand.productAlt": "600以上の言語に対応する音声AI OmniVoiceTTS",

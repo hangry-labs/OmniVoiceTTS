@@ -47,6 +47,8 @@ The named `omnivoicetts_data` volume stores model assets, application settings, 
 
 CPU mode is a fallback path and requires substantial system RAM. Include a reference transcript when cloning (`ref_text`) and save transcripts with voice profiles to avoid loading ASR solely to transcribe the reference. Keep `OMNIVOICE_LOAD_ASR=0` and the default `OMNIVOICE_MAX_CONCURRENT_GENERATIONS=1` for the lowest practical CPU footprint. Measured scenario guidance is maintained in [`benchmarks/memory/cpu/BENCHMARKS.md`](https://github.com/Hangry-Labs/OmniVoiceTTS/blob/master/benchmarks/memory/cpu/BENCHMARKS.md).
 
+CPU TTS defaults to FP16. Enable **System > CPU precision > Use FP32 on CPU** for potentially faster CPU inference with higher TTS-weight RAM usage. The choice persists in the data volume and applies to CPU API calls too; GPU precision is unchanged. Set `OMNIVOICE_CPU_FP32=1` to change the startup default when no System preference has been saved. Earlier CPU memory baselines used FP32, so compare the same precision mode.
+
 The smaller `latest_tiny` image downloads model assets on first use and keeps them in the same persistent volume:
 
 ```bash
@@ -156,13 +158,14 @@ Useful endpoints:
 | `OMNIVOICE_DEVICE` | `auto` | Select the inference device; use `cpu` for CPU mode |
 | `CUDA_VISIBLE_DEVICES` | Unset | Select which NVIDIA GPUs the container can see |
 | `OMNIVOICE_LOAD_ASR` | `0` | Keep reference-transcription ASR lazy rather than eager |
+| `OMNIVOICE_CPU_FP32` | `0` | Opt into FP32 CPU TTS weights; a saved System preference takes precedence |
 | `OMNIVOICE_MAX_CONCURRENT_GENERATIONS` | `1` | Serialize inference per resolved device to limit memory growth |
 | `HF_HUB_OFFLINE`, `TRANSFORMERS_OFFLINE` | Full: `1`; tiny: `0` | Allow missing model downloads when set to `0` |
 | `OMNIVOICE_ENABLE_MCP` | `0` | Enable the compact MCP endpoint at startup |
 | `OMNIVOICE_ENABLE_ADVANCED_MCP` | `0` | Enable the larger advanced endpoint at startup |
 | `OMNIVOICE_MCP_BASE_URL` | `http://localhost:7861` | Set a client-reachable origin for generated artifact links |
 
-Generation defaults and MCP access can be changed in **System** and persist in
+Generation defaults, CPU precision and MCP access can be changed in **System** and persist in
 the data volume. Device, ASR preload and concurrency changes require container
 replacement. `/tts/cache/clear` releases unused allocator blocks without unloading
 models or saved prompts; `/tts/purge` unloads cached models and prompts.
