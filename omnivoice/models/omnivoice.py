@@ -652,8 +652,8 @@ class OmniVoice(PreTrainedModel):
                 ``None`` (default) lets the model estimate duration from text.
                 Overrides ``speed`` when both are provided.
             speed: Speaking speed factor. ``> 1.0`` for faster, ``< 1.0`` for
-                slower. If a list, one value per item. ``None`` (default) uses
-                the model's default estimation.
+                slower. If a list, one value per item; ``None`` entries use
+                ``1.0``. ``None`` (default) uses the model's default estimation.
             normalize_text: Convert supported English, Malayalam, or Vietnamese
                 structured tokens to an inspectable spoken form. The default is
                 ``False``.
@@ -1300,6 +1300,8 @@ class OmniVoice(PreTrainedModel):
             # to get the raw estimate, then override target_lens below.
             has_dur = durations is not None and durations[i] is not None
             item_speed = 1.0 if has_dur else (user_speed[i] if user_speed else 1.0)
+            if item_speed is None:
+                item_speed = 1.0
             est = self._estimate_target_tokens(
                 text_list[i],
                 ref_text_list[i],

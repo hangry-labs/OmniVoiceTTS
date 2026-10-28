@@ -537,6 +537,8 @@ omnivoice-infer-batch --model k2-fsa/OmniVoice --test_list test.jsonl --res_dir 
 
 Both CLIs support WAV, MP3, FLAC, and OGG through the same encoder used by the server. Single-file inference infers the format from the output extension unless `--format` is supplied; an explicit format adjusts the extension. Batch inference defaults to WAV and applies the selected format to every result. Files are replaced atomically, and a batch codec failure is reported with a non-zero exit instead of leaving partially encoded files from that batch.
 
+Batch JSONL entries may omit `speed` or set it to `null` to use the default `1.0` for that item, even when other entries specify a speed. Python batching similarly accepts lists such as `speed=[None, 1.25]`. A per-item `duration` still overrides that item's speed and controls its audio-token budget rather than guaranteeing the exact postprocessed waveform duration.
+
 This fork intentionally removes upstream training, data-preparation, benchmark-evaluation, and the superseded Gradio demo from the runtime-focused package. The maintained browser experience is the standalone UI included with `omnivoice-serve` and the Docker images. For model training or research reproduction, use the original [k2-fsa/OmniVoice](https://github.com/k2-fsa/OmniVoice) repository.
 
 ---
@@ -566,6 +568,10 @@ If you encounter bugs, have feature requests, or need help using Hangry Labs Omn
 Snapshot commands intentionally follow the rolling `latest` tags. Published-release commands retain their readable version tag and also pin Docker Hub's immutable top-level OCI digest; the digest is authoritative if a tag is ever changed.
 
 ### v1.1 Snapshot
+
+- Fix mixed per-item batch speeds: omitted or `None`/JSON `null` speeds now use
+  `1.0` during duration estimation instead of crashing Python and JSONL CLI batches.
+  Explicit speeds and per-item duration overrides retain their existing behavior.
 
 - Run clone-prompt preparation in inference mode, including first-use saved voices
   and SSML-H dynamic voices, avoiding unnecessary gradient intermediates. A focused
