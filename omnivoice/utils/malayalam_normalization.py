@@ -207,7 +207,7 @@ _MIXED_FRACTION_RE = re.compile(
     rf"(?<![\w.])(?P<whole>{_INTEGER_TOKEN})\s+(?P<fraction>1/4|1/2|3/4)(?![\w/])"
 )
 _FRACTION_RE = re.compile(r"(?<![\w/])(?P<fraction>1/4|1/2|3/4)(?![\w/])")
-_FRACTION_LIKE_RE = re.compile(r"(?<![\w/])[0-9]+/[0-9]+(?![\w/])")
+_FRACTION_LIKE_RE = re.compile(r"(?<![\w/])[0-9]++/[0-9]++(?![\w/])")
 _ORDINAL_RE = re.compile(
     rf"(?<![\w.])(?P<value>{_INTEGER_TOKEN})(?:st|nd|rd|th)(?!\w)",
     re.IGNORECASE,
@@ -337,8 +337,6 @@ def collect_malayalam_candidates(
     supported_fractions = {match.span() for match in _FRACTION_RE.finditer(text)}
     unsupported_fractions = [
         match.span()
-        # Input is capped at MAX_NORMALIZATION_CHARACTERS by normalize_structured_text.
-        # codeql[py/polynomial-redos]
         for match in _FRACTION_LIKE_RE.finditer(text)
         if match.span() not in supported_fractions
     ]

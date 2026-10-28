@@ -128,8 +128,8 @@ _SEPARATED_DIGIT_SEQUENCE_RE = re.compile(
     r"(?<!\w)(?:\+\d{1,3}[ .-]?)?(?:\(?\d{2,4}\)?[ .-]){1,}\d{3,4}(?!\w)"
 )
 _IDENTIFIER_CONTEXT_RE = re.compile(
-    r"(?:mã(?:\s+số|\s+sinh\s+viên|\s+đơn\s+hàng)?|cccd|số\s+tài\s+khoản|phòng)"
-    r"\s*(?:là|:)?\s*(?P<value>\d+)",
+    r"(?:mã(?:\s++số|\s++sinh\s++viên|\s++đơn\s++hàng)?|cccd|số\s++tài\s++khoản|phòng)"
+    r"\s*+(?:(?:là|:)\s*+)?(?P<value>\d++)",
     re.IGNORECASE,
 )
 _PUNCTUATED_NUMBER_RE = re.compile(
@@ -399,8 +399,6 @@ def collect_vietnamese_candidates(
 
     identifier_spans = [
         match.span("value")
-        # Input is capped at MAX_NORMALIZATION_CHARACTERS by normalize_structured_text.
-        # codeql[py/polynomial-redos]
         for match in _IDENTIFIER_CONTEXT_RE.finditer(text)
         if not _overlaps(*match.span("value"), occupied)
     ]

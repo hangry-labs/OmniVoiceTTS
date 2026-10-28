@@ -23,19 +23,26 @@ _BRACKET_CONTROL_RE = re.compile(r"\[[^\[\]]*\]")
 _AMBIGUOUS_SLASH_DATE_RE = re.compile(r"(?<!\w)\d{1,2}/\d{1,2}/\d{2,4}(?!\w)")
 _VERSION_OR_IPV4_RE = re.compile(r"(?<!\w)v?\d+(?:\.\d+){2,}(?!\w)", re.IGNORECASE)
 _EMAIL_RE = re.compile(
-    r"(?<![\w.@])[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@"
-    r"[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+(?![\w@])"
+    r"(?<![\w.!#$%&'*+/=?^_`{|}~@-])[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]++@"
+    r"[A-Za-z0-9-]++(?:\.[A-Za-z0-9-]++)++(?![\w@])"
 )
 _URL_RE = re.compile(r"(?<!\w)(?:https?://|www\.)[^\s<>{}\[\]]+", re.IGNORECASE)
 _ISO_DATE_RE = re.compile(r"(?<!\w)(\d{4})-(\d{2})-(\d{2})(?!\w)")
 _PHONE_RE = re.compile(
     r"(?<!\w)(?:\+\d{1,3}[ .-])?(?:\(?\d{2,4}\)?[ .-]){2,}\d{3,4}(?![\w.])"
 )
-_CURRENCY_RE = re.compile(r"(?<![\w.])([$€£])\s*([-+]?\d[\d,]*(?:\.\d+)?)(?![\w.])")
-_PERCENT_RE = re.compile(r"(?<![\w.])([-+]?\d[\d,]*(?:\.\d+)?)\s*%(?!\w)")
-_DECIMAL_RE = re.compile(r"(?<![\w.])([-+]?\d[\d,]*\.\d+)(?![\w.])")
-_ALPHANUMERIC_RE = re.compile(r"(?<!\w)[A-Za-z0-9]+(?:[-_][A-Za-z0-9]+)*(?!\w)")
-_INTEGER_RE = re.compile(r"(?<![\w.])[-+]?\d[\d,]*(?!\w)(?!\.\d)")
+# Consume complete numeric groups without absorbing sentence punctuation.
+_INTEGER_TOKEN = r"\d++(?:,\d++)*+"
+_NUMBER_TOKEN = rf"[-+]?{_INTEGER_TOKEN}(?:\.\d++)?"
+_NUMBER_END = r"(?!\w)(?![.,]\w)(?!,,)"
+_CURRENCY_RE = re.compile(rf"(?<![\w.])([$€£])\s*+({_NUMBER_TOKEN}){_NUMBER_END}")
+_PERCENT_RE = re.compile(rf"(?<![\w.,])({_NUMBER_TOKEN})\s*+%(?!\w)")
+_DECIMAL_RE = re.compile(rf"(?<![\w.,])([-+]?{_INTEGER_TOKEN}\.\d++){_NUMBER_END}")
+_ALPHANUMERIC_RE = re.compile(
+    # Block retries inside ASCII identifiers while preserving prefixes such as '-AB12'.
+    r"(?<!\w)(?<![A-Za-z0-9_]-)[A-Za-z0-9]++(?:[-_][A-Za-z0-9]++)*+(?!\w)"
+)
+_INTEGER_RE = re.compile(rf"(?<![\w.,])[-+]?{_INTEGER_TOKEN}{_NUMBER_END}")
 
 _DIGIT_WORDS = (
     "zero",
@@ -158,6 +165,8 @@ def _verbalize_currency(match: re.Match[str]) -> str:
             words = f"{words} and {_english_words(minor)} {minor_name}"
     if negative:
         words = f"minus {words}"
+    elif value.strip().startswith("+"):
+        words = f"plus {words}"
     return words
 
 
@@ -275,9 +284,6 @@ def normalize_structured_text(text: str, language: str | None = None) -> TextNor
         verbalize: Callable[[re.Match[str]], str],
         accept: Callable[[re.Match[str]], bool] | None = None,
     ) -> None:
-        # Input is capped at MAX_NORMALIZATION_CHARACTERS above. These conservative
-        # recognizers are retained to preserve normalization behavior.
-        # codeql[py/polynomial-redos]
         for match in pattern.finditer(text):
             if _overlaps(match.start(), match.end(), occupied):
                 continue

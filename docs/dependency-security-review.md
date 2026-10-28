@@ -2,6 +2,8 @@
 
 Review date: 28 October 2026. This records the dependency changes prepared for the `1.1-snapshot` runtime. Published release images retain their original dependencies; deploy a newly built snapshot or subsequent release to receive these fixes.
 
+The subsequent [code-scanning security review](code-scanning-security-review.md) addresses three normalization regex findings and documents the remaining file-path false positive. Its newer validation totals supersede the initial counts below.
+
 ## Scope And Changes
 
 The repository had 54 open Dependabot alerts covering 29 distinct advisories. Many alerts repeat across `pyproject.toml`, `requirements.txt`, and `uv.lock`. The changes address 48 of those alert records, covering 27 advisories, while preserving Python 3.13 and CUDA 12.8.

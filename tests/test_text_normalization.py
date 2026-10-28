@@ -1,13 +1,72 @@
 from __future__ import annotations
 
+import time
 import unittest
 
 from omnivoice.utils.malayalam_normalization import number_to_malayalam
-from omnivoice.utils.text_normalization import normalize_structured_text
+from omnivoice.utils.text_normalization import MAX_NORMALIZATION_CHARACTERS, normalize_structured_text
 from omnivoice.utils.vietnamese_normalization import number_to_vietnamese
 
 
 class StructuredTextNormalizationTests(unittest.TestCase):
+    def test_maximum_length_near_misses_have_bounded_cpu_cost(self) -> None:
+        limit = MAX_NORMALIZATION_CHARACTERS
+        cases = (
+            ("en", "!" * limit),
+            ("en", "0" * (limit - 1) + "x"),
+            ("ml", "0" * (limit - 3) + "/0x"),
+            ("vi", "mã" + " " * (limit - 3) + "x"),
+        )
+        for language, text in cases:
+            with self.subTest(language=language, suffix=text[-4:]):
+                started = time.process_time()
+                result = normalize_structured_text(text, language)
+                elapsed = time.process_time() - started
+                self.assertEqual(result.normalized, text)
+                self.assertLess(elapsed, 1.0, "Normalization spent excessive CPU on a near miss")
+
+    def test_vietnamese_identifier_separators_remain_supported(self) -> None:
+        for prefix in ("mã", "mã số", "mã sinh viên", "mã đơn hàng", "CCCD", "số tài khoản", "phòng"):
+            for separator in (" ", ": ", " là "):
+                text = f"{prefix}{separator}12345"
+                with self.subTest(text=text):
+                    result = normalize_structured_text(text, "vi")
+                    self.assertEqual(result.normalized, text)
+                    self.assertIn("Numbers in explicit identifier contexts were preserved.", result.warnings)
+
+    def test_malformed_numeric_prefixes_before_words_are_preserved(self) -> None:
+        text = "Pay $123abc, keep 12,abc and 12,,34 and code123x."
+        self.assertEqual(normalize_structured_text(text, "en").normalized, text)
+
+    def test_amounts_at_sentence_end_preserve_the_complete_value(self) -> None:
+        cases = {
+            "Pay $1,234.": "Pay one thousand, two hundred and thirty four dollars.",
+            "Pay $1,234.56.": "Pay one thousand, two hundred and thirty four dollars and fifty six cents.",
+            "Value 1,234.56.": "Value one thousand, two hundred and thirty four point five six.",
+            "Pay $1,000,000.": "Pay one million dollars.",
+            "Pay $1,00,000.": "Pay one hundred thousand dollars.",
+            "Count 1,00,000 items.": "Count one hundred thousand items.",
+            "Pay $19.99.": "Pay nineteen dollars and ninety nine cents.",
+            "Pay $+12.": "Pay plus twelve dollars.",
+            "Pay £+12 now.": "Pay plus twelve pounds now.",
+            "Pay $-0.25.": "Pay minus zero dollars and twenty five cents.",
+            "There are 1,234, please count them.": "There are one thousand, two hundred and thirty four, please count them.",
+        }
+        for text, expected in cases.items():
+            with self.subTest(text=text):
+                self.assertEqual(normalize_structured_text(text, "en").normalized, expected)
+
+    def test_identifiers_after_hyphens_keep_their_spoken_form(self) -> None:
+        cases = {
+            "-AB12": "-A B one two",
+            "Hello--AB12": "Hello--A B one two",
+            "Café-AB12": "Café-A B one two",
+            "Zażółć-AB12": "Zażółć-A B one two",
+        }
+        for text, expected in cases.items():
+            with self.subTest(text=text):
+                self.assertEqual(normalize_structured_text(text, "en").normalized, expected)
+
     def test_issue_246_structured_english_is_verbalized(self) -> None:
         result = normalize_structured_text(
             "Email john.smith@example.com, call +1 555 123 4567, pay $19.99 on 2026-08-12, "

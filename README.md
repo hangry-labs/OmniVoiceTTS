@@ -574,6 +574,9 @@ Snapshot commands intentionally follow the rolling `latest` tags. Published-rele
   Transformers, and the CUDA 12.8 PyTorch runtime. See the
   [dependency security review](docs/dependency-security-review.md) for fixes,
   verification, and outstanding upstream advisories.
+- Harden English, Malayalam, and Vietnamese text-normalization patterns against
+  excessive backtracking. See the [CodeQL review](docs/code-scanning-security-review.md)
+  for resolved findings and the tested file-path containment assessment.
 
 The current development snapshot is published through the rolling tags from `master`:
 
