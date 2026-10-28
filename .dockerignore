@@ -30,3 +30,6 @@ download/
 data/
 exp*/
 results/
+
+# Website builder is separate from the inference image
+site/

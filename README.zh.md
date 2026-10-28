@@ -13,6 +13,8 @@
   <a href="README.es.md">Español</a>
 </p>
 
+<p align="center"><a href="https://hangry-labs.github.io/OmniVoiceTTS/examples/?lang=zh"><strong>🎧 收听语音示例</strong></a></p>
+
 # Hangry Labs OmniVoiceTTS
 
 可直接通过 Docker 运行的大规模多语言文本转语音环境，内置本地浏览器界面、HTTP API、声音设计和声音克隆功能。

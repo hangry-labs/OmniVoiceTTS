@@ -13,6 +13,8 @@
   <a href="README.es.md">Español</a>
 </p>
 
+<p align="center"><a href="https://hangry-labs.github.io/OmniVoiceTTS/examples/?lang=ja"><strong>🎧 音声サンプルを聴く</strong></a></p>
+
 # Hangry Labs OmniVoiceTTS
 
 ローカルのブラウザー UI、HTTP API、音声デザイン、音声クローンを備えた、Docker ですぐに実行できる大規模多言語テキスト読み上げ環境です。

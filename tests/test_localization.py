@@ -79,12 +79,12 @@ class LocalizationContractTests(unittest.TestCase):
                 self.assertIn("简体中文", text)
                 self.assertIn("Español", text)
 
-    def test_dockerhub_language_selector_uses_absolute_github_links(self) -> None:
+    def test_dockerhub_language_selector_uses_localized_website_links(self) -> None:
         text = (ROOT / "docs" / "dockerhub.md").read_text(encoding="utf-8")
 
         for locale in DOCUMENT_LOCALES:
             self.assertIn(
-                f"https://github.com/Hangry-Labs/OmniVoiceTTS/blob/master/README.{locale}.md",
+                f"https://hangry-labs.github.io/OmniVoiceTTS/README.{locale}.html?lang={locale}",
                 text,
             )
 

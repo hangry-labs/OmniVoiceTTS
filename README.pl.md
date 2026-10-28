@@ -13,6 +13,8 @@
   <a href="README.es.md">Español</a>
 </p>
 
+<p align="center"><a href="https://hangry-labs.github.io/OmniVoiceTTS/examples/?lang=pl"><strong>🎧 Posłuchaj przykładów głosów</strong></a></p>
+
 # Hangry Labs OmniVoiceTTS
 
 Gotowy do użycia w Dockerze, bardzo wielojęzyczny system zamiany tekstu na mowę z lokalnym interfejsem przeglądarkowym, API HTTP, projektowaniem głosu i klonowaniem głosu.

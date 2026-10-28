@@ -13,6 +13,8 @@
   <a href="README.es.md">Español</a>
 </p>
 
+<p align="center"><a href="https://hangry-labs.github.io/OmniVoiceTTS/examples/?lang=en"><strong>🎧 Listen to voice examples</strong></a></p>
+
 # Hangry Labs OmniVoiceTTS
 
 Easy-to-run OmniVoice text-to-speech Docker images with a browser UI and HTTP API included.
@@ -427,6 +429,11 @@ The old volumes remain untouched. On first profile load, legacy absolute audio p
 
 ## Local Development and Testing
 
+Preview the README-based website and listening galleries with `task pages`,
+create a static build with `task pages-build`, or check staging and language
+routing with `task pages-test`. See the [website guide](site/README.md). These
+tasks use a separate lightweight builder and do not load speech models.
+
 This repository currently targets Python `>=3.13, <3.14`. The Docker image uses `python:3.13-slim`, and `task deps` regenerates Linux/Python 3.13 requirements.
 
 Build and run the full baked image:
@@ -559,6 +566,9 @@ If you encounter bugs, have feature requests, or need help using Hangry Labs Omn
 Snapshot commands intentionally follow the rolling `latest` tags. Published-release commands retain their readable version tag and also pin Docker Hub's immutable top-level OCI digest; the digest is authoritative if a tag is ever changed.
 
 ### v1.1 Snapshot
+
+- Add a multilingual README-based project website with shared navigation,
+  the 20-language voice gallery and SSML-H conversation showcase.
 
 - No changes yet.
 

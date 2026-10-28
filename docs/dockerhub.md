@@ -1,17 +1,19 @@
-<p>
-  <a href="https://hangrylabs.app/">
-    <img src="https://github.com/Hangry-Labs/OmniVoiceTTS/raw/master/assets/omnivoice_logo_horizontal.webp" alt="Hangry Labs OmniVoiceTTS logo">
+<p align="center">
+  <a href="https://hangry-labs.github.io/OmniVoiceTTS/">
+    <img src="https://raw.githubusercontent.com/hangry-labs/OmniVoiceTTS/master/assets/omnivoice_logo_horizontal.webp" alt="Hangry Labs OmniVoiceTTS logo">
   </a>
 </p>
 
-<p>
-  <strong>English</strong> ·
-  <a href="https://github.com/Hangry-Labs/OmniVoiceTTS/blob/master/README.nb.md">Norsk bokmål</a> ·
-  <a href="https://github.com/Hangry-Labs/OmniVoiceTTS/blob/master/README.pl.md">Polski</a> ·
-  <a href="https://github.com/Hangry-Labs/OmniVoiceTTS/blob/master/README.ja.md">日本語</a> ·
-  <a href="https://github.com/Hangry-Labs/OmniVoiceTTS/blob/master/README.zh.md">简体中文</a> ·
-  <a href="https://github.com/Hangry-Labs/OmniVoiceTTS/blob/master/README.es.md">Español</a>
+<p align="center">
+  <a href="https://hangry-labs.github.io/OmniVoiceTTS/?lang=en">English</a> ·
+  <a href="https://hangry-labs.github.io/OmniVoiceTTS/README.nb.html?lang=nb">Norsk bokmål</a> ·
+  <a href="https://hangry-labs.github.io/OmniVoiceTTS/README.pl.html?lang=pl">Polski</a> ·
+  <a href="https://hangry-labs.github.io/OmniVoiceTTS/README.ja.html?lang=ja">日本語</a> ·
+  <a href="https://hangry-labs.github.io/OmniVoiceTTS/README.zh.html?lang=zh">简体中文</a> ·
+  <a href="https://hangry-labs.github.io/OmniVoiceTTS/README.es.html?lang=es">Español</a>
 </p>
+
+<p align="center"><a href="https://hangry-labs.github.io/OmniVoiceTTS/examples/?lang=en"><strong>🎧 Listen to voice examples</strong></a> · <a href="https://hangry-labs.github.io/OmniVoiceTTS/examples/ssml-h.html?lang=en">SSML-H conversations</a></p>
 
 # Hangry Labs OmniVoiceTTS
 
@@ -33,9 +35,13 @@ Run on CPU:
 docker run --name omnivoicetts --restart unless-stopped -p 7861:7861 -e OMNIVOICE_DEVICE=cpu -e OMNIVOICE_LOAD_ASR=0 -v omnivoicetts_data:/app/persistent hangrylabs/omnivoicetts:latest
 ```
 
-Then open:
+Open **[http://localhost:7861](http://localhost:7861)**. The browser UI and APIs
+share the same port; interactive API documentation is at
+[http://localhost:7861/tts/docs](http://localhost:7861/tts/docs).
 
-http://localhost:7861
+All shell commands below are one physical line for Bash, PowerShell and Windows
+Command Prompt. These GPU, CPU and tiny commands are alternative deployments.
+For access only from this machine, use `-p 127.0.0.1:7861:7861`.
 
 The named `omnivoicetts_data` volume stores model assets, application settings, and saved voice profiles across container replacement and image updates.
 
@@ -49,6 +55,27 @@ docker run --name omnivoicetts-tiny --restart unless-stopped -p 7861:7861 --gpus
 
 The full image incrementally seeds its pinned baked model cache into this volume at startup. Existing downloaded models, saved voices, and settings are preserved across image upgrades.
 
+## Image Tags
+
+| Tags | Contents | Updates |
+| --- | --- | --- |
+| `latest` | Full image with pinned model assets baked in | Moving snapshot |
+| `latest_tiny` | Same application, models downloaded on first use | Moving snapshot |
+| `v1.0`, `v1.0_tiny` | Published full and tiny release | Immutable |
+
+For a reproducible full-image deployment:
+
+```bash
+docker run --name omnivoicetts --restart unless-stopped -p 7861:7861 --gpus all -e CUDA_VISIBLE_DEVICES=0 -v omnivoicetts_data:/app/persistent hangrylabs/omnivoicetts:v1.0@sha256:f25ac241784a0133842e8a983808ed0ca8d6d2dd942b7fc02c37eecb7cf5c012
+```
+
+The matching tiny release is
+`hangrylabs/omnivoicetts:v1.0_tiny@sha256:b2bd5dbf6f861bbf5cc3591c3e4658995f62befad1acb65610f8369f538394a6`.
+Use it in the tiny command above when a fixed version is required. These are
+top-level OCI index digests, also available from
+`ghcr.io/hangry-labs/omnivoicetts` with identical tags and digests. Versioned
+tags, Git tags and published GitHub Releases are immutable; rolling tags can move.
+
 ## MCP
 
 Enable the compact local-agent endpoint in **System > MCP access**, then connect to `http://localhost:7861/mcp/`. It exposes five focused tools for health, languages, saved voices, speech inspection, and recommended simple generation.
@@ -57,13 +84,11 @@ The separately controlled `http://localhost:7861/mcp/advanced/` endpoint adds SS
 
 MCP generation returns expiring download links rather than embedding audio in model context. When connecting from another machine, set `OMNIVOICE_MCP_BASE_URL` to the externally reachable server origin. Advanced local reference files belong in `/app/persistent/mcp-input`.
 
-Published GitHub Releases and their Git tags are immutable. Versioned Docker tags such as `vX.Y.Z` and `vX.Y.Z_tiny` are also immutable and cannot be reassigned; use them for reproducible deployments. The movable `latest` and `latest_tiny` tags intentionally track the current snapshot.
-
 ## What You Get
 
-<p>
+<p align="center">
   <a href="https://hangry-labs.github.io/OmniVoiceTTS/examples/">
-    <img src="https://github.com/Hangry-Labs/OmniVoiceTTS/raw/master/assets/ui.webp" alt="OmniVoiceTTS browser interface with generation, voice, API, system, and GPU controls">
+    <img src="https://raw.githubusercontent.com/hangry-labs/OmniVoiceTTS/master/assets/ui.webp" alt="OmniVoiceTTS browser interface with generation, voice, API, system, and GPU controls">
   </a>
 </p>
 
@@ -71,12 +96,17 @@ Published GitHub Releases and their Git tags are immutable. Versioned Docker tag
 - No-prompt voices, voice design, direct cloning, and reusable saved voice profiles
 - Reference-audio diagnostics and automatic safe edge-silence repair during default clone preprocessing
 - Explicit plain text, SSML, and SSML-H modes, including dynamic multi-character dialogue
-- Multilingual browser UI and 600+ model languages
+- Browser UI in 60 display languages, six README translations and 600+ model languages
 - WAV, MP3, FLAC, and OGG output
 - OpenAI-compatible speech and model-discovery routes
 - Native generation, conversion, streaming, profile, status, and memory-management APIs
 - Live NVIDIA GPU telemetry and CUDA allocator diagnostics
 - Offline-friendly full image after the image is pulled
+
+The [voice gallery](https://hangry-labs.github.io/OmniVoiceTTS/examples/)
+has 20 speech languages, ten voice-variety samples per language, randomized
+introductions and cross-language clones. The separate conversation showcase
+includes three SSML-H dialogues with transcripts and copyable source.
 
 Hear samples before downloading the image:
 
@@ -87,19 +117,13 @@ Hear samples before downloading the image:
 Native WAV generation:
 
 ```bash
-curl -X POST "http://localhost:7861/tts/generate" \
-  -H "Content-Type: application/json" \
-  -d '{"text":"Hello from Hangry Labs OmniVoiceTTS.","language":"English"}' \
-  -o hello.wav
+curl -X POST "http://localhost:7861/tts/generate" -H "Content-Type: application/json" -d '{"text":"Hello from Hangry Labs OmniVoiceTTS.","language":"English"}' -o hello.wav
 ```
 
 OpenAI-compatible MP3 generation:
 
 ```bash
-curl -X POST "http://localhost:7861/v1/audio/speech" \
-  -H "Content-Type: application/json" \
-  -d '{"model":"tts-1","voice":"nova","input":"Hello from a local OpenAI-compatible endpoint.","response_format":"mp3"}' \
-  -o speech.mp3
+curl -X POST "http://localhost:7861/v1/audio/speech" -H "Content-Type: application/json" -d '{"model":"tts-1","voice":"nova","input":"Hello from a local OpenAI-compatible endpoint.","response_format":"mp3"}' -o speech.mp3
 ```
 
 The model-discovery endpoint reports the local `omnivoice` model. Compatibility names such as `tts-1`, `tts-1-hd`, and `gpt-4o-mini-tts` remain accepted by speech requests but do not represent separate loaded models.
@@ -107,10 +131,7 @@ The model-discovery endpoint reports the local `omnivoice` model. Compatibility 
 Standard SSML and [SSML-H 1.0](https://hangrylabs.app/ns/ssml-h/1.0) are supported by native routes through an explicit `input_type`:
 
 ```bash
-curl -X POST "http://localhost:7861/tts/generate" \
-  -H "Content-Type: application/json" \
-  -d '{"input_type":"ssml","text":"<speak version=\"1.1\" xml:lang=\"en-US\">Hello.<break time=\"300ms\"/><prosody rate=\"slow\">This uses SSML.</prosody></speak>","output_format":"mp3"}' \
-  -o ssml.mp3
+curl -X POST "http://localhost:7861/tts/generate" -H "Content-Type: application/json" -d '{"input_type":"ssml","text":"<speak version=\"1.1\" xml:lang=\"en-US\">Hello.<break time=\"300ms\"/><prosody rate=\"slow\">This uses SSML.</prosody></speak>","output_format":"mp3"}' -o ssml.mp3
 ```
 
 SSML-H adds bounded dynamic voice definitions, request-only characters, reusable profile publication, and multi-speaker turns while retaining standard SSML structure. The browser UI includes valid starter documents. Query `GET /tts/ssml/capabilities` for supported controls and limits.
@@ -128,6 +149,24 @@ Useful endpoints:
 - Release unused CUDA allocator blocks: `POST /tts/cache/clear`
 - Unload cached models and prompts: `POST /tts/purge`
 
+## Runtime Settings
+
+| Setting | Default | Purpose |
+| --- | --- | --- |
+| `OMNIVOICE_DEVICE` | `auto` | Select the inference device; use `cpu` for CPU mode |
+| `CUDA_VISIBLE_DEVICES` | Unset | Select which NVIDIA GPUs the container can see |
+| `OMNIVOICE_LOAD_ASR` | `0` | Keep reference-transcription ASR lazy rather than eager |
+| `OMNIVOICE_MAX_CONCURRENT_GENERATIONS` | `1` | Serialize inference per resolved device to limit memory growth |
+| `HF_HUB_OFFLINE`, `TRANSFORMERS_OFFLINE` | Full: `1`; tiny: `0` | Allow missing model downloads when set to `0` |
+| `OMNIVOICE_ENABLE_MCP` | `0` | Enable the compact MCP endpoint at startup |
+| `OMNIVOICE_ENABLE_ADVANCED_MCP` | `0` | Enable the larger advanced endpoint at startup |
+| `OMNIVOICE_MCP_BASE_URL` | `http://localhost:7861` | Set a client-reachable origin for generated artifact links |
+
+Generation defaults and MCP access can be changed in **System** and persist in
+the data volume. Device, ASR preload and concurrency changes require container
+replacement. `/tts/cache/clear` releases unused allocator blocks without unloading
+models or saved prompts; `/tts/purge` unloads cached models and prompts.
+
 ## Saved Voices And Data
 
 Create reusable cloned voices in the browser **Voices** workspace, then use the saved profile name as `voice` in compatible clients or as `voice_profile` in extended requests. Profiles with a supplied transcript avoid ASR work when their clone prompt is prepared.
@@ -144,6 +183,10 @@ Path overrides are available through `HF_HOME`, `OMNIVOICE_SETTINGS_PATH`, and `
 
 ## Responsible Use
 
+After image pulls and any required model downloads, inference runs on your own
+infrastructure. Audio, prompts and saved voice profiles can contain personal
+data. Keep the service and data volume accessible only to intended users.
+
 OmniVoice supports voice cloning. Do not use this image for unauthorized cloning, impersonation, fraud, harassment, scams, or illegal or unethical activity. Only clone voices when you have the rights and consent to do so.
 
 ## Licensing
@@ -157,6 +200,7 @@ Built with Higgs Materials licensed from Boson AI USA, Inc., Copyright Boson AI 
 ## Links
 
 - Product page and installation guide: https://hangrylabs.app/software/omnivoicetts
+- Project website and documentation: https://hangry-labs.github.io/OmniVoiceTTS/
 - Repository and full documentation: https://github.com/Hangry-Labs/OmniVoiceTTS
 - Language examples: https://hangry-labs.github.io/OmniVoiceTTS/examples/
 - SSML-H conversations: https://hangry-labs.github.io/OmniVoiceTTS/examples/ssml-h.html

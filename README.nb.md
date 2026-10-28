@@ -13,6 +13,8 @@
   <a href="README.es.md">Español</a>
 </p>
 
+<p align="center"><a href="https://hangry-labs.github.io/OmniVoiceTTS/examples/?lang=nb"><strong>🎧 Lytt til stemmeeksempler</strong></a></p>
+
 # Hangry Labs OmniVoiceTTS
 
 Docker-klar, svært flerspråklig tekst-til-tale med lokalt nettlesergrensesnitt, HTTP-API, stemmedesign og stemmekloning.

@@ -13,6 +13,8 @@
   <strong>Español</strong>
 </p>
 
+<p align="center"><a href="https://hangry-labs.github.io/OmniVoiceTTS/examples/?lang=es"><strong>🎧 Escuchar ejemplos de voces</strong></a></p>
+
 # Hangry Labs OmniVoiceTTS
 
 Texto a voz masivamente multilingüe y preparado para Docker, con interfaz web local, API HTTP, diseño de voces y clonación de voz.
